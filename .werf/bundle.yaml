@@ -27,3 +27,4 @@ git:
   - openapi
   - templates
   - Chart.yaml
+  - module.yaml
