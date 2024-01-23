@@ -1,6 +1,4 @@
 type: object
 properties:
-  disableDs:
-    description: Выключить local-lvm-provisioner daemonset
   logLevel:
     description: Уровень логирования для приложений модуля
