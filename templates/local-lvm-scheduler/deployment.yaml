@@ -130,14 +130,11 @@ spec:
               {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
               {{- include "kube_scheduler_resources" . | nindent 14 }}
               {{- end }}
-{{- if dig "dataNodes" "nodeSelector" false .Values.sdsDrbd }}
-      nodeSelector:
-        {{- .Values.sdsDrbd.dataNodes.nodeSelector | toYaml | nindent 8 }}
-{{- end }}
         - name: local-lvm-scheduler-extender
           {{- include "helm_lib_module_container_security_context_read_only_root_filesystem_capabilities_drop_all" . | nindent 10 }}
           image: {{ include "helm_lib_module_image" (list . "localLvmSchedulerExtender") }}
           imagePullPolicy: IfNotPresent
+          sd
           args:
             - --config=/etc/local-lvm-scheduler-extender/scheduler-extender-config.yaml
           - mountPath: /etc/local-lvm-scheduler-extender
