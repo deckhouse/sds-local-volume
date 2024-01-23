@@ -135,7 +135,9 @@ spec:
           image: {{ include "helm_lib_module_image" (list . "localLvmSchedulerExtender") }}
           imagePullPolicy: IfNotPresent
           args:
-          - --verbose=true
+            - --config=/etc/local-lvm-scheduler-extender/scheduler-extender-config.yaml
+          - mountPath: /etc/local-lvm-scheduler-extender
+            name: scheduler-config
           resources:
             requests:
               {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 14 }}

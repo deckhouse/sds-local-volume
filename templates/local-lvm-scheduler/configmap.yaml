@@ -6,6 +6,9 @@ metadata:
   namespace: d8-{{ .Chart.Name }}
   {{- include "helm_lib_module_labels" (list . (dict "app" "local-lvm-scheduler")) | nindent 2 }}
 data:
+  scheduler-extender-config.yaml: |-
+    listen: "localhost:8099"
+    default-divisor: 1
   {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
   scheduler-config.yaml: |-
     {{- if semverCompare ">= 1.23" .Values.global.discovery.kubernetesVersion }}
