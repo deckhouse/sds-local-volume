@@ -34,5 +34,5 @@ __pycache__/
 .pytest_cache/
 
 # dev
-images/local-lvm-provisioner/dev/Dockerfile-dev
-images/local-lvm-provisioner/Makefile
+images/local-lvm-csi/Makefile
+images/local-lvm-scheduler-extender/Makefile
