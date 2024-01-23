@@ -2,13 +2,6 @@ x-config-version: 2
 type: object
 required: []
 properties:
-  enableDevMode:
-    type: boolean
-    default: false
-  disableDs:
-    type: boolean
-    default: false
-    description: Disable local-lvm-provisioner daemonset
   logLevel:
     type: string
     enum:
