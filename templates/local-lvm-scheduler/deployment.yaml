@@ -134,9 +134,9 @@ spec:
           {{- include "helm_lib_module_container_security_context_read_only_root_filesystem_capabilities_drop_all" . | nindent 10 }}
           image: {{ include "helm_lib_module_image" (list . "localLvmSchedulerExtender") }}
           imagePullPolicy: IfNotPresent
-          sd
           args:
             - --config=/etc/local-lvm-scheduler-extender/scheduler-extender-config.yaml
+          volumeMounts:
           - mountPath: /etc/local-lvm-scheduler-extender
             name: scheduler-config
           resources:
