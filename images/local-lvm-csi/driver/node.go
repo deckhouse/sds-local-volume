@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
@@ -34,9 +36,22 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstage
 
 func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	d.log.Info("method NodePublishVolume")
+
 	fmt.Println("------------- NodePublishVolume --------------")
 	fmt.Println(request)
+	fmt.Println("----------------------------------------------")
+	fmt.Println("req.GetVolumeId()", request.GetVolumeId())
+	fmt.Println("req.GetTargetPath()", request.GetTargetPath())
+	fmt.Println("req.GetVolumeCapability()", request.GetVolumeCapability())
 	fmt.Println("------------- NodePublishVolume --------------")
+
+	var fsType string
+
+	err := d.mounter.Mount(request.GetVolumeId(), request.GetTargetPath(), fsType, false, []string{})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", request.GetVolumeId(), err)
+	}
+
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -45,6 +60,11 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, request *csi.NodeUnpub
 	fmt.Println("------------- NodeUnpublishVolume --------------")
 	fmt.Println(request)
 	fmt.Println("------------- NodeUnpublishVolume --------------")
+
+	err := d.mounter.Unmount(request.GetTargetPath())
+	if err != nil {
+		return nil, err
+	}
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
