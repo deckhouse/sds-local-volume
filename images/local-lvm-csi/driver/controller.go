@@ -119,6 +119,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	}
 
 	volCtx[subPath] = request.Name
+	volCtx["vgname"] = "wg-0000000000000"
 
 	d.log.Info("========== CreateVolume ============")
 	fmt.Println(".>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
