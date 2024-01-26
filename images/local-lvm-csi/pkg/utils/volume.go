@@ -30,6 +30,9 @@ func NewStore(logger *logger.Logger) *Store {
 }
 
 func (s *Store) Mount(source, target, fsType string, readonly bool, mntOpts []string) error {
+
+	fmt.Println("-----------------== Node Mount ==--------------- 1 ")
+
 	var block bool
 	if fsType == "" {
 		block = true
@@ -47,9 +50,11 @@ func (s *Store) Mount(source, target, fsType string, readonly bool, mntOpts []st
 		return fmt.Errorf("[NewMount] path %s is not a device", source) //nolint:goerr113
 	}
 
-	fmt.Println("----======== info ============----")
-	fmt.Println(info)
-	fmt.Println("----======== info ============----")
+	fmt.Println("----======== Stat info ============---- 2")
+	fmt.Println(info.Mode())
+	fmt.Println(info.IsDir())
+	fmt.Println(info.Sys())
+	fmt.Println("----======== Stat info ============----")
 
 	if readonly {
 		mntOpts = append(mntOpts, "ro")
@@ -58,20 +63,28 @@ func (s *Store) Mount(source, target, fsType string, readonly bool, mntOpts []st
 		//todo set RW
 	}
 
-	if !block {
-		if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
-			return fmt.Errorf("[NewMount] could not create target directory %s, %v", target, err)
-		}
-	} else {
-		f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0644))
-		if err != nil {
-			if !os.IsExist(err) {
-				return fmt.Errorf("[NewMount] could not create bind target for block volume %s, %w", target, err)
-			}
-		} else {
-			_ = f.Close()
-		}
+	//if !block {
+	fmt.Println("======== start MkdirAll ========")
+	fmt.Println("create dir =", target)
+	if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
+		return fmt.Errorf("[NewMount] could not create target directory %s, %v", target, err)
 	}
+	fmt.Println("======== stop  MkdirAll ========")
+
+	//} else {
+	//fmt.Println("======== start  test OpenFile ========")
+	//f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0644))
+	//if err != nil {
+	//	if !os.IsExist(err) {
+	//		return fmt.Errorf("[NewMount] could not create bind target for block volume %s, %w", target, err)
+	//	}
+	//} else {
+	//	_ = f.Close()
+	//}
+	//fmt.Println("======== stop  test OpenFile ========")
+	//}
+
+	fmt.Println("-----------------== IsNotMountPoint ==--------------- 3 ")
 
 	needsMount, err := mount.IsNotMountPoint(s.Mounter, target)
 	if err != nil {
@@ -82,11 +95,14 @@ func (s *Store) Mount(source, target, fsType string, readonly bool, mntOpts []st
 		return nil
 	}
 
-	err = s.Mounter.Mount(source, target, fsType, mntOpts)
+	fmt.Println("-----------------== FormatAndMount ==--------------- 4 ")
+
+	err = s.Mounter.FormatAndMount(source, target, fsType, mntOpts)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to FormatAndMount : %w", err)
 	}
 
+	fmt.Println("-----------------== Final ==--------------- 5 ")
 	return nil
 }
 
