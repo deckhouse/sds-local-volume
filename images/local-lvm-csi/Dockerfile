@@ -17,12 +17,13 @@ WORKDIR /go/src/cmd
 RUN GOOS=linux GOARCH=amd64 go build -o local-lvm-csi
 
 FROM --platform=linux/amd64 $BASE_UBUNTU
-COPY --from=builder /go/src/cmd/local-lvm-csi /go/src/cmd/local-lvm-csi
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update \
  && apt-get -y install lvm2 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /go/src/cmd/local-lvm-csi /go/src/cmd/local-lvm-csi
 
 ENTRYPOINT ["/go/src/cmd/local-lvm-csi"]
