@@ -36,6 +36,7 @@ const (
 	lvmSelector = "local-lvm.csi.storage.deckhouse.io/lvm-vg-selector"
 	topologyKey = "topology.local-lvm-csi/node"
 	subPath     = "subPath"
+	VGNameKey   = "vgname"
 )
 
 func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
@@ -43,6 +44,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	d.log.Info("========== CreateVolume ============")
 	d.log.Info(request.String())
+	request.GetAccessibilityRequirements().GetRequisite()
 	d.log.Info("========== CreateVolume ============")
 
 	l := make(map[string]string)
@@ -75,7 +77,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	}
 
 	nodesVGSize := make(map[string]int64)
-
+	var vgName string
 	for _, lvg := range listLvgs.Items {
 		obj := &v1alpha1.LvmVolumeGroup{}
 		err = d.cl.Get(ctx, client.ObjectKey{
@@ -95,10 +97,12 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 		d.log.Info("------------------------------")
 		d.log.Info(lvg.Name)
+		d.log.Info(lvg.Spec.ActualVGNameOnTheNode)
 		d.log.Info(vgSize.String())
 		d.log.Info("------------------------------")
 
 		nodesVGSize[lvg.Name] = vgSize.Value()
+		vgName = lvg.Spec.ActualVGNameOnTheNode
 	}
 
 	nodeName, _ := utils.NodeWithMaxSize(nodesVGSize)
@@ -119,7 +123,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	}
 
 	volCtx[subPath] = request.Name
-	volCtx["vgname"] = "wg-0000000000000"
+	volCtx[VGNameKey] = vgName
 
 	d.log.Info("========== CreateVolume ============")
 	fmt.Println(".>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
@@ -134,7 +138,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			ContentSource: request.VolumeContentSource,
 			AccessibleTopology: []*csi.Topology{
 				{Segments: map[string]string{
-					topologyKey: "a-ohrimenko-worker-0",
+					topologyKey: "a-ohrimenko-worker-1",
 				}},
 			},
 		},

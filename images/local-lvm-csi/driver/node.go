@@ -22,6 +22,10 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"local-lvm-csi/pkg/utils"
+	"time"
 )
 
 func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
@@ -39,17 +43,55 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 
 	fmt.Println("------------- NodePublishVolume --------------")
 	fmt.Println(request)
-	fmt.Println("----------------------------------------------")
-	fmt.Println("req.GetVolumeId()", request.GetVolumeId())
-	fmt.Println("req.GetTargetPath()", request.GetTargetPath())
-	fmt.Println("req.GetVolumeCapability()", request.GetVolumeCapability())
 	fmt.Println("------------- NodePublishVolume --------------")
 
-	var fsType string
-
-	err := d.mounter.Mount(request.GetVolumeId(), request.GetTargetPath(), fsType, false, []string{})
+	vgName := make(map[string]string)
+	err := yaml.Unmarshal([]byte(request.GetVolumeContext()[lvmSelector]), &vgName)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "NodePublishVolume failed for %s: %v", request.GetVolumeId(), err)
+		d.log.Error(err, "unmarshal labels")
+		return nil, status.Error(codes.Internal, "Unmarshal volume context")
+	}
+
+	// dev - blockDev /dev/vg-w1/pvc-****
+	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[VGNameKey], request.VolumeId)
+	// fsType - ext4
+	fsType := request.VolumeCapability.GetMount().FsType
+
+	d.log.Info("vgName[VGNameKey] = ", request.GetVolumeContext()[VGNameKey])
+	d.log.Info(fmt.Sprintf("[mount] params dev=%s target=%s fs=%s", dev, request.GetTargetPath(), fsType))
+
+	///------------- External code ----------------
+	fmt.Println("///------------- External code ----------------")
+	fmt.Println("LV Create START")
+	deviceSize, err := resource.ParseQuantity("1000000000")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	lv, err := utils.CreateLV(deviceSize.String(), request.VolumeId, request.GetVolumeContext()[VGNameKey])
+	if err != nil {
+		d.log.Error(err, "")
+	}
+	d.log.Info(fmt.Sprintf("[lv create] size=%s pvc=%s vg=%s", deviceSize.String(), request.VolumeId, request.GetVolumeContext()[VGNameKey]))
+	fmt.Println("lv create command = ", lv)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println("LV Create STOP")
+	fmt.Println("///------------- External code ----------------")
+	time.Sleep(1 * time.Second)
+	///------------- External code ----------------
+
+	var mountOptions []string
+	if request.GetReadonly() {
+		mountOptions = append(mountOptions, "ro")
+	}
+
+	err = d.mounter.Mount(dev, request.GetTargetPath(), fsType, false, mountOptions)
+	if err != nil {
+		d.log.Error(err, " d.mounter.Mount ")
+		return nil, err
 	}
 
 	return &csi.NodePublishVolumeResponse{}, nil
