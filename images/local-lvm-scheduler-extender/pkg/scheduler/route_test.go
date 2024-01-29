@@ -58,7 +58,7 @@ func testPredicate(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("POST", "/predicate", bytes.NewReader(input))
+	r := httptest.NewRequest("POST", "/filter", bytes.NewReader(input))
 	handler.ServeHTTP(w, r)
 
 	resp := w.Result()
@@ -80,7 +80,7 @@ func testPredicate(t *testing.T) {
 	}
 
 	w = httptest.NewRecorder()
-	r = httptest.NewRequest("POST", "/predicate", nil)
+	r = httptest.NewRequest("POST", "/filter", nil)
 	handler.ServeHTTP(w, r)
 
 	resp = w.Result()
@@ -144,6 +144,6 @@ func testPrioritize(t *testing.T) {
 }
 
 func TestRoute(t *testing.T) {
-	t.Run("predicate", testPredicate)
+	t.Run("filter", testPredicate)
 	t.Run("prioritize", testPrioritize)
 }

@@ -4,25 +4,42 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
+	sv1 "k8s.io/api/storage/v1"
+	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"local-lvm-scheduler-extender/api/v1alpha1"
+	"local-lvm-scheduler-extender/pkg/kubutils"
+	"local-lvm-scheduler-extender/pkg/scheduler"
 	"net/http"
 	"os"
 	"os/signal"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sync"
 	"syscall"
 	"time"
 
-	"local-lvm-scheduler-extender/pkg/scheduler"
+	apiruntime "k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
 	"github.com/spf13/cobra"
 	"github.com/topolvm/topolvm"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/yaml"
 )
 
 var cfgFilePath string
 var zapOpts zap.Options
+
+var resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
+	v1alpha1.AddToScheme,
+	clientgoscheme.AddToScheme,
+	extv1.AddToScheme,
+	v1.AddToScheme,
+	sv1.AddToScheme,
+}
 
 const defaultDivisor = 1
 const defaultListenAddr = ":8000"
@@ -70,7 +87,8 @@ The default divisor is 1.  It can be changed with a command-line option.
 
 func subMain(parentCtx context.Context) error {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
-	logger := log.FromContext(parentCtx)
+
+	log := logr.Logger{}
 
 	if len(cfgFilePath) != 0 {
 		b, err := os.ReadFile(cfgFilePath)
@@ -83,7 +101,28 @@ func subMain(parentCtx context.Context) error {
 		}
 	}
 
-	h, err := scheduler.NewHandler(config.DefaultDivisor, config.Divisors)
+	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
+	if err != nil {
+		log.Error(err, "[main] unable to KubernetesDefaultConfigCreate")
+	}
+	log.Info("[main] kubernetes config has been successfully created.")
+
+	scheme := runtime.NewScheme()
+	for _, f := range resourcesSchemeFuncs {
+		err := f(scheme)
+		if err != nil {
+			log.Error(err, "[main] unable to add scheme to func")
+			os.Exit(1)
+		}
+	}
+	log.Info("[main] successfully read scheme CR")
+
+	cl, err := client.New(kConfig, client.Options{
+		Scheme:         scheme,
+		WarningHandler: client.WarningHandlerOptions{},
+	})
+
+	h, err := scheduler.NewHandler(cl, config.DefaultDivisor, config.Divisors)
 	if err != nil {
 		return err
 	}
@@ -105,7 +144,7 @@ func subMain(parentCtx context.Context) error {
 		defer wg.Done()
 		<-ctx.Done()
 		if err := serv.Shutdown(parentCtx); err != nil {
-			logger.Error(err, "failed to shutdown gracefully")
+			log.Error(err, "failed to shutdown gracefully")
 		}
 	}()
 
