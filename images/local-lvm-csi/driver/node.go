@@ -25,7 +25,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"local-lvm-csi/pkg/utils"
-	"time"
 )
 
 func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
@@ -41,9 +40,9 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstage
 func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	d.log.Info("method NodePublishVolume")
 
-	fmt.Println("------------- NodePublishVolume --------------")
-	fmt.Println(request)
-	fmt.Println("------------- NodePublishVolume --------------")
+	d.log.Info("------------- NodePublishVolume --------------")
+	d.log.Info(request.String())
+	d.log.Info("------------- NodePublishVolume --------------")
 
 	vgName := make(map[string]string)
 	err := yaml.Unmarshal([]byte(request.GetVolumeContext()[lvmSelector]), &vgName)
@@ -52,35 +51,42 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		return nil, status.Error(codes.Internal, "Unmarshal volume context")
 	}
 
-	// dev - blockDev /dev/vg-w1/pvc-****
 	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[VGNameKey], request.VolumeId)
-	// fsType - ext4
 	fsType := request.VolumeCapability.GetMount().FsType
 
 	d.log.Info("vgName[VGNameKey] = ", request.GetVolumeContext()[VGNameKey])
 	d.log.Info(fmt.Sprintf("[mount] params dev=%s target=%s fs=%s", dev, request.GetTargetPath(), fsType))
 
 	///------------- External code ----------------
-	fmt.Println("///------------- External code ----------------")
-	fmt.Println("LV Create START")
-	deviceSize, err := resource.ParseQuantity("1000000000")
+
+	d.log.Info("///------------- External code ----------------")
+
+	command, _, err := utils.LVExist(request.GetVolumeContext()[VGNameKey], request.VolumeId)
+	d.log.Info(command)
 	if err != nil {
-		fmt.Println(err)
+		d.log.Error(err, " error utils.LVExist")
+
+		d.log.Info("LV Create START")
+		deviceSize, err := resource.ParseQuantity("1000000000")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		lv, err := utils.CreateLV(deviceSize.String(), request.VolumeId, request.GetVolumeContext()[VGNameKey])
+		if err != nil {
+			d.log.Error(err, "")
+		}
+		d.log.Info(fmt.Sprintf("[lv create] size=%s pvc=%s vg=%s", deviceSize.String(), request.VolumeId, request.GetVolumeContext()[VGNameKey]))
+		fmt.Println("lv create command = ", lv)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		d.log.Info("LV Create STOP")
 	}
 
-	lv, err := utils.CreateLV(deviceSize.String(), request.VolumeId, request.GetVolumeContext()[VGNameKey])
-	if err != nil {
-		d.log.Error(err, "")
-	}
-	d.log.Info(fmt.Sprintf("[lv create] size=%s pvc=%s vg=%s", deviceSize.String(), request.VolumeId, request.GetVolumeContext()[VGNameKey]))
-	fmt.Println("lv create command = ", lv)
-	if err != nil {
-		fmt.Println(err)
-	}
+	d.log.Info("///------------- External code ----------------")
 
-	fmt.Println("LV Create STOP")
-	fmt.Println("///------------- External code ----------------")
-	time.Sleep(1 * time.Second)
 	///------------- External code ----------------
 
 	var mountOptions []string
