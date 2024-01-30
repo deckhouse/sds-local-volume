@@ -4,8 +4,8 @@
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: d8:{{ .Chart.Name }}:local-lvm-csi-controller
-  {{- include "helm_lib_module_labels" (list . (dict "app" "local-lvm-csi-controller")) | nindent 2 }}
+  name: d8:{{ .Chart.Name }}:sds-lvm-csi-controller
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-csi-controller")) | nindent 2 }}
 rules:
   - apiGroups:
       - storage.deckhouse.io
@@ -24,14 +24,14 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: d8:{{ .Chart.Name }}:local-lvm-csi-controller
-  {{- include "helm_lib_module_labels" (list . (dict "app" "local-lvm-csi-controller")) | nindent 2 }}
+  name: d8:{{ .Chart.Name }}:sds-lvm-csi-controller
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-csi-controller")) | nindent 2 }}
 subjects:
   - kind: ServiceAccount
     name: csi
     namespace: d8-{{ .Chart.Name }}
 roleRef:
   kind: ClusterRole
-  name: d8:{{ .Chart.Name }}:local-lvm-csi-controller
+  name: d8:{{ .Chart.Name }}:sds-lvm-csi-controller
   apiGroup: rbac.authorization.k8s.io
 

@@ -18,8 +18,8 @@ package config
 
 import (
 	"fmt"
-	"local-lvm-csi/pkg/logger"
 	"os"
+	"sds-lvm-csi/pkg/logger"
 )
 
 const (

@@ -20,13 +20,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"local-lvm-csi/api/v1alpha1"
-	"local-lvm-csi/config"
-	"local-lvm-csi/driver"
-	"local-lvm-csi/pkg/kubutils"
-	"local-lvm-csi/pkg/logger"
 	"os"
 	"os/signal"
+	"sds-lvm-csi/api/v1alpha1"
+	"sds-lvm-csi/config"
+	"sds-lvm-csi/driver"
+	"sds-lvm-csi/pkg/kubutils"
+	"sds-lvm-csi/pkg/logger"
 
 	"syscall"
 

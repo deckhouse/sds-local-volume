@@ -1,4 +1,4 @@
-project: local-lvm-provisioner
+project: sds-lvm
 configVersion: 1
 ---
 {{ tpl (.Files.Get ".werf/images.yaml") $ }}

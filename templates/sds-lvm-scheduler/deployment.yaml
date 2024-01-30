@@ -3,7 +3,7 @@ cpu: 10m
 memory: 30Mi
 {{- end }}
 
-{{- define "local_lvm_scheduler_extender_resources" }}
+{{- define "sds_lvm_scheduler_extender_resources" }}
 cpu: 10m
 memory: 25Mi
 {{- end }}
@@ -14,14 +14,14 @@ memory: 25Mi
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
-  name: local-lvm-scheduler
+  name: sds-lvm-scheduler
   namespace: d8-{{ .Chart.Name }}
-  {{- include "helm_lib_module_labels" (list . (dict "app" "local-lvm-scheduler")) | nindent 2 }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-scheduler")) | nindent 2 }}
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: Deployment
-    name: local-lvm-scheduler
+    name: sds-lvm-scheduler
   updatePolicy:
     updateMode: "Auto"
   resourcePolicy:
@@ -32,9 +32,9 @@ spec:
       maxAllowed:
         memory: 60Mi
         cpu: 20m
-    - containerName: local-lvm-scheduler-extender
+    - containerName: sds-lvm-scheduler-extender
       minAllowed:
-        {{- include "local_lvm_scheduler_extender_resources" . | nindent 8 }}
+        {{- include "sds_lvm_scheduler_extender_resources" . | nindent 8 }}
       maxAllowed:
         memory: 40Mi
         cpu: 20m
@@ -43,37 +43,37 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: local-lvm-scheduler
+  name: sds-lvm-scheduler
   namespace: d8-{{ .Chart.Name }}
-  {{- include "helm_lib_module_labels" (list . (dict "app" "local-lvm-scheduler" )) | nindent 2 }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-scheduler" )) | nindent 2 }}
 spec:
   minAvailable: {{ include "helm_lib_is_ha_to_value" (list . 1 0) }}
   selector:
     matchLabels:
-      app: local-lvm-scheduler
+      app: sds-lvm-scheduler
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: local-lvm-scheduler
+  name: sds-lvm-scheduler
   namespace: d8-{{ .Chart.Name }}
-  {{- include "helm_lib_module_labels" (list . (dict "app" "local-lvm-scheduler" )) | nindent 2 }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-scheduler" )) | nindent 2 }}
 spec:
   {{- include "helm_lib_deployment_strategy_and_replicas_for_ha" . | nindent 2 }}
   revisionHistoryLimit: 2
   selector:
     matchLabels:
-      app: local-lvm-scheduler
+      app: sds-lvm-scheduler
   template:
     metadata:
       labels:
-        app: local-lvm-scheduler
+        app: sds-lvm-scheduler
     spec:
       {{- include "helm_lib_priority_class" (tuple . "system-cluster-critical") | nindent 6 }}
       {{- include "helm_lib_node_selector" (tuple . "system") | nindent 6 }}
       {{- include "helm_lib_tolerations" (tuple . "system") | nindent 6 }}
       {{- include "helm_lib_module_pod_security_context_run_as_user_nobody" . | nindent 6 }}
-      {{- include "helm_lib_pod_anti_affinity_for_ha" (list . (dict "app" "local-lvm-scheduler")) | nindent 6 }}
+      {{- include "helm_lib_pod_anti_affinity_for_ha" (list . (dict "app" "sds-lvm-scheduler")) | nindent 6 }}
       imagePullSecrets:
         - name: {{ .Chart.Name }}-module-registry
       containers:
@@ -84,12 +84,12 @@ spec:
           {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
           - --config=/etc/kubernetes/scheduler-config.yaml
           {{- else }}
-          - --scheduler-name=local-lvm
-          - --policy-configmap=local-lvm-scheduler
+          - --scheduler-name=sds-lvm
+          - --policy-configmap=sds-lvm-scheduler
           - --policy-configmap-namespace=d8-{{ .Chart.Name }}
           {{- end }}
           - --leader-elect=true
-          - --leader-elect-resource-name=local-lvm-scheduler
+          - --leader-elect-resource-name=sds-lvm-scheduler
           - --leader-elect-resource-namespace=$(NAMESPACE)
           env:
           - name: NAMESPACE
@@ -130,26 +130,26 @@ spec:
               {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
               {{- include "kube_scheduler_resources" . | nindent 14 }}
               {{- end }}
-        - name: local-lvm-scheduler-extender
+        - name: sds-lvm-scheduler-extender
           {{- include "helm_lib_module_container_security_context_read_only_root_filesystem_capabilities_drop_all" . | nindent 10 }}
-          image: {{ include "helm_lib_module_image" (list . "localLvmSchedulerExtender") }}
+          image: {{ include "helm_lib_module_image" (list . "sdsLvmSchedulerExtender") }}
           imagePullPolicy: IfNotPresent
           args:
-            - --config=/etc/local-lvm-scheduler-extender/scheduler-extender-config.yaml
+            - --config=/etc/sds-lvm-scheduler-extender/scheduler-extender-config.yaml
           volumeMounts:
-          - mountPath: /etc/local-lvm-scheduler-extender
+          - mountPath: /etc/sds-lvm-scheduler-extender
             name: scheduler-config
           resources:
             requests:
               {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 14 }}
               {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
-              {{- include "local_lvm_scheduler_extender_resources" . | nindent 14 }}
+              {{- include "sds_lvm_scheduler_extender_resources" . | nindent 14 }}
               {{- end }}
       {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
       volumes:
       - configMap:
           defaultMode: 420
-          name: local-lvm-scheduler
+          name: sds-lvm-scheduler
         name: scheduler-config
       {{- end }}
-      serviceAccountName: local-lvm-scheduler
+      serviceAccountName: sds-lvm-scheduler

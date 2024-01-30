@@ -1,4 +1,4 @@
-module local-lvm-scheduler-extender
+module sds-lvm-scheduler-extender
 
 go 1.21
 

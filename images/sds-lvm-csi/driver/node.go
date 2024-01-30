@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"local-lvm-csi/pkg/utils"
+	"sds-lvm-csi/pkg/utils"
 )
 
 func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
