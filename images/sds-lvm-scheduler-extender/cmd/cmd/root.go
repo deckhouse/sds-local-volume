@@ -82,13 +82,6 @@ The default divisor is 1.  It can be changed with a command-line option.
 }
 
 func subMain(parentCtx context.Context) error {
-	log, err := logger.NewLogger(logger.Verbosity(config.LogLevel))
-	if err != nil {
-		fmt.Println(fmt.Sprintf("[subMain] unable to initialize logger, err: %s", err.Error()))
-	}
-	log.Info(fmt.Sprintf("[subMain] logger has been initialized, log level: %s", config.LogLevel))
-	ctrl.SetLogger(log.GetLogger())
-
 	if len(cfgFilePath) != 0 {
 		b, err := os.ReadFile(cfgFilePath)
 		if err != nil {
@@ -99,6 +92,13 @@ func subMain(parentCtx context.Context) error {
 			return err
 		}
 	}
+
+	log, err := logger.NewLogger(logger.Verbosity(config.LogLevel))
+	if err != nil {
+		fmt.Println(fmt.Sprintf("[subMain] unable to initialize logger, err: %s", err.Error()))
+	}
+	log.Info(fmt.Sprintf("[subMain] logger has been initialized, log level: %s", config.LogLevel))
+	ctrl.SetLogger(log.GetLogger())
 
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {
