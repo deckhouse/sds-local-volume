@@ -135,6 +135,7 @@ spec:
           image: {{ include "helm_lib_module_image" (list . "sdsLvmSchedulerExtender") }}
           imagePullPolicy: IfNotPresent
           args:
+            - sds-lvm-scheduler-extender
             - --config=/etc/sds-lvm-scheduler-extender/scheduler-extender-config.yaml
           volumeMounts:
           - mountPath: /etc/sds-lvm-scheduler-extender

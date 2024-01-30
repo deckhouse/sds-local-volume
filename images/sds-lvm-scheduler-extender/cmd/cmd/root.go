@@ -4,62 +4,61 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
 	"net/http"
 	"os"
 	"os/signal"
+	"sds-lvm-scheduler-extender/api/v1alpha1"
+	"sds-lvm-scheduler-extender/pkg/kubutils"
+	"sds-lvm-scheduler-extender/pkg/logger"
+	"sds-lvm-scheduler-extender/pkg/scheduler"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sync"
 	"syscall"
 	"time"
 
-	"sds-lvm-scheduler-extender/pkg/scheduler"
-
 	"github.com/spf13/cobra"
-	"github.com/topolvm/topolvm"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
 )
 
 var cfgFilePath string
-var zapOpts zap.Options
 
-const defaultDivisor = 1
-const defaultListenAddr = ":8000"
+var resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
+	v1alpha1.AddToScheme,
+}
 
-// Config represents configuration parameters for topolvm-scheduler
+const (
+	defaultDivisor    = 1
+	defaultListenAddr = ":8000"
+)
+
 type Config struct {
-	// ListenAddr is listen address of topolvm-scheduler.
-	ListenAddr string `json:"listen"`
-	// Divisors is a mapping between device-class names and their divisors.
-	Divisors map[string]float64 `json:"divisors"`
-	// DefaultDivisor is the default divisor value.
+	ListenAddr     string  `json:"listen"`
 	DefaultDivisor float64 `json:"default-divisor"`
+	LogLevel       string  `json:"log-level"`
 }
 
 var config = &Config{
 	ListenAddr:     defaultListenAddr,
 	DefaultDivisor: defaultDivisor,
+	LogLevel:       "2",
 }
 
 var rootCmd = &cobra.Command{
-	Use:     "topolvm-scheduler",
-	Version: topolvm.Version,
-	Short:   "a scheduler-extender for TopoLVM",
-	Long: `A scheduler-extender for TopoLVM.
-
+	Use:     "sds-lvm-scheduler",
+	Version: "development",
+	Short:   "a scheduler-extender for SDS-LVM",
+	Long: `A scheduler-extender for SDS-LVM.
 The extender implements filter and prioritize verbs.
-
-The filter verb is "predicate" and served at "/predicate" via HTTP.
+The filter verb is "filter" and served at "/filter" via HTTP.
 It filters out nodes that have less storage capacity than requested.
 The requested capacity is read from "capacity.topolvm.io/<device-class>"
 resource value.
-
 The prioritize verb is "prioritize" and served at "/prioritize" via HTTP.
 It scores nodes with this formula:
-
     min(10, max(0, log2(capacity >> 30 / divisor)))
-
 The default divisor is 1.  It can be changed with a command-line option.
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -69,9 +68,6 @@ The default divisor is 1.  It can be changed with a command-line option.
 }
 
 func subMain(parentCtx context.Context) error {
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
-	logger := log.FromContext(parentCtx)
-
 	if len(cfgFilePath) != 0 {
 		b, err := os.ReadFile(cfgFilePath)
 		if err != nil {
@@ -83,32 +79,59 @@ func subMain(parentCtx context.Context) error {
 		}
 	}
 
-	h, err := scheduler.NewHandler(config.DefaultDivisor, config.Divisors)
+	log, err := logger.NewLogger(logger.Verbosity(config.LogLevel))
+	if err != nil {
+		fmt.Println(fmt.Sprintf("[subMain] unable to initialize logger, err: %s", err.Error()))
+	}
+	log.Info(fmt.Sprintf("[subMain] logger has been initialized, log level: %s", config.LogLevel))
+	ctrl.SetLogger(log.GetLogger())
+
+	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
+	if err != nil {
+		log.Error(err, "[subMain] unable to KubernetesDefaultConfigCreate")
+	}
+	log.Info("[subMain] kubernetes config has been successfully created.")
+
+	scheme := runtime.NewScheme()
+	for _, f := range resourcesSchemeFuncs {
+		err := f(scheme)
+		if err != nil {
+			log.Error(err, "[subMain] unable to add scheme to func")
+			os.Exit(1)
+		}
+	}
+	log.Info("[subMain] successfully read scheme CR")
+
+	cl, err := client.New(kConfig, client.Options{
+		Scheme:         scheme,
+		WarningHandler: client.WarningHandlerOptions{},
+	})
+
+	h, err := scheduler.NewHandler(cl, *log, config.DefaultDivisor)
 	if err != nil {
 		return err
 	}
+	log.Info("[subMain] scheduler handler initialized")
 
 	serv := &http.Server{
 		Addr:        config.ListenAddr,
 		Handler:     accessLogHandler(parentCtx, h),
 		ReadTimeout: 30 * time.Second,
 	}
-
 	var wg sync.WaitGroup
 	defer wg.Wait()
-
 	ctx, stop := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
 	defer stop() // stop() should be called before wg.Wait() to stop the goroutine correctly.
-
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
 		if err := serv.Shutdown(parentCtx); err != nil {
-			logger.Error(err, "failed to shutdown gracefully")
+			log.Error(err, "failed to shutdown gracefully")
 		}
 	}()
 
+	log.Info(fmt.Sprintf("[subMain] starts serving on: %s", config.ListenAddr))
 	err = serv.ListenAndServe()
 	if !errors.Is(err, http.ErrServerClosed) {
 		return err
@@ -124,7 +147,6 @@ func Execute() {
 		os.Exit(1)
 	}
 }
-
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFilePath, "config", "", "config file")
 }
