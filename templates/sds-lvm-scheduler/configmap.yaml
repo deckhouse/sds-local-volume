@@ -9,7 +9,8 @@ data:
   scheduler-extender-config.yaml: |-
     listen: "localhost:8099"
     default-divisor: 1
-  {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
+    log-level: "2"
+    {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
   scheduler-config.yaml: |-
     {{- if semverCompare ">= 1.23" .Values.global.discovery.kubernetesVersion }}
     apiVersion: kubescheduler.config.k8s.io/v1beta3
