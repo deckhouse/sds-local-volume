@@ -2,8 +2,6 @@ module sds-lvm-scheduler-extender
 
 go 1.21
 
-toolchain go1.21.5
-
 require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/spf13/cobra v1.8.0
