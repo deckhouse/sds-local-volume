@@ -1,4 +1,4 @@
-module local-lvm-csi
+module sds-lvm-csi
 
 go 1.21
 

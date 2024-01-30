@@ -34,5 +34,5 @@ __pycache__/
 .pytest_cache/
 
 # dev
-images/local-lvm-csi/Makefile
-images/local-lvm-scheduler-extender/Makefile
+images/sds-lvm-csi/Makefile
+images/sds-lvm-scheduler-extender/Makefile

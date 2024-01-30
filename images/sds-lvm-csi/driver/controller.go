@@ -19,8 +19,8 @@ package driver
 import (
 	"context"
 	"fmt"
-	"local-lvm-csi/api/v1alpha1"
-	"local-lvm-csi/pkg/utils"
+	"sds-lvm-csi/api/v1alpha1"
+	"sds-lvm-csi/pkg/utils"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -33,8 +33,8 @@ import (
 )
 
 const (
-	lvmSelector = "local-lvm.csi.storage.deckhouse.io/lvm-vg-selector"
-	topologyKey = "topology.local-lvm-csi/node"
+	lvmSelector = "sds-lvm.csi.storage.deckhouse.io/lvm-vg-selector"
+	topologyKey = "topology.sds-lvm-csi/node"
 	subPath     = "subPath"
 	VGNameKey   = "vgname"
 )

@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"local-lvm-scheduler-extender/pkg/scheduler"
+	"sds-lvm-scheduler-extender/pkg/scheduler"
 
 	"github.com/spf13/cobra"
 	"github.com/topolvm/topolvm"
