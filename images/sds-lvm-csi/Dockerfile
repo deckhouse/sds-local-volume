@@ -13,13 +13,13 @@ RUN go mod download
 COPY . .
 
 WORKDIR /go/src/cmd
-RUN GOOS=linux GOARCH=amd64 go build -o local-lvm-csi
+RUN GOOS=linux GOARCH=amd64 go build -o sds-lvm-csi
 
 FROM --platform=linux/amd64 $BASE_ALPINE
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apk add --no-cache lvm2 e2fsprogs xfsprogs 
 
-COPY --from=builder /go/src/cmd/local-lvm-csi /go/src/cmd/local-lvm-csi
+COPY --from=builder /go/src/cmd/sds-lvm-csi /go/src/cmd/sds-lvm-csi
 
-ENTRYPOINT ["/go/src/cmd/local-lvm-csi"]
+ENTRYPOINT ["/go/src/cmd/sds-lvm-csi"]

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	utilexec "k8s.io/utils/exec"
 	"k8s.io/utils/mount"
-	"local-lvm-csi/pkg/logger"
 	"os"
+	"sds-lvm-csi/pkg/logger"
 )
 
 type Store struct {

@@ -23,14 +23,14 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
-	"local-lvm-csi/pkg/logger"
-	"local-lvm-csi/pkg/utils"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+	"sds-lvm-csi/pkg/logger"
+	"sds-lvm-csi/pkg/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sync"
 	"time"
@@ -39,7 +39,7 @@ import (
 const (
 	// DefaultDriverName defines the name that is used in Kubernetes and the CSI
 	// system for the canonical, official name of this plugin
-	DefaultDriverName = "local-lvm.csi.storage.deckhouse.io"
+	DefaultDriverName = "sds-lvm.csi.storage.deckhouse.io"
 	// DefaultAddress is the default address that the csi plugin will serve its
 	// http handler on.
 	DefaultAddress           = "127.0.0.1:12302"
