@@ -9,6 +9,7 @@ data:
   scheduler-extender-config.yaml: |-
     listen: "localhost:8099"
     default-divisor: 1
+    log-level: "3"
   {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
   scheduler-config.yaml: |-
     {{- if semverCompare ">= 1.23" .Values.global.discovery.kubernetesVersion }}

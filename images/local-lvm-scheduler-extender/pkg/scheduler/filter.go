@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/topolvm/topolvm"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"local-lvm-scheduler-extender/api/v1alpha1"
+	"local-lvm-scheduler-extender/pkg/logger"
 	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
 	"sync"
 )
 
@@ -22,38 +21,42 @@ const (
 )
 
 func (s scheduler) filter(w http.ResponseWriter, r *http.Request) {
+	s.log.Debug("[filter] starts the serving")
 	var input ExtenderArgs
 	reader := http.MaxBytesReader(w, r.Body, 10<<20)
 	err := json.NewDecoder(reader).Decode(&input)
 	if err != nil || input.Nodes == nil || input.Pod == nil {
+		s.log.Error(err, "[filter] unable to decode a request")
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 
-	requested, err := extractRequestedSize(s.client, input.Pod)
+	s.log.Debug("[filter] starts to extract requested size")
+	requested, err := extractRequestedSize(s.client, s.log, input.Pod)
 	if err != nil {
-		fmt.Println("ERROR: " + err.Error())
+		s.log.Error(err, fmt.Sprintf("[filter] unable to extract request size for a pod %s", input.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
 	}
+	s.log.Debug("[filter] successfully extracted the requested size")
 
-	fmt.Println("EXTRACTED SIZE")
-
-	result, err := filterNodes(s.client, *input.Nodes, requested)
+	s.log.Debug("[filter] starts to filter requested nodes")
+	result, err := filterNodes(s.client, s.log, *input.Nodes, requested)
 	if err != nil {
-		fmt.Println("ERROR: " + err.Error())
+		s.log.Error(err, "[filter] unable to filter requested nodes")
 		http.Error(w, "bad request", http.StatusBadRequest)
 	}
-
-	fmt.Println("FILTERED NODES")
+	s.log.Debug("[filter] successfully filtered the requested nodes")
 
 	w.Header().Set("content-type", "application/json")
 	err = json.NewEncoder(w).Encode(result)
 	if err != nil {
+		s.log.Error(err, "[filter] unable to encode a response")
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
+	s.log.Debug("[filter] ends the serving")
 }
 
-func extractRequestedSize(cl client.Client, pod *corev1.Pod) (map[string]int64, error) {
+func extractRequestedSize(cl client.Client, log logger.Logger, pod *corev1.Pod) (map[string]int64, error) {
 	ctx := context.Background()
 	usedPvc := make([]string, 0, len(pod.Spec.Volumes))
 	for _, v := range pod.Spec.Volumes {
@@ -91,7 +94,7 @@ func extractRequestedSize(cl client.Client, pod *corev1.Pod) (map[string]int64, 
 
 		scName := pv.Spec.StorageClassName
 		sc := scMap[*scName]
-
+		log.Trace(fmt.Sprintf("[extractRequestedSize] StorageClass %s has LVMType %s", sc.Name, sc.Parameters[lvmTypeParamKey]))
 		switch sc.Parameters[lvmTypeParamKey] {
 		case thick:
 			result[thick] += pv.Spec.Resources.Requests.Storage().Value()
@@ -100,10 +103,14 @@ func extractRequestedSize(cl client.Client, pod *corev1.Pod) (map[string]int64, 
 		}
 	}
 
+	for t, s := range result {
+		log.Trace(fmt.Sprintf("[extractRequestedSize] pod %s has requested type: %s, size: %d", pod.Name, t, s))
+	}
+
 	return result, nil
 }
 
-func filterNodes(cl client.Client, nodes corev1.NodeList, requested map[string]int64) (*ExtenderFilterResult, error) {
+func filterNodes(cl client.Client, log logger.Logger, nodes corev1.NodeList, requested map[string]int64) (*ExtenderFilterResult, error) {
 	if len(requested) == 0 {
 		return &ExtenderFilterResult{
 			Nodes: &nodes,
@@ -124,6 +131,8 @@ func filterNodes(cl client.Client, nodes corev1.NodeList, requested map[string]i
 		}
 	}
 
+	log.Trace(fmt.Sprintf("[filterNodes] sorted LVG by nodes: %+v", lvgByNodes))
+
 	result := &ExtenderFilterResult{
 		Nodes:       &corev1.NodeList{},
 		FailedNodes: FailedNodesMap{},
@@ -132,19 +141,17 @@ func filterNodes(cl client.Client, nodes corev1.NodeList, requested map[string]i
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodes.Items))
 
-	for _, n := range nodes.Items {
-		node := n
-		lvgs := lvgByNodes[node.Name]
-
-		go func() {
-			fmt.Println("FUNC STARTS")
+	for _, node := range nodes.Items {
+		go func(node corev1.Node) {
 			defer wg.Done()
+
+			lvgs := lvgByNodes[node.Name]
 			freeSpace, err := getNodeFreeSpace(lvgs)
 			if err != nil {
-				result.FailedNodes[node.Name] = err.Error()
+				log.Error(err, fmt.Sprintf("[filterNodes] unable to get node free space, node: %s, lvgs: %+v", node.Name, lvgs))
+				result.FailedNodes[node.Name] = "error occurred while counting free space"
 				return
 			}
-
 			if freeSpace[thick] < requested[thick] ||
 				freeSpace[thin] < requested[thin] {
 				result.FailedNodes[node.Name] = "not enough space"
@@ -152,46 +159,17 @@ func filterNodes(cl client.Client, nodes corev1.NodeList, requested map[string]i
 			}
 
 			result.Nodes.Items = append(result.Nodes.Items, node)
-			fmt.Println("FUNC ENDS")
-		}()
+		}(node)
 	}
-
 	wg.Wait()
 
-	//failedNodes := make([]string, len(nodes.Items))
-	//wg := &sync.WaitGroup{}
-	//wg.Add(len(nodes.Items))
-	//for i := range nodes.Items {
-	//	reason := &failedNodes[i]
-	//	node := nodes.Items[i]
-	//	go func() {
-	//		*reason = filterNode(node, requested)
-	//		wg.Done()
-	//	}()
-	//}
-	//wg.Wait()
-	//result := &ExtenderFilterResult{
-	//	Nodes:       &corev1.NodeList{},
-	//	FailedNodes: FailedNodesMap{},
-	//}
-	//for i, reason := range failedNodes {
-	//	if len(reason) == 0 {
-	//		result.Nodes.Items = append(result.Nodes.Items, nodes.Items[i])
-	//	} else {
-	//		result.FailedNodes[nodes.Items[i].Name] = reason
-	//	}
-	//}
+	for _, node := range result.Nodes.Items {
+		log.Trace(fmt.Sprintf("[filterNodes] suitable node: %s", node.Name))
+	}
 
-	fmt.Println("RESULT NODE")
-	fmt.Println(result.Nodes.Items)
-	fmt.Println("RESULT NODE")
-
-	fmt.Println("FAILED NODES")
-	fmt.Println(result.FailedNodes)
-	fmt.Println("FAILED NODES")
-
-	fmt.Println("NODE NAMES")
-	fmt.Println("NODE NAMES")
+	for node, reason := range result.FailedNodes {
+		log.Trace(fmt.Sprintf("[filterNodes] failed node: %s, reason: %s", node, reason))
+	}
 
 	return result, nil
 }
@@ -251,29 +229,4 @@ func getThinPoolFreeSpace(tp v1alpha1.StatusThinPool) (resource.Quantity, error)
 	free.Sub(used)
 
 	return free, nil
-}
-
-func getLVGType(lvg *v1alpha1.LvmVolumeGroup) string {
-	if len(lvg.Spec.ThinPools) == 0 {
-		return thick
-	}
-
-	return thin
-}
-
-func filterNode(node corev1.Node, requested map[string]int64) string {
-	for dc, required := range requested {
-		val, ok := node.Annotations[topolvm.GetCapacityKeyPrefix()+dc]
-		if !ok {
-			return "no capacity annotation"
-		}
-		capacity, err := strconv.ParseUint(val, 10, 64)
-		if err != nil {
-			return "bad capacity annotation: " + val
-		}
-		if capacity < uint64(required) {
-			return "out of VG free space"
-		}
-	}
-	return ""
 }
