@@ -44,6 +44,11 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 	d.log.Info(request.String())
 	d.log.Info("------------- NodePublishVolume --------------")
 
+	d.log.Info("------------- Extend params --------------")
+	fmt.Println("request.GetVolumeCapability().GetBlock():", request.GetVolumeCapability().GetBlock())
+	fmt.Println("request.GetVolumeCapability().GetMount():", request.GetVolumeCapability().GetMount())
+	d.log.Info("------------- Extend params  --------------")
+
 	vgName := make(map[string]string)
 	err := yaml.Unmarshal([]byte(request.GetVolumeContext()[lvmSelector]), &vgName)
 	if err != nil {
@@ -53,6 +58,10 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 
 	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[VGNameKey], request.VolumeId)
 	fsType := request.VolumeCapability.GetMount().FsType
+
+	if fsType != "ext4" {
+		fmt.Println("request.VolumeCapability.GetMount().FsType =", request.VolumeCapability.GetMount().FsType)
+	}
 
 	d.log.Info("vgName[VGNameKey] = ", request.GetVolumeContext()[VGNameKey])
 	d.log.Info(fmt.Sprintf("[mount] params dev=%s target=%s fs=%s", dev, request.GetTargetPath(), fsType))
@@ -111,7 +120,7 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, request *csi.NodeUnpub
 
 	err := d.mounter.Unmount(request.GetTargetPath())
 	if err != nil {
-		return nil, err
+		d.log.Error(err, "NodeUnpublishVolume err ")
 	}
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }

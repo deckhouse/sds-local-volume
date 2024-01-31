@@ -2,15 +2,16 @@ package utils
 
 import (
 	"fmt"
+	mu "k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
-	"k8s.io/utils/mount"
 	"os"
 	"sds-lvm-csi/pkg/logger"
+	"time"
 )
 
 type Store struct {
 	Log     *logger.Logger
-	Mounter mount.SafeFormatAndMount
+	Mounter mu.SafeFormatAndMount
 }
 
 type NewMounter interface {
@@ -22,22 +23,20 @@ type NewMounter interface {
 func NewStore(logger *logger.Logger) *Store {
 	return &Store{
 		Log: logger,
-		Mounter: mount.SafeFormatAndMount{
-			Interface: mount.New("/bin/mount"),
+		Mounter: mu.SafeFormatAndMount{
+			Interface: mu.New("/bin/mount"),
 			Exec:      utilexec.New(),
 		},
 	}
 }
 
 func (s *Store) Mount(source, target, fsType string, readonly bool, mntOpts []string) error {
-
-	fmt.Println("-----------------== Node Mount ==--------------- 1 ")
+	s.Log.Info(" ----== Node Mount ==---- ")
 
 	var block bool
 	if fsType == "" {
 		block = true
 	}
-
 	s.Log.Info(fmt.Sprintf("[mount volune] source=%s target=%s moutnOpt=%s filesystem=%s blockAccessMode=%t",
 		source, target, mntOpts, fsType, block))
 
@@ -47,14 +46,8 @@ func (s *Store) Mount(source, target, fsType string, readonly bool, mntOpts []st
 	}
 
 	if (info.Mode() & os.ModeDevice) != os.ModeDevice {
-		return fmt.Errorf("[NewMount] path %s is not a device", source) //nolint:goerr113
+		return fmt.Errorf("[NewMount] path %s is not a device", source)
 	}
-
-	fmt.Println("----======== Stat info ============---- 2")
-	fmt.Println(info.Mode())
-	fmt.Println(info.IsDir())
-	fmt.Println(info.Sys())
-	fmt.Println("----======== Stat info ============----")
 
 	if readonly {
 		mntOpts = append(mntOpts, "ro")
@@ -71,22 +64,9 @@ func (s *Store) Mount(source, target, fsType string, readonly bool, mntOpts []st
 	}
 	fmt.Println("======== stop  MkdirAll ========")
 
-	//} else {
-	//fmt.Println("======== start  test OpenFile ========")
-	//f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0644))
-	//if err != nil {
-	//	if !os.IsExist(err) {
-	//		return fmt.Errorf("[NewMount] could not create bind target for block volume %s, %w", target, err)
-	//	}
-	//} else {
-	//	_ = f.Close()
-	//}
-	//fmt.Println("======== stop  test OpenFile ========")
-	//}
-
 	fmt.Println("-----------------== IsNotMountPoint ==--------------- 3 ")
 
-	needsMount, err := mount.IsNotMountPoint(s.Mounter, target)
+	needsMount, err := s.Mounter.IsMountPoint(target)
 	if err != nil {
 		return fmt.Errorf("[NewMount] unable to determine mount status of %s %v", target, err)
 	}
@@ -103,20 +83,25 @@ func (s *Store) Mount(source, target, fsType string, readonly bool, mntOpts []st
 	}
 
 	fmt.Println("-----------------== Final ==--------------- 5 ")
+
+	//todo sleep 60
 	return nil
 }
 
 func (s *Store) Unmount(target string) error {
 	s.Log.Info(fmt.Sprintf("[unmount volume] target=%s", target))
-	err := mount.CleanupMountPoint(target, s.Mounter, true)
+
+	err := s.Mounter.Unmount(target)
 	if err != nil {
-		return fmt.Errorf("[NewUnmount] unable to cleanup mount point: %w", err)
+		s.Log.Error(err, "[s.Mounter.Unmount]: ")
+		return err
 	}
+	time.Sleep(time.Second * 1)
 	return nil
 }
 
 func (s *Store) IsNotMountPoint(target string) (bool, error) {
-	notMounted, err := mount.IsNotMountPoint(s.Mounter, target)
+	notMounted, err := s.Mounter.IsMountPoint(target)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return true, nil
