@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	v1 "k8s.io/api/core/v1"
-	sv1 "k8s.io/api/storage/v1"
-	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"net/http"
 	"os"
 	"os/signal"
-	"sds-lvm-scheduler-extender/pkg/api/v1alpha1"
+	"sds-lvm-scheduler-extender/api/v1alpha1"
 	"sds-lvm-scheduler-extender/pkg/kubutils"
 	"sds-lvm-scheduler-extender/pkg/logger"
 	"sds-lvm-scheduler-extender/pkg/scheduler"
@@ -21,10 +18,8 @@ import (
 	"syscall"
 	"time"
 
-	apiruntime "k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-
 	"github.com/spf13/cobra"
+	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
 )
 
@@ -32,10 +27,6 @@ var cfgFilePath string
 
 var resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
 	v1alpha1.AddToScheme,
-	clientgoscheme.AddToScheme,
-	extv1.AddToScheme,
-	v1.AddToScheme,
-	sv1.AddToScheme,
 }
 
 const (

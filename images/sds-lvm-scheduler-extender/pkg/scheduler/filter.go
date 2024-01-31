@@ -8,7 +8,7 @@ import (
 	v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"net/http"
-	"sds-lvm-scheduler-extender/pkg/api/v1alpha1"
+	"sds-lvm-scheduler-extender/api/v1alpha1"
 	"sds-lvm-scheduler-extender/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sync"
@@ -178,9 +178,6 @@ func getNodeFreeSpace(lvgs []v1alpha1.LvmVolumeGroup) (map[string]int64, error) 
 	freeSpaces := make(map[string]int64, 2)
 
 	for _, lvg := range lvgs {
-		// здесь не нужно делать выборку по типу, мы просто смотрим, сколько есть места такого и такого (а не одно из двух)
-
-		// выбираю максимальное свободное место из thin pool
 		for _, tp := range lvg.Status.ThinPools {
 			thinSpace, err := getThinPoolFreeSpace(tp)
 			if err != nil {

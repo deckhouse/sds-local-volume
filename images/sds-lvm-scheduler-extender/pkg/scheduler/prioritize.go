@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"math"
 	"net/http"
-	"sds-lvm-scheduler-extender/pkg/api/v1alpha1"
+	"sds-lvm-scheduler-extender/api/v1alpha1"
 	"sds-lvm-scheduler-extender/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sync"
