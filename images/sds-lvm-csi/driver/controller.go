@@ -44,8 +44,9 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	d.log.Info("========== CreateVolume ============")
 	d.log.Info(request.String())
-	request.GetAccessibilityRequirements().GetRequisite()
 	d.log.Info("========== CreateVolume ============")
+	fmt.Println("request.GetVolumeCapabilities():", request.GetVolumeCapabilities())
+	d.log.Info("------------------------------------")
 
 	l := make(map[string]string)
 	err := yaml.Unmarshal([]byte(request.GetParameters()[lvmSelector]), &l)
