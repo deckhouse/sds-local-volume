@@ -166,7 +166,7 @@ spec:
           - name: CSI_ENDPOINT
             value: /csi/csi.sock
           - name: DRIVER_REG_SOCK_PATH
-            value: /var/lib/kubelet/plugins/sds-lvm.csi.storage.deckhouse.io/csi.sock
+            value: /var/lib/kubelet/plugins/lvm.csi.storage.deckhouse.io/csi.sock
           - name: KUBE_NODE_NAME
             valueFrom:
               fieldRef:
@@ -180,7 +180,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - rm -rf /registration/sds-lvm.csi.storage.deckhouse.io /registration/sds-lvm.csi.storage.deckhouse.io-reg.sock
+                - rm -rf /registration/lvm.csi.storage.deckhouse.io /registration/lvm.csi.storage.deckhouse.io-reg.sock
         name: csi-node-driver-registrar
         resources:
           requests:
@@ -227,7 +227,7 @@ spec:
           - name: CSI_ENDPOINT
             value: /csi/csi.sock
           - name: DRIVER_REG_SOCK_PATH
-            value: /var/lib/kubelet/plugins/sds-lvm.csi.storage.deckhouse.io/csi.sock
+            value: /var/lib/kubelet/plugins/lvm.csi.storage.deckhouse.io/csi.sock
           - name: KUBE_NODE_NAME
             valueFrom:
               fieldRef:
@@ -284,7 +284,7 @@ spec:
             type: ""
           name: device-dir
         - hostPath:
-            path: /var/lib/kubelet/plugins/sds-lvm.csi.storage.deckhouse.io
+            path: /var/lib/kubelet/plugins/lvm.csi.storage.deckhouse.io
             type: DirectoryOrCreate
           name: plugin-dir
         - hostPath:

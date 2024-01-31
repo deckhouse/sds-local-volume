@@ -39,7 +39,7 @@ import (
 const (
 	// DefaultDriverName defines the name that is used in Kubernetes and the CSI
 	// system for the canonical, official name of this plugin
-	DefaultDriverName = "sds-lvm.csi.storage.deckhouse.io"
+	DefaultDriverName = "lvm.csi.storage.deckhouse.io"
 	// DefaultAddress is the default address that the csi plugin will serve its
 	// http handler on.
 	DefaultAddress           = "127.0.0.1:12302"
