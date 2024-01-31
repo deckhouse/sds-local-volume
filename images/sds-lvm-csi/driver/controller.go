@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	lvmSelector = "sds-lvm.csi.storage.deckhouse.io/lvm-vg-selector"
+	lvmSelector = "lvm.csi.storage.deckhouse.io/lvm-vg-selector"
 	topologyKey = "topology.sds-lvm-csi/node"
 	subPath     = "subPath"
 	VGNameKey   = "vgname"
