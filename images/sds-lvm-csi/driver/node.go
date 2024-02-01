@@ -39,16 +39,15 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstage
 
 func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	d.log.Info("method NodePublishVolume")
-
 	d.log.Info("------------- NodePublishVolume --------------")
 	d.log.Info(request.String())
 	d.log.Info("------------- NodePublishVolume --------------")
-
 	d.log.Info("------------- Extend params --------------")
-	fmt.Println("request.GetVolumeCapability().GetBlock():", request.GetVolumeCapability().GetBlock())
-	fmt.Println("request.GetVolumeCapability().GetMount():", request.GetVolumeCapability().GetMount())
+	d.log.Info("request.GetVolumeCapability().GetBlock():", request.GetVolumeCapability().GetBlock().String())
+	d.log.Info("request.GetVolumeCapability().GetMount():", request.GetVolumeCapability().GetMount().String())
 	d.log.Info("------------- Extend params  --------------")
 
+	// Extract VGName
 	vgName := make(map[string]string)
 	err := yaml.Unmarshal([]byte(request.GetVolumeContext()[lvmSelector]), &vgName)
 	if err != nil {
@@ -56,20 +55,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		return nil, status.Error(codes.Internal, "Unmarshal volume context")
 	}
 
-	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[VGNameKey], request.VolumeId)
-	fsType := request.VolumeCapability.GetMount().FsType
-
-	if fsType != "ext4" {
-		fmt.Println("request.VolumeCapability.GetMount().FsType =", request.VolumeCapability.GetMount().FsType)
-	}
-
-	d.log.Info("vgName[VGNameKey] = ", request.GetVolumeContext()[VGNameKey])
-	d.log.Info(fmt.Sprintf("[mount] params dev=%s target=%s fs=%s", dev, request.GetTargetPath(), fsType))
-
-	///------------- External code ----------------
-
-	d.log.Info("///------------- External code ----------------")
-
+	d.log.Info("---------------- LVCreate External code ----------------")
 	command, _, err := utils.LVExist(request.GetVolumeContext()[VGNameKey], request.VolumeId)
 	d.log.Info(command)
 	if err != nil {
@@ -90,22 +76,32 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		if err != nil {
 			fmt.Println(err)
 		}
-
 		d.log.Info("LV Create STOP")
 	}
+	d.log.Info("---------------- LVCreate External code ----------------")
 
-	d.log.Info("///------------- External code ----------------")
-
-	///------------- External code ----------------
+	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[VGNameKey], request.VolumeId)
 
 	var mountOptions []string
 	if request.GetReadonly() {
 		mountOptions = append(mountOptions, "ro")
 	}
+	var fsType string
+	var IsBlock bool
 
-	err = d.mounter.Mount(dev, request.GetTargetPath(), fsType, false, mountOptions)
+	if request.GetVolumeCapability().GetBlock() != nil {
+		mountOptions = []string{"bind"}
+		IsBlock = true
+	}
+
+	if mnt := request.GetVolumeCapability().GetMount(); mnt != nil {
+		fsType = request.VolumeCapability.GetMount().FsType
+		mountOptions = append(mountOptions, mnt.GetMountFlags()...)
+	}
+
+	err = d.mounter.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions)
 	if err != nil {
-		d.log.Error(err, " d.mounter.Mount ")
+		d.log.Error(err, "d.mounter.Mount :")
 		return nil, err
 	}
 
