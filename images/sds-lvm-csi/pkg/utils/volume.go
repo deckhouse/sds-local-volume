@@ -30,15 +30,12 @@ func NewStore(logger *logger.Logger) *Store {
 	}
 }
 
-func (s *Store) Mount(source, target, fsType string, readonly bool, mntOpts []string) error {
+func (s *Store) Mount(source, target string, isBlock bool, fsType string, readonly bool, mntOpts []string) error {
 	s.Log.Info(" ----== Node Mount ==---- ")
 
-	var block bool
-	if fsType == "" {
-		block = true
-	}
-	s.Log.Info(fmt.Sprintf("[mount volune] source=%s target=%s moutnOpt=%s filesystem=%s blockAccessMode=%t",
-		source, target, mntOpts, fsType, block))
+	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+	s.Log.Info(fmt.Sprintf("[mount] params source=%s target=%s fs=%s blockMode=%t mountOptions=%v", source, target, fsType, isBlock, mntOpts))
+	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
 	info, err := os.Stat(source)
 	if err != nil {
@@ -49,42 +46,69 @@ func (s *Store) Mount(source, target, fsType string, readonly bool, mntOpts []st
 		return fmt.Errorf("[NewMount] path %s is not a device", source)
 	}
 
-	if readonly {
-		mntOpts = append(mntOpts, "ro")
-		//todo set RO
-	} else {
-		//todo set RW
-	}
+	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ MODE SOURCE ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+	s.Log.Info(info.Mode().String())
+	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ MODE SOURCE  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
-	//if !block {
-	fmt.Println("======== start MkdirAll ========")
-	fmt.Println("create dir =", target)
-	if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
-		return fmt.Errorf("[NewMount] could not create target directory %s, %v", target, err)
-	}
-	fmt.Println("======== stop  MkdirAll ========")
+	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ isBlock ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+	s.Log.Info(fmt.Sprintf("%t ", isBlock))
+	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ isBlock  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
-	fmt.Println("-----------------== IsNotMountPoint ==--------------- 3 ")
+	if !isBlock {
+		s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ FS MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		s.Log.Info("-----------------== start MkdirAll ==-----------------")
+		s.Log.Info("mkdir create dir =" + target)
+		if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
+			return fmt.Errorf("[MkdirAll] could not create target directory %s, %v", target, err)
+		}
+		s.Log.Info("-----------------== stop MkdirAll ==-----------------")
 
-	needsMount, err := s.Mounter.IsMountPoint(target)
-	if err != nil {
-		return fmt.Errorf("[NewMount] unable to determine mount status of %s %v", target, err)
-	}
+		needsMount, err := s.Mounter.IsMountPoint(target)
+		if err != nil {
+			return fmt.Errorf("[s.Mounter.IsMountPoint] unable to determine mount status of %s %v", target, err)
+		}
 
-	if !needsMount {
+		s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ needsMount ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		s.Log.Info(fmt.Sprintf("%t", needsMount))
+		s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ needsMount  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+
+		//todo
+		//if !needsMount {
+		//	return nil
+		//}
+
+		s.Log.Info("-----------------== start FormatAndMount ==---------------")
+		err = s.Mounter.FormatAndMount(source, target, fsType, mntOpts)
+		if err != nil {
+			return fmt.Errorf("failed to FormatAndMount : %w", err)
+		}
+		s.Log.Info("-----------------== stop FormatAndMount ==---------------")
 		return nil
 	}
 
-	fmt.Println("-----------------== FormatAndMount ==--------------- 4 ")
-
-	err = s.Mounter.FormatAndMount(source, target, fsType, mntOpts)
-	if err != nil {
-		return fmt.Errorf("failed to FormatAndMount : %w", err)
+	if isBlock {
+		s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ BLOCK MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		s.Log.Info("-----------------== start Create File ==---------------")
+		f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0666))
+		if err != nil {
+			if !os.IsExist(err) {
+				return fmt.Errorf("could not create bind target for block volume %s, %w", target, err)
+			}
+		} else {
+			_ = f.Close()
+		}
+		s.Log.Info("-----------------== stop Create File ==---------------")
+		s.Log.Info("-----------------== start Mount ==---------------")
+		err = s.Mounter.Mount(source, target, fsType, mntOpts)
+		if err != nil {
+			s.Log.Error(err, "block mount error :")
+			return err
+		}
+		s.Log.Info("-----------------== stop Mount ==---------------")
+		s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ BLOCK MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		return nil
 	}
-
-	fmt.Println("-----------------== Final ==--------------- 5 ")
-
-	//todo sleep 60
+	s.Log.Info("-----------------== Final ==---------------")
 	return nil
 }
 
