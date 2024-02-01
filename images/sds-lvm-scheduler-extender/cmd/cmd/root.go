@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	v1 "k8s.io/api/core/v1"
+	sv1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"net/http"
 	"os"
@@ -27,6 +29,8 @@ var cfgFilePath string
 
 var resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
 	v1alpha1.AddToScheme,
+	v1.AddToScheme,
+	sv1.AddToScheme,
 }
 
 const (
