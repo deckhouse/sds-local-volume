@@ -31,6 +31,10 @@ func (s scheduler) filter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	for _, n := range input.Nodes.Items {
+		s.log.Trace(fmt.Sprintf("[filter] a node from request, name :%s", n.Name))
+	}
+
 	s.log.Debug("[filter] starts to extract requested size")
 	requested, err := extractRequestedSize(s.client, s.log, input.Pod)
 	if err != nil {
