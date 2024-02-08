@@ -39,7 +39,7 @@ func (s scheduler) filter(w http.ResponseWriter, r *http.Request) {
 		s.log.Trace(fmt.Sprintf("[filter] a node from request, name :%s", n.Name))
 	}
 
-	pvcs, err := getUsedPVC(s.client, input.Pod)
+	pvcs, err := getUsedPVC(s.ctx, s.client, input.Pod)
 	if err != nil {
 		s.log.Error(err, "[filter] unable to get PVC from the Pod")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -49,7 +49,7 @@ func (s scheduler) filter(w http.ResponseWriter, r *http.Request) {
 		s.log.Trace(fmt.Sprintf("[filter] used PVC: %s", pvc.Name))
 	}
 
-	scs, err := getStorageClassesUsedByPVCs(s.client, pvcs)
+	scs, err := getStorageClassesUsedByPVCs(s.ctx, s.client, pvcs)
 	if err != nil {
 		s.log.Error(err, "[filter] unable to get StorageClasses from the PVC")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -60,7 +60,7 @@ func (s scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Debug("[filter] starts to extract pvcRequests size")
-	pvcRequests, err := extractRequestedSize(s.client, s.log, pvcs, scs)
+	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, pvcs, scs)
 	if err != nil {
 		s.log.Error(err, fmt.Sprintf("[filter] unable to extract request size for a pod %s", input.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -68,7 +68,7 @@ func (s scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug("[filter] successfully extracted the pvcRequests size")
 
 	s.log.Debug("[filter] starts to filter the nodes")
-	result, err := filterNodes(s.client, s.log, input.Nodes, pvcs, scs, pvcRequests)
+	result, err := filterNodes(s.ctx, s.client, s.log, input.Nodes, pvcs, scs, pvcRequests)
 	if err != nil {
 		s.log.Error(err, "[filter] unable to filter the nodes")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -89,9 +89,13 @@ type PVCRequest struct {
 	RequestedSize int64
 }
 
-func extractRequestedSize(cl client.Client, log logger.Logger, pvcs map[string]corev1.PersistentVolumeClaim, scs map[string]v1.StorageClass) (map[string]PVCRequest, error) {
-	ctx := context.Background()
-
+func extractRequestedSize(
+	ctx context.Context,
+	cl client.Client,
+	log logger.Logger,
+	pvcs map[string]corev1.PersistentVolumeClaim,
+	scs map[string]v1.StorageClass,
+) (map[string]PVCRequest, error) {
 	pvs, err := getPersistentVolumes(ctx, cl)
 	if err != nil {
 		return nil, err
@@ -139,15 +143,21 @@ func extractRequestedSize(cl client.Client, log logger.Logger, pvcs map[string]c
 	return pvcRequests, nil
 }
 
-func filterNodes(cl client.Client, log logger.Logger, nodes *corev1.NodeList, pvcs map[string]corev1.PersistentVolumeClaim, scs map[string]v1.StorageClass, pvcRequests map[string]PVCRequest) (*ExtenderFilterResult, error) {
+func filterNodes(
+	ctx context.Context,
+	cl client.Client,
+	log logger.Logger,
+	nodes *corev1.NodeList,
+	pvcs map[string]corev1.PersistentVolumeClaim,
+	scs map[string]v1.StorageClass,
+	pvcRequests map[string]PVCRequest,
+) (*ExtenderFilterResult, error) {
 	// Param "pvcRequests" is a total amount of the pvcRequests space (both thick and thin) for Pod (i.e. from every PVC)
 	if len(pvcRequests) == 0 {
 		return &ExtenderFilterResult{
 			Nodes: nodes,
 		}, nil
 	}
-
-	ctx := context.Background()
 
 	lvgs, err := getLVMVolumeGroups(ctx, cl)
 	if err != nil {
@@ -460,9 +470,9 @@ func getPersistentVolumes(ctx context.Context, cl client.Client) (map[string]cor
 	return pvMap, nil
 }
 
-func getStorageClassesUsedByPVCs(cl client.Client, pvcs map[string]corev1.PersistentVolumeClaim) (map[string]v1.StorageClass, error) {
+func getStorageClassesUsedByPVCs(ctx context.Context, cl client.Client, pvcs map[string]corev1.PersistentVolumeClaim) (map[string]v1.StorageClass, error) {
 	scs := &v1.StorageClassList{}
-	err := cl.List(context.Background(), scs)
+	err := cl.List(ctx, scs)
 	if err != nil {
 		return nil, err
 	}
@@ -488,11 +498,11 @@ func getStorageClassesUsedByPVCs(cl client.Client, pvcs map[string]corev1.Persis
 	return result, nil
 }
 
-func getUsedPVC(cl client.Client, pod *corev1.Pod) (map[string]corev1.PersistentVolumeClaim, error) {
+func getUsedPVC(ctx context.Context, cl client.Client, pod *corev1.Pod) (map[string]corev1.PersistentVolumeClaim, error) {
 	usedPvc := make(map[string]corev1.PersistentVolumeClaim, len(pod.Spec.Volumes))
 
 	pvcs := &corev1.PersistentVolumeClaimList{}
-	err := cl.List(context.Background(), pvcs)
+	err := cl.List(ctx, pvcs)
 	if err != nil {
 		return nil, err
 	}

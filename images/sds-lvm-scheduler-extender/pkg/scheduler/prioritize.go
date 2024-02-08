@@ -25,7 +25,7 @@ func (s scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pvcs, err := getUsedPVC(s.client, input.Pod)
+	pvcs, err := getUsedPVC(s.ctx, s.client, input.Pod)
 	if err != nil {
 		s.log.Error(err, "[prioritize] unable to get PVC from the Pod")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -35,7 +35,7 @@ func (s scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 		s.log.Trace(fmt.Sprintf("[prioritize] used PVC: %s", pvc.Name))
 	}
 
-	scs, err := getStorageClassesUsedByPVCs(s.client, pvcs)
+	scs, err := getStorageClassesUsedByPVCs(s.ctx, s.client, pvcs)
 	if err != nil {
 		s.log.Error(err, "[prioritize] unable to get StorageClasses from the PVC")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -46,7 +46,7 @@ func (s scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Debug("[prioritize] starts to extract pvcRequests size")
-	pvcRequests, err := extractRequestedSize(s.client, s.log, pvcs, scs)
+	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, pvcs, scs)
 	if err != nil {
 		s.log.Error(err, fmt.Sprintf("[filter] unable to extract request size for a pod %s", input.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -54,7 +54,7 @@ func (s scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug("[filter] successfully extracted the pvcRequests size")
 
 	s.log.Debug("[prioritize] starts to score the nodes")
-	result, err := scoreNodes(s.client, s.log, input.Nodes, pvcs, scs, pvcRequests, s.defaultDivisor)
+	result, err := scoreNodes(s.ctx, s.client, s.log, input.Nodes, pvcs, scs, pvcRequests, s.defaultDivisor)
 	if err != nil {
 		s.log.Error(err, "[prioritize] unable to score nodes")
 		http.Error(w, "Bad Request.", http.StatusBadRequest)
@@ -71,9 +71,16 @@ func (s scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug("[prioritize] ends serving")
 }
 
-func scoreNodes(cl client.Client, log logger.Logger, nodes *corev1.NodeList, pvcs map[string]corev1.PersistentVolumeClaim, scs map[string]v1.StorageClass, pvcRequests map[string]PVCRequest, divisor float64) ([]HostPriority, error) {
-	ctx := context.Background()
-
+func scoreNodes(
+	ctx context.Context,
+	cl client.Client,
+	log logger.Logger,
+	nodes *corev1.NodeList,
+	pvcs map[string]corev1.PersistentVolumeClaim,
+	scs map[string]v1.StorageClass,
+	pvcRequests map[string]PVCRequest,
+	divisor float64,
+) ([]HostPriority, error) {
 	lvgs, err := getLVMVolumeGroups(ctx, cl)
 	if err != nil {
 		return nil, err

@@ -83,6 +83,7 @@ func subMain(parentCtx context.Context) error {
 		}
 	}
 
+	ctx := context.Background()
 	log, err := logger.NewLogger(logger.Verbosity(config.LogLevel))
 	if err != nil {
 		fmt.Println(fmt.Sprintf("[subMain] unable to initialize logger, err: %s", err.Error()))
@@ -111,7 +112,7 @@ func subMain(parentCtx context.Context) error {
 		WarningHandler: client.WarningHandlerOptions{},
 	})
 
-	h, err := scheduler.NewHandler(cl, *log, config.DefaultDivisor)
+	h, err := scheduler.NewHandler(ctx, cl, *log, config.DefaultDivisor)
 	if err != nil {
 		return err
 	}
