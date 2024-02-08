@@ -19,12 +19,8 @@ package driver
 import (
 	"context"
 	"fmt"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"sds-lvm-csi/pkg/utils"
 )
 
 func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
@@ -42,43 +38,6 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 	d.log.Info("------------- NodePublishVolume --------------")
 	d.log.Info(request.String())
 	d.log.Info("------------- NodePublishVolume --------------")
-	d.log.Info("------------- Extend params --------------")
-	d.log.Info("request.GetVolumeCapability().GetBlock():", request.GetVolumeCapability().GetBlock().String())
-	d.log.Info("request.GetVolumeCapability().GetMount():", request.GetVolumeCapability().GetMount().String())
-	d.log.Info("------------- Extend params  --------------")
-
-	// Extract VGName
-	vgName := make(map[string]string)
-	err := yaml.Unmarshal([]byte(request.GetVolumeContext()[lvmSelector]), &vgName)
-	if err != nil {
-		d.log.Error(err, "unmarshal labels")
-		return nil, status.Error(codes.Internal, "Unmarshal volume context")
-	}
-
-	d.log.Info("---------------- LVCreate External code ----------------")
-	command, _, err := utils.LVExist(request.GetVolumeContext()[VGNameKey], request.VolumeId)
-	d.log.Info(command)
-	if err != nil {
-		d.log.Error(err, " error utils.LVExist")
-
-		d.log.Info("LV Create START")
-		deviceSize, err := resource.ParseQuantity("1000000000")
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		lv, err := utils.CreateLV(deviceSize.String(), request.VolumeId, request.GetVolumeContext()[VGNameKey])
-		if err != nil {
-			d.log.Error(err, "")
-		}
-		d.log.Info(fmt.Sprintf("[lv create] size=%s pvc=%s vg=%s", deviceSize.String(), request.VolumeId, request.GetVolumeContext()[VGNameKey]))
-		fmt.Println("lv create command = ", lv)
-		if err != nil {
-			fmt.Println(err)
-		}
-		d.log.Info("LV Create STOP")
-	}
-	d.log.Info("---------------- LVCreate External code ----------------")
 
 	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[VGNameKey], request.VolumeId)
 
@@ -99,7 +58,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		mountOptions = append(mountOptions, mnt.GetMountFlags()...)
 	}
 
-	err = d.mounter.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions)
+	err := d.mounter.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions)
 	if err != nil {
 		d.log.Error(err, "d.mounter.Mount :")
 		return nil, err
@@ -111,7 +70,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 func (d *Driver) NodeUnpublishVolume(ctx context.Context, request *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	d.log.Info("method NodeUnpublishVolume")
 	fmt.Println("------------- NodeUnpublishVolume --------------")
-	fmt.Println(request)
+	fmt.Println(request.String())
 	fmt.Println("------------- NodeUnpublishVolume --------------")
 
 	err := d.mounter.Unmount(request.GetTargetPath())
@@ -137,7 +96,7 @@ func (d *Driver) NodeGetCapabilities(ctx context.Context, request *csi.NodeGetCa
 }
 
 func (d *Driver) NodeGetInfo(ctx context.Context, request *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	d.log.Info("method NodeGetInfo 0 2")
+	d.log.Info("method NodeGetInfo")
 	d.log.Info("hostID = ", d.hostID)
 
 	return &csi.NodeGetInfoResponse{
