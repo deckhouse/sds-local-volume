@@ -3,11 +3,12 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/storage/v1"
 	"math"
 	"net/http"
-	"sds-lvm-scheduler-extender/api/v1alpha1"
 	"sds-lvm-scheduler-extender/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sync"
@@ -24,12 +25,42 @@ func (s scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := scoreNodes(s.client, s.log, input.Nodes.Items, s.defaultDivisor)
+	pvcs, err := getUsedPVC(s.client, input.Pod)
+	if err != nil {
+		s.log.Error(err, "[prioritize] unable to get PVC from the Pod")
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	for _, pvc := range pvcs {
+		s.log.Trace(fmt.Sprintf("[prioritize] used PVC: %s", pvc.Name))
+	}
+
+	scs, err := getStorageClassesUsedByPVCs(s.client, pvcs)
+	if err != nil {
+		s.log.Error(err, "[prioritize] unable to get StorageClasses from the PVC")
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	for _, sc := range scs {
+		s.log.Trace(fmt.Sprintf("[prioritize] used StorageClasses: %s", sc.Name))
+	}
+
+	s.log.Debug("[prioritize] starts to extract pvcRequests size")
+	pvcRequests, err := extractRequestedSize(s.client, s.log, pvcs, scs)
+	if err != nil {
+		s.log.Error(err, fmt.Sprintf("[filter] unable to extract request size for a pod %s", input.Pod.Name))
+		http.Error(w, "bad request", http.StatusBadRequest)
+	}
+	s.log.Debug("[filter] successfully extracted the pvcRequests size")
+
+	s.log.Debug("[prioritize] starts to score the nodes")
+	result, err := scoreNodes(s.client, s.log, input.Nodes, pvcs, scs, pvcRequests, s.defaultDivisor)
 	if err != nil {
 		s.log.Error(err, "[prioritize] unable to score nodes")
 		http.Error(w, "Bad Request.", http.StatusBadRequest)
 		return
 	}
+	s.log.Debug("[prioritize] successfully scored the nodes")
 
 	w.Header().Set("content-type", "application/json")
 	err = json.NewEncoder(w).Encode(result)
@@ -40,45 +71,103 @@ func (s scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug("[prioritize] ends serving")
 }
 
-func scoreNodes(cl client.Client, log logger.Logger, nodes []corev1.Node, divisor float64) ([]HostPriority, error) {
+func scoreNodes(cl client.Client, log logger.Logger, nodes *corev1.NodeList, pvcs map[string]corev1.PersistentVolumeClaim, scs map[string]v1.StorageClass, pvcRequests map[string]PVCRequest, divisor float64) ([]HostPriority, error) {
 	ctx := context.Background()
-	lvgl := &v1alpha1.LvmVolumeGroupList{}
-	err := cl.List(ctx, lvgl)
+
+	lvgs, err := getLVMVolumeGroups(ctx, cl)
 	if err != nil {
 		return nil, err
 	}
 
-	lvgByNodes := make(map[string][]v1alpha1.LvmVolumeGroup, len(lvgl.Items))
-	for _, lvg := range lvgl.Items {
-		for _, node := range lvg.Status.Nodes {
-			lvgByNodes[node.Name] = append(lvgByNodes[node.Name], lvg)
+	scLVGs, err := getLVGsFromStorageClasses(scs)
+	if err != nil {
+		return nil, err
+	}
+
+	usedLVGs := removeUnusedLVGs(lvgs, scLVGs)
+
+	nodeLVGs := sortLVGsByNodeName(usedLVGs)
+	for n, ls := range nodeLVGs {
+		for _, l := range ls {
+			log.Trace(fmt.Sprintf("[filterNodes] the LVMVolumeGroup %s belongs to node %s", l.Name, n))
 		}
 	}
 
-	log.Trace(fmt.Sprintf("[scoreNodes] sorted LVG by nodes: %+v", lvgByNodes))
-
-	result := make([]HostPriority, 0, len(nodes))
-
-	// TODO: probably should score the nodes exactly to their free space
+	result := make([]HostPriority, 0, len(nodes.Items))
 	wg := &sync.WaitGroup{}
-	wg.Add(len(nodes))
+	wg.Add(len(nodes.Items))
+	errs := make(chan error, len(pvcs)*len(nodes.Items))
 
-	for _, node := range nodes {
-		go func(node corev1.Node) {
-			defer wg.Done()
+	for i, node := range nodes.Items {
+		go func(i int, node corev1.Node) {
+			log.Debug(fmt.Sprintf("[filterNodes] gourutine %d starts the work", i))
+			defer func() {
+				log.Debug(fmt.Sprintf("[filterNodes] gourutine %d ends the work", i))
+				wg.Done()
+			}()
 
-			lvgs := lvgByNodes[node.Name]
-			freeSpace, err := getNodeFreeSpace(lvgs)
-			if err != nil {
-				log.Error(err, fmt.Sprintf("[scoreNodes] unable to get node free space, node: %s, lvgs: %+v", node.Name, lvgs))
-				return
+			lvgsFromNode := nodeLVGs[node.Name]
+			var totalFreeSpaceLeft int64
+			for _, pvc := range pvcs {
+				pvcReq := pvcRequests[pvc.Name]
+				lvgsFromSC := scLVGs[*pvc.Spec.StorageClassName]
+				matchedLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
+				if matchedLVG == nil {
+					err = errors.New(fmt.Sprintf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
+					errs <- err
+					return
+				}
+
+				switch pvcReq.DeviceType {
+				case thick:
+					lvg := lvgs[matchedLVG.Name]
+					freeSpace, err := getVGFreeSpace(&lvg)
+					if err != nil {
+						errs <- err
+						return
+					}
+
+					totalFreeSpaceLeft = getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize)
+				case thin:
+					lvg := lvgs[matchedLVG.Name]
+					thinPool := findMatchedThinPool(lvg.Status.ThinPools, matchedLVG.Thin.PoolName)
+					if thinPool == nil {
+						err = errors.New(fmt.Sprintf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
+						log.Error(err, "an error occurs while searching for target LVMVolumeGroup")
+						errs <- err
+						return
+					}
+
+					freeSpace, err := getThinPoolFreeSpace(thinPool)
+					if err != nil {
+						errs <- err
+						return
+					}
+
+					totalFreeSpaceLeft = getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize)
+				}
 			}
 
-			score := getNodeScore(freeSpace, divisor)
-			result = append(result, HostPriority{Host: node.Name, Score: score})
-		}(node)
+			averageFreeSpace := totalFreeSpaceLeft / int64(len(pvcs))
+			score := getNodeScore(averageFreeSpace, divisor)
+			result = append(result, HostPriority{
+				Host:  node.Name,
+				Score: score,
+			})
+		}(i, node)
+
 	}
 	wg.Wait()
+
+	if len(errs) != 0 {
+		for err = range errs {
+			log.Error(err, "[scoreNodes] an error occurs while scoring the nodes")
+		}
+	}
+	close(errs)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, n := range result {
 		log.Trace(fmt.Sprintf("[scoreNodes] host: %s", n.Host))
@@ -88,22 +177,13 @@ func scoreNodes(cl client.Client, log logger.Logger, nodes []corev1.Node, diviso
 	return result, nil
 }
 
-func getNodeScore(freeSpace map[string]int64, divisor float64) int {
-	capacity := freeSpace[thin] + freeSpace[thick]
-	gb := capacity >> 30
+func getFreeSpaceLeftPercent(freeSpace int64, requestedSpace int64) int64 {
+	left := freeSpace - requestedSpace
+	return left * 100 / freeSpace
+}
 
-	// Avoid logarithm of zero, which diverges to negative infinity.
-	if gb == 0 {
-		// If there is a non-nil capacity, but we don't have at least one gigabyte, we score it with one.
-		// This is because the capacityToScore precision is at the gigabyte level.
-		if capacity > 0 {
-			return 1
-		}
-
-		return 0
-	}
-
-	converted := int(math.Log2(float64(gb) / divisor))
+func getNodeScore(freeSpace int64, divisor float64) int {
+	converted := int(math.Log2(float64(freeSpace) / divisor))
 	switch {
 	case converted < 1:
 		return 1
