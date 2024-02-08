@@ -14,15 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package utils
+package driver
 
-func NodeWithMaxSize(vgNameAndSize map[string]int64) (vgName string, maxSize int64) {
-
-	for k, n := range vgNameAndSize {
-		if n > maxSize {
-			maxSize = n
-			vgName = k
-		}
-	}
-	return vgName, maxSize
+type VolumeGroup struct {
+	Name string `yaml:"name"`
+	Thin struct {
+		PoolName string `yaml:"poolName"`
+	} `yaml:"thin"`
 }
+
+type LVMVolumeGroups []VolumeGroup
