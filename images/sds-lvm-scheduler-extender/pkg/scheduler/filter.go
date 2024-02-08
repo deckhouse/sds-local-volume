@@ -218,8 +218,6 @@ func filterNodes(
 
 				switch pvcReq.DeviceType {
 				case thick:
-					fmt.Println("Device Thick ")
-
 					lvg := lvgs[matchedLVG.Name]
 					freeSpace, err := getVGFreeSpace(&lvg)
 					if err != nil {
@@ -227,6 +225,7 @@ func filterNodes(
 						return
 					}
 
+					log.Trace(fmt.Sprintf("[filterNodes] ThinPool free space: %d, PVC requested space: %d", freeSpace.Value(), pvcReq.RequestedSize))
 					if freeSpace.Value() < pvcReq.RequestedSize {
 						hasEnoughSpace = false
 					}
@@ -246,6 +245,7 @@ func filterNodes(
 						return
 					}
 
+					log.Trace(fmt.Sprintf("[filterNodes] ThinPool free space: %d, PVC requested space: %d", freeSpace.Value(), pvcReq.RequestedSize))
 					if freeSpace.Value() < pvcReq.RequestedSize {
 						hasEnoughSpace = false
 					}
