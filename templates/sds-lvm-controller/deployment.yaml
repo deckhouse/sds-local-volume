@@ -92,44 +92,7 @@ spec:
 {{- else if eq .Values.sdsLvm.logLevel "TRACE" }}
               value: "4"
 {{- end }}
-            - name: LS_USER_CERTIFICATE
-              valueFrom:
-                secretKeyRef:
-                  name: linstor-client-https-cert
-                  key: tls.crt
-            - name: LS_USER_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: linstor-client-https-cert
-                  key: tls.key
-            - name: LS_ROOT_CA
-              valueFrom:
-                secretKeyRef:
-                  name: linstor-client-https-cert
-                  key: ca.crt
-            - name: LS_CONTROLLERS
-              value: https://linstor.d8-{{ .Chart.Name }}.svc:3371
             - name: CONTROLLER_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-          volumeMounts:
-            - name: host-device-dir
-              mountPath: /dev/
-            - name: host-sys-dir
-              mountPath: /sys/
-            - name: host-root
-              mountPath: /host-root/
-              mountPropagation: HostToContainer
-      volumes:
-        - name: host-device-dir
-          hostPath:
-            path: /dev
-            type: ""
-        - name: host-sys-dir
-          hostPath:
-            path: /sys/
-            type: Directory
-        - name: host-root
-          hostPath:
-            path: /
