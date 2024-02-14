@@ -21,7 +21,7 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 type LvmStorageClass struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              *LvmStorageClassSpec   `json:"spec"`
+	Spec              LvmStorageClassSpec    `json:"spec"`
 	Status            *LvmStorageClassStatus `json:"status,omitempty"`
 }
 
@@ -37,7 +37,7 @@ type LvmStorageClassSpec struct {
 	Type                 string               `json:"type"`
 	ReclaimPolicy        string               `json:"reclaimPolicy"`
 	VolumeBindingMode    string               `json:"volumeBindingMode"`
-	AllowVolumeExpansion string               `json:"allowVolumeExpansion"`
+	AllowVolumeExpansion bool                 `json:"allowVolumeExpansion"`
 	LVMVolumeGroups      []LvmStorageClassLVG `json:"lvmVolumeGroups"`
 }
 
