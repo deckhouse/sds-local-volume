@@ -88,7 +88,9 @@ spec:
                     Configure if Persistent Volume is going to be expandable.
                 lvmVolumeGroups:
                   type: array
-                  x-kubernetes-list-type: atomic
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: Value is immutable.
                   description: |
                     LVMVolumeGroup resources where Persistent Volume will be create on.
                   items:

@@ -65,7 +65,7 @@ func main() {
 
 	log.Info("[main] CfgParams has been successfully created")
 	log.Info(fmt.Sprintf("[main] %s = %s", config.LogLevel, cfgParams.Loglevel))
-	log.Info(fmt.Sprintf("[main] %s = %s", config.NodeName, cfgParams.NodeName))
+	log.Info(fmt.Sprintf("[main] %s = %s", config.RequeueInterval, cfgParams.RequeueInterval.String()))
 
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {
@@ -96,9 +96,9 @@ func main() {
 	}
 	log.Info("[main] successfully created kubernetes manager")
 
-	metrics := monitoring.GetMetrics(cfgParams.NodeName)
+	metrics := monitoring.GetMetrics("")
 
-	if _, err = controller.RunLVMStorageClassWatcherController(ctx, mgr, *cfgParams, *log, metrics); err != nil {
+	if _, err = controller.RunLVMStorageClassWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
 		log.Error(err, "[main] unable to controller.RunBlockDeviceController")
 		os.Exit(1)
 	}

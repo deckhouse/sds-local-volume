@@ -16,17 +16,18 @@ package config
 import (
 	"os"
 	"sds-lvm-controller/pkg/logger"
+	"time"
 )
 
 const (
-	NodeName = "KUBE_NODE_NAME"
-	LogLevel = "LOG_LEVEL"
+	NodeName        = "KUBE_NODE_NAME"
+	LogLevel        = "LOG_LEVEL"
+	RequeueInterval = "REQUEUE_INTERVAL"
 )
 
 type Options struct {
-	NodeName string
-	Version  string
-	Loglevel logger.Verbosity
+	Loglevel        logger.Verbosity
+	RequeueInterval time.Duration
 }
 
 func NewConfig() *Options {
@@ -39,7 +40,7 @@ func NewConfig() *Options {
 		opts.Loglevel = logger.Verbosity(loglevel)
 	}
 
-	opts.Version = "dev"
+	opts.RequeueInterval = 5
 
 	return &opts
 }
