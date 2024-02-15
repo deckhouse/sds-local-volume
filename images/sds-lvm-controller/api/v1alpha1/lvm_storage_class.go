@@ -47,8 +47,8 @@ type LvmStorageClassStatus struct {
 }
 
 type LvmStorageClassLVG struct {
-	Name string                  `json:"name"`
-	Thin LvmStorageClassThinPool `json:"thin"`
+	Name string                   `json:"name"`
+	Thin *LvmStorageClassThinPool `json:"thin,omitempty"`
 }
 
 type LvmStorageClassThinPool struct {
