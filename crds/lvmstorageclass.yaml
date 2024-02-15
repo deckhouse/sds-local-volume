@@ -34,6 +34,8 @@ spec:
               required:
                 - type
                 - reclaimPolicy
+                - volumeBindingMode
+                - allowVolumeExpansion
                 - lvmVolumeGroups
               properties:
                 isDefault:
