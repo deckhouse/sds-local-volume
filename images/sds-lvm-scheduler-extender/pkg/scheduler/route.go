@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sds-lvm-scheduler-extender/pkg/logger"
@@ -12,6 +13,7 @@ type scheduler struct {
 	defaultDivisor float64
 	log            logger.Logger
 	client         client.Client
+	ctx            context.Context
 }
 
 func (s scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -34,8 +36,13 @@ func (s scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // NewHandler return new http.Handler of the scheduler extender
-func NewHandler(cl client.Client, log logger.Logger, defaultDiv float64) (http.Handler, error) {
-	return scheduler{defaultDiv, log, cl}, nil
+func NewHandler(ctx context.Context, cl client.Client, log logger.Logger, defaultDiv float64) (http.Handler, error) {
+	return scheduler{
+		defaultDivisor: defaultDiv,
+		log:            log,
+		client:         cl,
+		ctx:            ctx,
+	}, nil
 }
 
 func status(w http.ResponseWriter, r *http.Request) {
