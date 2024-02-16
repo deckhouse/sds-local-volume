@@ -20,6 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	v1alpha1 "sds-lvm-controller/api/v1alpha1"
+	"sds-lvm-controller/pkg/config"
+	"sds-lvm-controller/pkg/logger"
+	"sds-lvm-controller/pkg/monitoring"
+	"strings"
+	"time"
+
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
@@ -28,18 +35,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/strings/slices"
-	v1alpha1 "sds-lvm-controller/api/v1alpha1"
-	"sds-lvm-controller/pkg/config"
-	"sds-lvm-controller/pkg/logger"
-	"sds-lvm-controller/pkg/monitoring"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"strings"
-	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -371,6 +372,8 @@ func patchSCByLSC(sc *v1.StorageClass, lsc *v1alpha1.LvmStorageClass) *v1.Storag
 	}
 
 	sc.Annotations[DefaultStorageClassAnnotationKey] = lscDefault
+
+	// TODO: remove it
 	sc.AllowVolumeExpansion = &lsc.Spec.AllowVolumeExpansion
 
 	return sc
@@ -423,6 +426,7 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *v1alpha1.LvmS
 				return true
 			}
 
+			// TODO: remove it
 			if *sc.AllowVolumeExpansion != lsc.Spec.AllowVolumeExpansion {
 				return true
 			}
@@ -575,7 +579,8 @@ func configureStorageClass(lsc *v1alpha1.LvmStorageClass) (*v1.StorageClass, err
 			LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
 			LVMVolumeGroupsParamKey:      string(lvgsParam),
 		},
-		ReclaimPolicy:        &reclaimPolicy,
+		ReclaimPolicy: &reclaimPolicy,
+		// TODO: add constant
 		AllowVolumeExpansion: &lsc.Spec.AllowVolumeExpansion,
 		VolumeBindingMode:    &volumeBindingMode,
 	}
@@ -596,6 +601,7 @@ func updateLVMStorageClassPhase(
 	lsc.Status.Phase = phase
 	lsc.Status.Reason = reason
 
+	// TODO: add retry logic
 	err := cl.Update(ctx, lsc)
 	if err != nil {
 		return err
