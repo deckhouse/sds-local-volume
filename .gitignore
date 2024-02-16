@@ -36,3 +36,4 @@ __pycache__/
 # dev
 images/sds-lvm-csi/Makefile
 images/sds-lvm-scheduler-extender/Makefile
+images/sds-lvm-controller/Makefile
