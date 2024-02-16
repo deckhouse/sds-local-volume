@@ -53,8 +53,8 @@ spec:
                   description: |
                     The type of the device.
                   enum:
-                    - LVM
-                    - LVMThin
+                    - Thick
+                    - Thin
                 reclaimPolicy:
                   type: string
                   x-kubernetes-validations:
