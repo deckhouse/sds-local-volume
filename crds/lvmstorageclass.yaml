@@ -81,9 +81,6 @@ spec:
                     - WaitForFirstConsumer
                 allowVolumeExpansion:
                   type: boolean
-                  x-kubernetes-validations:
-                    - rule: self == oldSelf
-                      message: Value is immutable.
                   description: | 
                     Configure if Persistent Volume is going to be expandable.
                 lvmVolumeGroups:

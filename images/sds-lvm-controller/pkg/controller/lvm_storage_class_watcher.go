@@ -1,5 +1,5 @@
 /*
-Copyright 2023 Flant JSC
+Copyright 2024 Flant JSC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -98,27 +98,9 @@ func RunLVMStorageClassWatcherController(
 				return reconcile.Result{}, err
 			}
 
-			shouldRequeue := false
-			recType := identifyReconcileFunc(scList, lsc)
-			log.Debug(fmt.Sprintf("[LVMStorageClassReconciler] reconcile operation: %s", recType))
-			switch recType {
-			case CreateReconcile:
-				shouldRequeue, err = reconcileLSCCreateFunc(ctx, cl, log, scList, lsc)
-				if err != nil {
-					log.Error(err, fmt.Sprintf("[LVMStorageClassReconciler] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
-				}
-			case UpdateReconcile:
-				shouldRequeue, err = reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc)
-				if err != nil {
-					log.Error(err, fmt.Sprintf("[LVMStorageClassReconciler] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
-				}
-			case DeleteReconcile:
-				shouldRequeue, err = reconcileLSCDeleteFunc(ctx, cl, log, scList, lsc)
-				if err != nil {
-					log.Error(err, fmt.Sprintf("[LVMStorageClassReconciler] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
-				}
-			default:
-				log.Debug(fmt.Sprintf("[LVMStorageClassReconciler] the LVMStorageClass %s should not be reconciled", lsc.Name))
+			shouldRequeue, err := runEventReconcile(ctx, cl, log, scList, lsc)
+			if err != nil {
+				log.Error(err, fmt.Sprintf("[LVMStorageClassReconciler] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
 			}
 
 			if shouldRequeue {
@@ -161,27 +143,9 @@ func RunLVMStorageClassWatcherController(
 				return
 			}
 
-			shouldRequeue := false
-			recType := identifyReconcileFunc(scList, lsc)
-			log.Debug(fmt.Sprintf("[CreateFunc] reconcile operation: %s", recType))
-			switch recType {
-			case CreateReconcile:
-				shouldRequeue, err = reconcileLSCCreateFunc(ctx, cl, log, scList, lsc)
-				if err != nil {
-					log.Error(err, fmt.Sprintf("[CreateFunc] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
-				}
-			case UpdateReconcile:
-				shouldRequeue, err = reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc)
-				if err != nil {
-					log.Error(err, fmt.Sprintf("[CreateFunc] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
-				}
-			case DeleteReconcile:
-				shouldRequeue, err = reconcileLSCDeleteFunc(ctx, cl, log, scList, lsc)
-				if err != nil {
-					log.Error(err, fmt.Sprintf("[CreateFunc] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
-				}
-			default:
-				log.Debug(fmt.Sprintf("[CreateFunc] the LVMStorageClass %s should not be reconciled", lsc.Name))
+			shouldRequeue, err := runEventReconcile(ctx, cl, log, scList, lsc)
+			if err != nil {
+				log.Error(err, fmt.Sprintf("[CreateFunc] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
 			}
 
 			if shouldRequeue {
@@ -218,22 +182,9 @@ func RunLVMStorageClassWatcherController(
 				return
 			}
 
-			shouldRequeue := false
-			recType := identifyReconcileFunc(scList, lsc)
-			log.Debug(fmt.Sprintf("[UpdateFunc] reconcile operation: %s", recType))
-			switch recType {
-			case UpdateReconcile:
-				shouldRequeue, err = reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc)
-				if err != nil {
-					log.Error(err, fmt.Sprintf("[UpdateFunc] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
-				}
-			case DeleteReconcile:
-				shouldRequeue, err = reconcileLSCDeleteFunc(ctx, cl, log, scList, lsc)
-				if err != nil {
-					log.Error(err, fmt.Sprintf("[UpdateFunc] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
-				}
-			default:
-				log.Debug(fmt.Sprintf("[UpdateFunc] the LVMStorageClass %s should not be reconciled", lsc.Name))
+			shouldRequeue, err := runEventReconcile(ctx, cl, log, scList, lsc)
+			if err != nil {
+				log.Error(err, fmt.Sprintf("[UpdateFunc] an error occured while reconciles the LVMStorageClass, name: %s", lsc.Name))
 			}
 
 			if shouldRequeue {
@@ -255,6 +206,26 @@ func RunLVMStorageClassWatcherController(
 	}
 
 	return c, nil
+}
+
+func runEventReconcile(ctx context.Context, cl client.Client, log logger.Logger, scList *v1.StorageClassList, lsc *v1alpha1.LvmStorageClass) (bool, error) {
+	recType := identifyReconcileFunc(scList, lsc)
+	log.Debug(fmt.Sprintf("[runEventReconcile] reconcile operation: %s", recType))
+	switch recType {
+	case CreateReconcile:
+		log.Debug(fmt.Sprintf("[runEventReconcile] CreateReconcile starts reconciliataion for the LVMStorageClass, name: %s", lsc.Name))
+		return reconcileLSCCreateFunc(ctx, cl, log, scList, lsc)
+	case UpdateReconcile:
+		log.Debug(fmt.Sprintf("[runEventReconcile] UpdateReconcile starts reconciliataion for the LVMStorageClass, name: %s", lsc.Name))
+		return reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc)
+	case DeleteReconcile:
+		log.Debug(fmt.Sprintf("[runEventReconcile] DeleteReconcile starts reconciliataion for the LVMStorageClass, name: %s", lsc.Name))
+		return reconcileLSCDeleteFunc(ctx, cl, log, scList, lsc)
+	default:
+		log.Debug(fmt.Sprintf("[runEventReconcile] the LVMStorageClass %s should not be reconciled", lsc.Name))
+	}
+
+	return false, nil
 }
 
 func reconcileLSCDeleteFunc(
