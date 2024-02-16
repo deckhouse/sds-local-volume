@@ -20,8 +20,8 @@ const (
 	lvmTypeParamKey         = "lvm.csi.storage.deckhouse.io/lvm-type"
 	lvmVolumeGroupsParamKey = "lvm.csi.storage.deckhouse.io/lvm-volume-groups"
 
-	thick = "LVM"
-	thin  = "LVMThin"
+	thick = "Thick"
+	thin  = "Thin"
 )
 
 func (s scheduler) filter(w http.ResponseWriter, r *http.Request) {
