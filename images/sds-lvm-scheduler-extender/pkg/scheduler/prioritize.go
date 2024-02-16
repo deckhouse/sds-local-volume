@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/storage/v1"
 	"math"
 	"net/http"
 	"sds-lvm-scheduler-extender/pkg/logger"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sync"
+
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/storage/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func (s scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +116,7 @@ func scoreNodes(
 
 			lvgsFromNode := nodeLVGs[node.Name]
 			var totalFreeSpaceLeft int64
+			// TODO: change pvs to vgs
 			for _, pvc := range pvcs {
 				pvcReq := pvcRequests[pvc.Name]
 				lvgsFromSC := scLVGs[*pvc.Spec.StorageClassName]

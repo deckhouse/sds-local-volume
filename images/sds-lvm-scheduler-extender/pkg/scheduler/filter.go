@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"sds-lvm-scheduler-extender/api/v1alpha1"
+	"sds-lvm-scheduler-extender/pkg/logger"
+	"sync"
+
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"net/http"
-	"sds-lvm-scheduler-extender/api/v1alpha1"
-	"sds-lvm-scheduler-extender/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sync"
 )
 
 const (
@@ -238,17 +239,18 @@ func filterNodes(
 						errs <- err
 						return
 					}
+					// TODO: add after overCommit implementation
+					// freeSpace, err := getThinPoolFreeSpace(targetThinPool)
+					// if err != nil {
+					// 	errs <- err
+					// 	return
+					// }
 
-					freeSpace, err := getThinPoolFreeSpace(targetThinPool)
-					if err != nil {
-						errs <- err
-						return
-					}
+					// log.Trace(fmt.Sprintf("[filterNodes] ThinPool free space: %d, PVC requested space: %d", freeSpace.Value(), pvcReq.RequestedSize))
 
-					log.Trace(fmt.Sprintf("[filterNodes] ThinPool free space: %d, PVC requested space: %d", freeSpace.Value(), pvcReq.RequestedSize))
-					if freeSpace.Value() < pvcReq.RequestedSize {
-						hasEnoughSpace = false
-					}
+					// if freeSpace.Value() < pvcReq.RequestedSize {
+					// 	hasEnoughSpace = false
+					// }
 				}
 
 				if !hasEnoughSpace {
@@ -260,6 +262,8 @@ func filterNodes(
 				result.FailedNodes[node.Name] = "not enough space"
 				return
 			}
+
+			// TODO: add logic to filter nodes when pvcs has same storage class
 
 			result.Nodes.Items = append(result.Nodes.Items, node)
 		}(i, node)
