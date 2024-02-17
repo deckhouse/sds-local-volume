@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	LvmStorageClassKind = "LvmStorageClass"
+	LVMStorageClassKind = "LVMStorageClass"
 	APIGroup            = "storage.deckhouse.io"
 	APIVersion          = "v1alpha1"
 )
@@ -41,8 +41,8 @@ var (
 // Adds the list of known types to Scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&LvmStorageClass{},
-		&LvmStorageClassList{},
+		&LVMStorageClass{},
+		&LVMStorageClassList{},
 		&LvmVolumeGroup{},
 		&LvmVolumeGroupList{},
 	)

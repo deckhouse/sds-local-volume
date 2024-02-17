@@ -11,7 +11,7 @@ spec:
   names:
     plural: lvmstorageclasses
     singular: lvmstorageclass
-    kind: LvmStorageClass
+    kind: LVMStorageClass
     shortNames:
       - lsc
   preserveUnknownFields: false
@@ -35,7 +35,6 @@ spec:
                 - type
                 - reclaimPolicy
                 - volumeBindingMode
-                - allowVolumeExpansion
                 - lvmVolumeGroups
               properties:
                 isDefault:
@@ -79,10 +78,6 @@ spec:
                   enum:
                     - Immediate
                     - WaitForFirstConsumer
-                allowVolumeExpansion:
-                  type: boolean
-                  description: | 
-                    Configure if Persistent Volume is going to be expandable.
                 lvmVolumeGroups:
                   type: array
                   x-kubernetes-validations:
