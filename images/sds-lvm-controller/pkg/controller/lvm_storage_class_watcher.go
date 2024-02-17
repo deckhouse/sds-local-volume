@@ -62,6 +62,8 @@ const (
 	DefaultStorageClassAnnotationKey = "storageclass.kubernetes.io/is-default-class"
 	LVMStorageClassFinalizerName     = "lvmstorageclass.storage.deckhouse.io"
 
+	AllowVolumeExpansionDefaultValue = true
+
 	FailedStatusPhase  = "Failed"
 	CreatedStatusPhase = "Created"
 
@@ -373,9 +375,6 @@ func patchSCByLSC(sc *v1.StorageClass, lsc *v1alpha1.LvmStorageClass) *v1.Storag
 
 	sc.Annotations[DefaultStorageClassAnnotationKey] = lscDefault
 
-	// TODO: remove it
-	sc.AllowVolumeExpansion = &lsc.Spec.AllowVolumeExpansion
-
 	return sc
 }
 
@@ -423,11 +422,6 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *v1alpha1.LvmS
 			}
 
 			if sc.Annotations[DefaultStorageClassAnnotationKey] != lscDefault {
-				return true
-			}
-
-			// TODO: remove it
-			if *sc.AllowVolumeExpansion != lsc.Spec.AllowVolumeExpansion {
 				return true
 			}
 		}
@@ -550,6 +544,7 @@ func addFinalizerIfNotExists(ctx context.Context, cl client.Client, lsc *v1alpha
 func configureStorageClass(lsc *v1alpha1.LvmStorageClass) (*v1.StorageClass, error) {
 	reclaimPolicy := corev1.PersistentVolumeReclaimPolicy(lsc.Spec.ReclaimPolicy)
 	volumeBindingMode := v1.VolumeBindingMode(lsc.Spec.VolumeBindingMode)
+	AllowVolumeExpansion := AllowVolumeExpansionDefaultValue
 
 	lvgsParam, err := yaml.Marshal(lsc.Spec.LVMVolumeGroups)
 	if err != nil {
@@ -579,9 +574,8 @@ func configureStorageClass(lsc *v1alpha1.LvmStorageClass) (*v1.StorageClass, err
 			LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
 			LVMVolumeGroupsParamKey:      string(lvgsParam),
 		},
-		ReclaimPolicy: &reclaimPolicy,
-		// TODO: add constant
-		AllowVolumeExpansion: &lsc.Spec.AllowVolumeExpansion,
+		ReclaimPolicy:        &reclaimPolicy,
+		AllowVolumeExpansion: &AllowVolumeExpansion,
 		VolumeBindingMode:    &volumeBindingMode,
 	}
 

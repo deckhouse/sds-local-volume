@@ -33,12 +33,11 @@ type LvmStorageClassList struct {
 }
 
 type LvmStorageClassSpec struct {
-	IsDefault            bool                 `json:"isDefault"`
-	Type                 string               `json:"type"`
-	ReclaimPolicy        string               `json:"reclaimPolicy"`
-	VolumeBindingMode    string               `json:"volumeBindingMode"`
-	AllowVolumeExpansion bool                 `json:"allowVolumeExpansion"`
-	LVMVolumeGroups      []LvmStorageClassLVG `json:"lvmVolumeGroups"`
+	IsDefault         bool                 `json:"isDefault"`
+	Type              string               `json:"type"`
+	ReclaimPolicy     string               `json:"reclaimPolicy"`
+	VolumeBindingMode string               `json:"volumeBindingMode"`
+	LVMVolumeGroups   []LvmStorageClassLVG `json:"lvmVolumeGroups"`
 }
 
 type LvmStorageClassStatus struct {
