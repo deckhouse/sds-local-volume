@@ -20,9 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 	"net"
 	"net/http"
 	"net/url"
@@ -31,9 +28,13 @@ import (
 	"path/filepath"
 	"sds-lvm-csi/pkg/logger"
 	"sds-lvm-csi/pkg/utils"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sync"
 	"time"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -63,10 +64,10 @@ type Driver struct {
 	httpSrv http.Server
 	log     *logger.Logger
 
-	readyMu sync.Mutex // protects ready
-	ready   bool
-	cl      client.Client
-	mounter utils.Store
+	readyMu     sync.Mutex // protects ready
+	ready       bool
+	cl          client.Client
+	nodeStorage utils.Store
 }
 
 // NewDriver returns a CSI plugin that contains the necessary gRPC
@@ -88,7 +89,7 @@ func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Log
 		log:               log,
 		waitActionTimeout: defaultWaitActionTimeout,
 		cl:                cl,
-		mounter:           *st,
+		nodeStorage:       *st,
 	}, nil
 }
 
