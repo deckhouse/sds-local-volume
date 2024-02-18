@@ -274,9 +274,9 @@ func (d *Driver) ListSnapshots(ctx context.Context, request *csi.ListSnapshotsRe
 func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 	d.log.Info(" call method ControllerExpandVolume")
 
-	d.log.Info("========== CreateVolume ============")
+	d.log.Info("========== ExpandVolume ============")
 	d.log.Info(request.String())
-	d.log.Info("========== CreateVolume ============")
+	d.log.Info("========== ExpandVolume ============")
 
 	volumeID := request.GetVolumeId()
 	resizeDelta, err := resource.ParseQuantity(ResizeDelta)
@@ -324,6 +324,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 	}
 
 	d.log.Info("start resize LVMLogicalVolume")
+	d.log.Info(fmt.Sprintf("requested size: %s, actual size: %s", requestCapacity.String(), llv.Status.ActualSize.String()))
 	llv.Spec.Size = *requestCapacity
 	err = utils.UpdateLVMLogicalVolume(ctx, d.cl, llv)
 	if err != nil {
