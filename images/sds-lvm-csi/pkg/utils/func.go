@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"sds-lvm-csi/api/v1alpha1"
+	"sds-lvm-csi/pkg/logger"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -29,8 +30,10 @@ import (
 )
 
 const (
-	LLVStatusCreated = "Created"
-	LLVTypeThin      = "Thin"
+	LLVStatusCreated            = "Created"
+	LLVTypeThin                 = "Thin"
+	KubernetesApiRequestLimit   = 3
+	KubernetesApiRequestTimeout = 1
 )
 
 func NodeWithMaxSize(vgNameAndSize map[string]int64) (vgName string, maxSize int64) {
@@ -44,7 +47,8 @@ func NodeWithMaxSize(vgNameAndSize map[string]int64) (vgName string, maxSize int
 	return vgName, maxSize
 }
 
-func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, LvmLogicalVolumeSpec v1alpha1.LvmLogicalVolumeSpec) (error, *v1alpha1.LvmLogicalVolume) {
+func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, LvmLogicalVolumeSpec v1alpha1.LvmLogicalVolumeSpec) (*v1alpha1.LvmLogicalVolume, error) {
+	var err error
 	llv := &v1alpha1.LvmLogicalVolume{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.LVMLogicalVolumeKind,
@@ -57,14 +61,22 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, 
 		Spec: LvmLogicalVolumeSpec,
 	}
 
-	err := kc.Create(ctx, llv)
-	if err != nil {
-		return err, nil
+	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
+		err = kc.Create(ctx, llv)
+		if err == nil {
+			return llv, nil
+		}
+		time.Sleep(KubernetesApiRequestTimeout)
 	}
-	return nil, llv
+
+	if err != nil {
+		return nil, fmt.Errorf("after %d attempts of creating LvmLogicalVolume %s, last error: %w", KubernetesApiRequestLimit, name, err)
+	}
+	return llv, nil
 }
 
 func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, LvmLogicalVolumeName string) error {
+	var err error
 	llv := &v1alpha1.LvmLogicalVolume{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: LvmLogicalVolumeName,
@@ -74,15 +86,22 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, LvmLogicalVol
 			APIVersion: v1alpha1.TypeMediaAPIVersion,
 		},
 	}
-	err := kc.Delete(ctx, llv)
+
+	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
+		err := kc.Delete(ctx, llv)
+		if err == nil {
+			return nil
+		}
+		time.Sleep(KubernetesApiRequestTimeout)
+	}
+
 	if err != nil {
-		return err
+		return fmt.Errorf("after %d attempts of deleting LvmLogicalVolume %s, last error: %w", KubernetesApiRequestLimit, LvmLogicalVolumeName, err)
 	}
 	return nil
 }
 
-func WaitForStatusUpdate(ctx context.Context, kc client.Client, LvmLogicalVolumeName, namespace string) (int, error) {
-	var newLV v1alpha1.LvmLogicalVolume
+func WaitForStatusUpdate(ctx context.Context, kc client.Client, log logger.Logger, LvmLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
 	var attemptCounter int
 	for {
 		attemptCounter++
@@ -92,21 +111,50 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, LvmLogicalVolume
 		case <-time.After(500 * time.Millisecond):
 		}
 
-		err := kc.Get(ctx, client.ObjectKey{
-			Name:      LvmLogicalVolumeName,
-			Namespace: namespace,
-		}, &newLV)
+		llv, err := GetLVMLogicalVolume(ctx, kc, LvmLogicalVolumeName, namespace)
 		if err != nil {
 			return attemptCounter, err
 		}
 
-		if newLV.Status != nil && newLV.Status.Phase == LLVStatusCreated {
+		sizeEquals := AreSizesEqualWithinDelta(llvSize, llv.Status.ActualSize, delta)
+
+		if attemptCounter%20 == 0 {
+			log.Info(fmt.Sprintf("[WaitForStatusUpdate] Attempt: %d,LVM Logical Volume status: %+v; delta=%s; sizeEquals=%t", attemptCounter, llv.Status, delta.String(), sizeEquals))
+		}
+		if llv.Status != nil && llv.Status.Phase == LLVStatusCreated && sizeEquals {
 			return attemptCounter, nil
 		}
 	}
 }
 
-func GetNodeMaxVGSize(ctx context.Context, kc client.Client) (nodeName string, freeSpace string, err error) {
+func GetLVMLogicalVolume(ctx context.Context, kc client.Client, LvmLogicalVolumeName, namespace string) (*v1alpha1.LvmLogicalVolume, error) {
+	var llv v1alpha1.LvmLogicalVolume
+	var err error
+
+	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
+		err = kc.Get(ctx, client.ObjectKey{
+			Name:      LvmLogicalVolumeName,
+			Namespace: namespace,
+		}, &llv)
+
+		if err == nil {
+			return &llv, nil
+		}
+		time.Sleep(KubernetesApiRequestTimeout)
+	}
+	return nil, fmt.Errorf("after %d attempts of getting LvmLogicalVolume %s in namespace %s, last error: %w", KubernetesApiRequestLimit, LvmLogicalVolumeName, namespace, err)
+}
+
+func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantity) bool {
+	delta := leftSize.DeepCopy()
+	delta.Sub(rightSize)
+	if delta.Sign() < 0 {
+		delta.Neg()
+	}
+	return delta.Cmp(allowedDelta) <= 0
+}
+
+func GetNodeMaxFreeVGSize(ctx context.Context, kc client.Client) (nodeName string, freeSpace resource.Quantity, err error) {
 	listLvgs := &v1alpha1.LvmVolumeGroupList{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.LVMVolumeGroupKind,
@@ -115,40 +163,47 @@ func GetNodeMaxVGSize(ctx context.Context, kc client.Client) (nodeName string, f
 		ListMeta: metav1.ListMeta{},
 		Items:    []v1alpha1.LvmVolumeGroup{},
 	}
-	err = kc.List(ctx, listLvgs)
-	if err != nil {
-		return "", "", err
+
+	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
+		err = kc.List(ctx, listLvgs)
+		if err == nil {
+			break
+		}
+		time.Sleep(KubernetesApiRequestTimeout)
 	}
 
-	nodesVGSize := make(map[string]int64)
+	if err != nil {
+		return "", freeSpace, fmt.Errorf("after %d attempts of getting LvmVolumeGroups, last error: %w", KubernetesApiRequestLimit, err)
+	}
+
+	nodesVGFreeSize := make(map[string]int64)
 	vgNameNodeName := make(map[string]string)
 	for _, lvg := range listLvgs.Items {
-		obj := &v1alpha1.LvmVolumeGroup{}
-		err = kc.Get(ctx, client.ObjectKey{
-			Name:      lvg.Name,
-			Namespace: lvg.Namespace,
-		}, obj)
-		if err != nil {
-			return "", "", errors.New(fmt.Sprintf("get lvg name: %s", lvg.Name))
-		}
+		// obj := &v1alpha1.LvmVolumeGroup{}
+		// err = kc.Get(ctx, client.ObjectKey{
+		// 	Name:      lvg.Name,
+		// 	Namespace: lvg.Namespace,
+		// }, obj)
+		// if err != nil {
+		// 	return "", "", errors.New(fmt.Sprintf("get lvg name: %s", lvg.Name))
+		// }
 
-		vgSize, err := resource.ParseQuantity(lvg.Status.VGSize)
+		vgFreeSize, err := GetLVMVolumeGroupCapacity(*&lvg)
 		if err != nil {
-			return "", "", errors.New("parse size vgSize")
+			return "", freeSpace, err
 		}
-		nodesVGSize[lvg.Name] = vgSize.Value()
+		nodesVGFreeSize[lvg.Name] = vgFreeSize.Value()
 		vgNameNodeName[lvg.Name] = lvg.Status.Nodes[0].Name
 	}
 
-	VGNameWihMaxFreeSpace, _ := NodeWithMaxSize(nodesVGSize)
-	fs := resource.NewQuantity(nodesVGSize[VGNameWihMaxFreeSpace], resource.BinarySI)
-	freeSpace = fs.String()
+	VGNameWihMaxFreeSpace, _ := NodeWithMaxSize(nodesVGFreeSize)
+	freeSpace = *resource.NewQuantity(nodesVGFreeSize[VGNameWihMaxFreeSpace], resource.BinarySI)
 	nodeName = vgNameNodeName[VGNameWihMaxFreeSpace]
 
 	return nodeName, freeSpace, nil
 }
 
-func GetVGName(ctx context.Context, kc client.Client, lvmVG map[string]string, nodeName, LvmType string) (lvgName, vgName string, err error) {
+func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.Logger, lvmVG map[string]string, nodeName, LvmType string) (lvgName, vgName string, err error) {
 	listLvgs := &v1alpha1.LvmVolumeGroupList{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.LVMVolumeGroupKind,
@@ -157,25 +212,92 @@ func GetVGName(ctx context.Context, kc client.Client, lvmVG map[string]string, n
 		ListMeta: metav1.ListMeta{},
 		Items:    []v1alpha1.LvmVolumeGroup{},
 	}
-	err = kc.List(ctx, listLvgs)
+
+	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
+		err = kc.List(ctx, listLvgs)
+		if err == nil {
+			break
+		}
+		time.Sleep(KubernetesApiRequestTimeout)
+	}
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("after %d attempts of getting LvmVolumeGroups, last error: %w", KubernetesApiRequestLimit, err)
 	}
 
 	for _, lvg := range listLvgs.Items {
-		_, ok := lvmVG[lvg.Spec.ActualVGNameOnTheNode]
-		if ok && lvg.Status.Nodes[0].Name == nodeName {
-			if LvmType == LLVTypeThin {
-				for _, thinPool := range lvg.Status.ThinPools {
-					for _, tp := range lvmVG {
-						if thinPool.Name == tp {
-							return lvg.Name, lvg.Spec.ActualVGNameOnTheNode, nil
+
+		log.Trace(fmt.Sprintf("[GetLVMVolumeGroupParams] process lvg: %+v", lvg))
+
+		_, ok := lvmVG[lvg.Name]
+		if ok {
+			log.Info(fmt.Sprintf("[GetLVMVolumeGroupParams] found lvg from storage class: %s", lvg.Name))
+			log.Info(fmt.Sprintf("[GetLVMVolumeGroupParams] lvg.Status.Nodes[0].Name: %s, prefferedNode: %s", lvg.Status.Nodes[0].Name, nodeName))
+			if lvg.Status.Nodes[0].Name == nodeName {
+				if LvmType == LLVTypeThin {
+					for _, thinPool := range lvg.Status.ThinPools {
+						for _, tp := range lvmVG {
+							if thinPool.Name == tp {
+								return lvg.Name, lvg.Spec.ActualVGNameOnTheNode, nil
+							}
 						}
 					}
 				}
+				return lvg.Name, lvg.Spec.ActualVGNameOnTheNode, nil
 			}
-			return lvg.Name, lvg.Spec.ActualVGNameOnTheNode, nil
+		} else {
+			log.Info(fmt.Sprintf("[GetLVMVolumeGroupParams] skip lvg: %s", lvg.Name))
 		}
+
 	}
 	return "", "", errors.New("there are no matches")
+}
+
+func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace string) (*v1alpha1.LvmVolumeGroup, error) {
+	var lvg v1alpha1.LvmVolumeGroup
+	var err error
+
+	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
+		err = kc.Get(ctx, client.ObjectKey{
+			Name:      lvgName,
+			Namespace: namespace,
+		}, &lvg)
+
+		if err == nil {
+			return &lvg, nil
+		}
+		time.Sleep(KubernetesApiRequestTimeout)
+	}
+	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroup %s in namespace %s, last error: %w", KubernetesApiRequestLimit, lvgName, namespace, err)
+}
+
+func GetLVMVolumeGroupCapacity(lvg v1alpha1.LvmVolumeGroup) (vgCapacity resource.Quantity, err error) {
+	vgSize, err := resource.ParseQuantity(lvg.Status.VGSize)
+	if err != nil {
+		return vgCapacity, fmt.Errorf("parse size vgSize (%s): %w", lvg.Status.VGSize, err)
+	}
+
+	allocatedSize, err := resource.ParseQuantity(lvg.Status.AllocatedSize)
+	if err != nil {
+		return vgCapacity, fmt.Errorf("parse size vgSize (%s): %w", lvg.Status.AllocatedSize, err)
+	}
+
+	vgCapacity = vgSize
+	vgCapacity.Sub(allocatedSize)
+	return vgCapacity, nil
+}
+
+func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *v1alpha1.LvmLogicalVolume) error {
+	var err error
+	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
+		err = kc.Update(ctx, llv)
+		if err == nil {
+			return nil
+		}
+		time.Sleep(KubernetesApiRequestTimeout)
+	}
+
+	if err != nil {
+		return fmt.Errorf("after %d attempts of updating LvmLogicalVolume %s, last error: %w", KubernetesApiRequestLimit, llv.Name, err)
+	}
+	return nil
 }

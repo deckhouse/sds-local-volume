@@ -22,6 +22,8 @@ import (
 	"sds-lvm-csi/api/v1alpha1"
 	"sds-lvm-csi/pkg/utils"
 
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -82,12 +84,15 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	var preferredNode string
 	if LvmBindingMode == BindingModeI {
-		prefNode, freeSpace, err := utils.GetNodeMaxVGSize(ctx, d.cl)
+		prefNode, freeSpace, err := utils.GetNodeMaxFreeVGSize(ctx, d.cl)
 		if err != nil {
 			d.log.Error(err, "error GetNodeMaxVGSize")
 		}
 		preferredNode = prefNode
-		d.log.Info(fmt.Sprintf("prefered node: %s, free space %s ", prefNode, freeSpace))
+		if llvSize.Value() > freeSpace.Value() {
+			return nil, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), freeSpace.String())
+		}
+		d.log.Info(fmt.Sprintf("prefered node: %s, free space %s ", prefNode, freeSpace.String()))
 	}
 
 	if LvmBindingMode == BindingModeWFFC {
@@ -97,9 +102,13 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		}
 	}
 
-	lvmVolumeGroupName, vgName, err := utils.GetVGName(ctx, d.cl, lvmVG, preferredNode, LvmType)
+	d.log.Info(fmt.Sprintf("prefered node: %s", preferredNode))
+	d.log.Info(fmt.Sprintf("lvm-volume-groups: %+v", lvmVG))
+	d.log.Info(fmt.Sprintf("lvm-type: %s", LvmType))
+	lvmVolumeGroupName, vgName, err := utils.GetLVMVolumeGroupParams(ctx, d.cl, *d.log, lvmVG, preferredNode, LvmType)
 	if err != nil {
 		d.log.Error(err, "error GetVGName")
+		// return nil, err
 	}
 
 	d.log.Info(fmt.Sprintf("LvmVolumeGroup: %s", lvmVolumeGroupName))
@@ -124,16 +133,24 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	d.log.Info(fmt.Sprintf("LvmLogicalVolumeSpec : %+v", spec))
 
-	err, llv := utils.CreateLVMLogicalVolume(ctx, d.cl, llvName, spec)
+	_, err = utils.CreateLVMLogicalVolume(ctx, d.cl, llvName, spec)
 	if err != nil {
-		d.log.Error(err, "error CreateLVMLogicalVolume")
-		// todo if llv exist?
-		//return nil, err
+		if kerrors.IsAlreadyExists(err) {
+			d.log.Info(fmt.Sprintf("LVMLogicalVolume %s already exists", llvName))
+		} else {
+			d.log.Error(err, "error CreateLVMLogicalVolume")
+			return nil, err
+		}
 	}
 	d.log.Info("------------ CreateLVMLogicalVolume ------------")
 
 	d.log.Info("start wait CreateLVMLogicalVolume ")
-	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, request.Name, llv.Namespace)
+	resizeDelta, err := resource.ParseQuantity(ResizeDelta)
+	if err != nil {
+		d.log.Error(err, "error ParseQuantity for ResizeDelta")
+		return nil, err
+	}
+	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, *d.log, request.Name, "", *llvSize, resizeDelta)
 	if err != nil {
 		d.log.Error(err, "error WaitForStatusUpdate")
 		return nil, err
@@ -256,6 +273,70 @@ func (d *Driver) ListSnapshots(ctx context.Context, request *csi.ListSnapshotsRe
 
 func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 	d.log.Info(" call method ControllerExpandVolume")
+
+	d.log.Info("========== CreateVolume ============")
+	d.log.Info(request.String())
+	d.log.Info("========== CreateVolume ============")
+
+	volumeID := request.GetVolumeId()
+	resizeDelta, err := resource.ParseQuantity(ResizeDelta)
+	d.log.Trace("resizeDelta: %s", resizeDelta.String())
+	requestCapacity := resource.NewQuantity(request.CapacityRange.GetRequiredBytes(), resource.BinarySI)
+	d.log.Trace("requestCapacity: %s", requestCapacity.String())
+
+	if err != nil {
+		d.log.Error(err, "error ParseQuantity for ResizeDelta")
+		return nil, err
+	}
+
+	if len(volumeID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume id cannot be empty")
+	}
+
+	llv, err := utils.GetLVMLogicalVolume(ctx, d.cl, volumeID, "")
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			return nil, status.Errorf(codes.NotFound, "LVMLogicalVolume with id: %s not found", volumeID)
+		}
+		return nil, status.Errorf(codes.Internal, "error getting LVMLogicalVolume: %v", err)
+	}
+
+	if llv.Status.ActualSize.Value() > requestCapacity.Value()+resizeDelta.Value() || utils.AreSizesEqualWithinDelta(*requestCapacity, llv.Status.ActualSize, resizeDelta) {
+		d.log.Warning("requested size is less than or equal to the actual size of the volume include delta %s , no need to resize LVMLogicalVolume %s, requested size: %s, actual size: %s, return NodeExpansionRequired: true and CapacityBytes: %d", resizeDelta.String(), volumeID, requestCapacity.String(), llv.Status.ActualSize.String(), llv.Status.ActualSize.Value())
+		return &csi.ControllerExpandVolumeResponse{
+			CapacityBytes:         llv.Status.ActualSize.Value(),
+			NodeExpansionRequired: true,
+		}, nil
+	}
+
+	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LvmVolumeGroup, llv.Namespace)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
+	}
+
+	lvgCapacity, err := utils.GetLVMVolumeGroupCapacity(*lvg)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroupCapacity: %v", err)
+	}
+
+	if lvgCapacity.Value() < (requestCapacity.Value() - llv.Status.ActualSize.Value()) {
+		return nil, status.Errorf(codes.Internal, "requested size: %s is greater than the capacity of the LVMVolumeGroup: %s", requestCapacity.String(), lvgCapacity.String())
+	}
+
+	d.log.Info("start resize LVMLogicalVolume")
+	llv.Spec.Size = *requestCapacity
+	err = utils.UpdateLVMLogicalVolume(ctx, d.cl, llv)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "error updating LVMLogicalVolume: %v", err)
+	}
+
+	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, *d.log, llv.Name, llv.Namespace, *requestCapacity, resizeDelta)
+	if err != nil {
+		d.log.Error(err, "error WaitForStatusUpdate")
+		return nil, err
+	}
+	d.log.Info(fmt.Sprintf("finish resize LVMLogicalVolume, attempt сounter = %d ", attemptCounter))
+
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         request.CapacityRange.RequiredBytes,
 		NodeExpansionRequired: true,

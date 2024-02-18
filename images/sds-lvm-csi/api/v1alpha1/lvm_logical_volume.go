@@ -40,7 +40,7 @@ type LvmLogicalVolumeSpec struct {
 	Type           string                 `json:"type"`
 	Size           resource.Quantity      `json:"size"`
 	LvmVolumeGroup string                 `json:"lvmVolumeGroup"`
-	Thin           *ThinLogicalVolumeSpec `json:"thin,omitempty"`
+	Thin           *ThinLogicalVolumeSpec `json:"thin"`
 }
 
 type ThinLogicalVolumeSpec struct {

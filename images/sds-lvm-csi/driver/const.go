@@ -28,4 +28,5 @@ const (
 	LLVStatusCreated = "Created"
 	BindingModeWFFC  = "WaitForFirstConsumer"
 	BindingModeI     = "Immediate"
+	ResizeDelta      = "32Mi"
 )
