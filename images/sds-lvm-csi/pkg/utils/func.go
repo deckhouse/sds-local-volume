@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sds-lvm-csi/api/v1alpha1"
 	"sds-lvm-csi/pkg/logger"
 	"time"
@@ -31,6 +32,7 @@ import (
 
 const (
 	LLVStatusCreated            = "Created"
+	LLVStatusFailed             = "Failed"
 	LLVTypeThin                 = "Thin"
 	KubernetesApiRequestLimit   = 3
 	KubernetesApiRequestTimeout = 1
@@ -118,8 +120,11 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log logger.Logge
 
 		sizeEquals := AreSizesEqualWithinDelta(llvSize, llv.Status.ActualSize, delta)
 
-		if attemptCounter%20 == 0 {
+		if attemptCounter%10 == 0 {
 			log.Info(fmt.Sprintf("[WaitForStatusUpdate] Attempt: %d,LVM Logical Volume status: %+v; delta=%s; sizeEquals=%t", attemptCounter, llv.Status, delta.String(), sizeEquals))
+			if llv.Status != nil && llv.Status.Phase == LLVStatusFailed {
+				return attemptCounter, fmt.Errorf("LVM Logical Volume %s in namespace %s failed", LvmLogicalVolumeName, namespace)
+			}
 		}
 		if llv.Status != nil && llv.Status.Phase == LLVStatusCreated && sizeEquals {
 			return attemptCounter, nil
@@ -146,12 +151,10 @@ func GetLVMLogicalVolume(ctx context.Context, kc client.Client, LvmLogicalVolume
 }
 
 func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantity) bool {
-	delta := leftSize.DeepCopy()
-	delta.Sub(rightSize)
-	if delta.Sign() < 0 {
-		delta.Neg()
-	}
-	return delta.Cmp(allowedDelta) <= 0
+	leftSizeFloat := float64(leftSize.Value())
+	rightSizeFloat := float64(rightSize.Value())
+
+	return math.Abs(leftSizeFloat-rightSizeFloat) < float64(delta.Value())
 }
 
 func GetNodeMaxFreeVGSize(ctx context.Context, kc client.Client) (nodeName string, freeSpace resource.Quantity, err error) {
