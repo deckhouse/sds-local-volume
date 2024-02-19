@@ -154,7 +154,7 @@ func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantit
 	leftSizeFloat := float64(leftSize.Value())
 	rightSizeFloat := float64(rightSize.Value())
 
-	return math.Abs(leftSizeFloat-rightSizeFloat) < float64(delta.Value())
+	return math.Abs(leftSizeFloat-rightSizeFloat) < float64(allowedDelta.Value())
 }
 
 func GetNodeMaxFreeVGSize(ctx context.Context, kc client.Client) (nodeName string, freeSpace resource.Quantity, err error) {
