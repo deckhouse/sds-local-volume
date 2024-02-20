@@ -20,11 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"math"
 	"sds-lvm-csi/api/v1alpha1"
 	"sds-lvm-csi/pkg/logger"
 	"time"
+
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -176,14 +177,14 @@ func GetNodeMaxFreeVGSize(ctx context.Context, kc client.Client) (nodeName strin
 
 	var maxFreeSpace int64
 	for _, lvg := range listLvgs.Items {
-		free, err := GetLVMVolumeGroupFreeSpace(lvg)
+		freeSpace, err := GetLVMVolumeGroupFreeSpace(lvg)
 		if err != nil {
-			return
+			return "", freeSpace, fmt.Errorf("get free space for lvg %s: %w", lvg.Name, err)
 		}
 
-		if free.Value() > maxFreeSpace {
+		if freeSpace.Value() > maxFreeSpace {
 			nodeName = lvg.Status.Nodes[0].Name
-			maxFreeSpace = free.Value()
+			maxFreeSpace = freeSpace.Value()
 		}
 	}
 
@@ -257,20 +258,20 @@ func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace
 	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroup %s in namespace %s, last error: %w", KubernetesApiRequestLimit, lvgName, namespace, err)
 }
 
-func GetLVMVolumeGroupFreeSpace(lvg v1alpha1.LvmVolumeGroup) (vgCapacity resource.Quantity, err error) {
+func GetLVMVolumeGroupFreeSpace(lvg v1alpha1.LvmVolumeGroup) (vgFreeSpace resource.Quantity, err error) {
 	vgSize, err := resource.ParseQuantity(lvg.Status.VGSize)
 	if err != nil {
-		return vgCapacity, fmt.Errorf("parse size vgSize (%s): %w", lvg.Status.VGSize, err)
+		return vgFreeSpace, fmt.Errorf("parse size vgSize (%s): %w", lvg.Status.VGSize, err)
 	}
 
 	allocatedSize, err := resource.ParseQuantity(lvg.Status.AllocatedSize)
 	if err != nil {
-		return vgCapacity, fmt.Errorf("parse size vgSize (%s): %w", lvg.Status.AllocatedSize, err)
+		return vgFreeSpace, fmt.Errorf("parse size vgSize (%s): %w", lvg.Status.AllocatedSize, err)
 	}
 
-	vgCapacity = vgSize
-	vgCapacity.Sub(allocatedSize)
-	return vgCapacity, nil
+	vgFreeSpace = vgSize
+	vgFreeSpace.Sub(allocatedSize)
+	return vgFreeSpace, nil
 }
 
 func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *v1alpha1.LvmLogicalVolume) error {

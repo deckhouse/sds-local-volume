@@ -80,7 +80,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	var preferredNode string
 	switch LvmBindingMode {
 	case BindingModeI:
-		d.log.Info("LvmBindingMode is Immediate. Start selecting node")
+		d.log.Info(fmt.Sprintf("LvmBindingMode is %s. Start selecting node", BindingModeI))
 		selectedNodeName, freeSpace, err := utils.GetNodeMaxFreeVGSize(ctx, d.cl)
 		if err != nil {
 			d.log.Error(err, "error GetNodeMaxVGSize")
@@ -91,13 +91,13 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		}
 		d.log.Info(fmt.Sprintf("Selected node: %s, free space %s ", selectedNodeName, freeSpace.String()))
 	case BindingModeWFFC:
+		d.log.Info(fmt.Sprintf("LvmBindingMode is %s. Get preferredNode", BindingModeWFFC))
 		if len(request.AccessibilityRequirements.Preferred) != 0 {
 			t := request.AccessibilityRequirements.Preferred[0].Segments
 			preferredNode = t[topologyKey]
 		}
 	}
 
-	d.log.Info(fmt.Sprintf("prefered node: %s", preferredNode))
 	lvmVolumeGroupName, vgName, err := utils.GetLVMVolumeGroupParams(ctx, d.cl, *d.log, lvmVG, preferredNode, LvmType)
 	if err != nil {
 		d.log.Error(err, "error GetVGName")
@@ -111,6 +111,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	d.log.Info("------------ CreateLVMLogicalVolume ------------")
 	var llvThin *v1alpha1.ThinLogicalVolumeSpec
 	if LvmType == LLVTypeThin {
+		llvThin = &v1alpha1.ThinLogicalVolumeSpec{}
 		llvThin.PoolName = lvmVG[lvmVolumeGroupName]
 	}
 
@@ -282,9 +283,9 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		d.log.Error(err, "error ParseQuantity for ResizeDelta")
 		return nil, err
 	}
-	d.log.Trace("resizeDelta: %s", resizeDelta.String())
+	d.log.Trace(fmt.Sprintf("resizeDelta: %s", resizeDelta.String()))
 	requestCapacity := resource.NewQuantity(request.CapacityRange.GetRequiredBytes(), resource.BinarySI)
-	d.log.Trace("requestCapacity: %s", requestCapacity.String())
+	d.log.Trace(fmt.Sprintf("requestCapacity: %s", requestCapacity.String()))
 
 	nodeExpansionRequired := true
 	if request.GetVolumeCapability().GetBlock() != nil {
@@ -293,7 +294,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 	d.log.Info(fmt.Sprintf("NodeExpansionRequired: %t", nodeExpansionRequired))
 
 	if llv.Status.ActualSize.Value() > requestCapacity.Value()+resizeDelta.Value() || utils.AreSizesEqualWithinDelta(*requestCapacity, llv.Status.ActualSize, resizeDelta) {
-		d.log.Warning("requested size is less than or equal to the actual size of the volume include delta %s , no need to resize LVMLogicalVolume %s, requested size: %s, actual size: %s, return NodeExpansionRequired: %t and CapacityBytes: %d", resizeDelta.String(), volumeID, requestCapacity.String(), llv.Status.ActualSize.String(), nodeExpansionRequired, llv.Status.ActualSize.Value())
+		d.log.Warning(fmt.Sprintf("requested size is less than or equal to the actual size of the volume include delta %s , no need to resize LVMLogicalVolume %s, requested size: %s, actual size: %s, return NodeExpansionRequired: %t and CapacityBytes: %d", resizeDelta.String(), volumeID, requestCapacity.String(), llv.Status.ActualSize.String(), nodeExpansionRequired, llv.Status.ActualSize.Value()))
 		return &csi.ControllerExpandVolumeResponse{
 			CapacityBytes:         llv.Status.ActualSize.Value(),
 			NodeExpansionRequired: nodeExpansionRequired,
