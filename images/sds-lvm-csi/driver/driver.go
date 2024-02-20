@@ -64,10 +64,10 @@ type Driver struct {
 	httpSrv http.Server
 	log     *logger.Logger
 
-	readyMu     sync.Mutex // protects ready
-	ready       bool
-	cl          client.Client
-	nodeStorage utils.Store
+	readyMu      sync.Mutex // protects ready
+	ready        bool
+	cl           client.Client
+	storeManager utils.NodeStoreManager
 }
 
 // NewDriver returns a CSI plugin that contains the necessary gRPC
@@ -89,7 +89,7 @@ func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Log
 		log:               log,
 		waitActionTimeout: defaultWaitActionTimeout,
 		cl:                cl,
-		nodeStorage:       *st,
+		storeManager:      st,
 	}, nil
 }
 

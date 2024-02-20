@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"math"
 	"sds-lvm-csi/api/v1alpha1"
 	"sds-lvm-csi/pkg/logger"
@@ -37,17 +38,6 @@ const (
 	KubernetesApiRequestLimit   = 3
 	KubernetesApiRequestTimeout = 1
 )
-
-func NodeWithMaxSize(vgNameAndSize map[string]int64) (vgName string, maxSize int64) {
-
-	for k, n := range vgNameAndSize {
-		if n > maxSize {
-			maxSize = n
-			vgName = k
-		}
-	}
-	return vgName, maxSize
-}
 
 func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, LvmLogicalVolumeSpec v1alpha1.LvmLogicalVolumeSpec) (*v1alpha1.LvmLogicalVolume, error) {
 	var err error
@@ -68,6 +58,11 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, 
 		if err == nil {
 			return llv, nil
 		}
+
+		if kerrors.IsAlreadyExists(err) {
+			return nil, err
+		}
+
 		time.Sleep(KubernetesApiRequestTimeout)
 	}
 
@@ -179,31 +174,20 @@ func GetNodeMaxFreeVGSize(ctx context.Context, kc client.Client) (nodeName strin
 		return "", freeSpace, fmt.Errorf("after %d attempts of getting LvmVolumeGroups, last error: %w", KubernetesApiRequestLimit, err)
 	}
 
-	nodesVGFreeSize := make(map[string]int64)
-	vgNameNodeName := make(map[string]string)
+	var maxFreeSpace int64
 	for _, lvg := range listLvgs.Items {
-		// obj := &v1alpha1.LvmVolumeGroup{}
-		// err = kc.Get(ctx, client.ObjectKey{
-		// 	Name:      lvg.Name,
-		// 	Namespace: lvg.Namespace,
-		// }, obj)
-		// if err != nil {
-		// 	return "", "", errors.New(fmt.Sprintf("get lvg name: %s", lvg.Name))
-		// }
-
-		vgFreeSize, err := GetLVMVolumeGroupCapacity(*&lvg)
+		free, err := GetLVMVolumeGroupFreeSpace(lvg)
 		if err != nil {
-			return "", freeSpace, err
+			return
 		}
-		nodesVGFreeSize[lvg.Name] = vgFreeSize.Value()
-		vgNameNodeName[lvg.Name] = lvg.Status.Nodes[0].Name
+
+		if free.Value() > maxFreeSpace {
+			nodeName = lvg.Status.Nodes[0].Name
+			maxFreeSpace = free.Value()
+		}
 	}
 
-	VGNameWihMaxFreeSpace, _ := NodeWithMaxSize(nodesVGFreeSize)
-	freeSpace = *resource.NewQuantity(nodesVGFreeSize[VGNameWihMaxFreeSpace], resource.BinarySI)
-	nodeName = vgNameNodeName[VGNameWihMaxFreeSpace]
-
-	return nodeName, freeSpace, nil
+	return nodeName, *resource.NewQuantity(maxFreeSpace, resource.BinarySI), nil
 }
 
 func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.Logger, lvmVG map[string]string, nodeName, LvmType string) (lvgName, vgName string, err error) {
@@ -273,7 +257,7 @@ func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace
 	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroup %s in namespace %s, last error: %w", KubernetesApiRequestLimit, lvgName, namespace, err)
 }
 
-func GetLVMVolumeGroupCapacity(lvg v1alpha1.LvmVolumeGroup) (vgCapacity resource.Quantity, err error) {
+func GetLVMVolumeGroupFreeSpace(lvg v1alpha1.LvmVolumeGroup) (vgCapacity resource.Quantity, err error) {
 	vgSize, err := resource.ParseQuantity(lvg.Status.VGSize)
 	if err != nil {
 		return vgCapacity, fmt.Errorf("parse size vgSize (%s): %w", lvg.Status.VGSize, err)

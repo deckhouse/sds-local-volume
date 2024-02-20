@@ -26,16 +26,16 @@ import (
 	utilexec "k8s.io/utils/exec"
 )
 
-type Store struct {
-	Log         *logger.Logger
-	NodeStorage mu.SafeFormatAndMount
-}
-
-type NewNodeStore interface {
-	Mount(source, target, fsType string, readonly bool, mntOpts []string) error
+type NodeStoreManager interface {
+	Mount(source, target string, isBlock bool, fsType string, readonly bool, mntOpts []string) error
 	Unmount(target string) error
 	IsNotMountPoint(target string) (bool, error)
 	ResizeFS(target string) error
+}
+
+type Store struct {
+	Log         *logger.Logger
+	NodeStorage mu.SafeFormatAndMount
 }
 
 func NewStore(logger *logger.Logger) *Store {

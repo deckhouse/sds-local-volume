@@ -60,7 +60,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		mountOptions = append(mountOptions, mnt.GetMountFlags()...)
 	}
 
-	err := d.nodeStorage.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions)
+	err := d.storeManager.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions)
 	if err != nil {
 		d.log.Error(err, "d.mounter.Mount :")
 		return nil, err
@@ -75,7 +75,7 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, request *csi.NodeUnpub
 	fmt.Println(request.String())
 	fmt.Println("------------- NodeUnpublishVolume --------------")
 
-	err := d.nodeStorage.Unmount(request.GetTargetPath())
+	err := d.storeManager.Unmount(request.GetTargetPath())
 	if err != nil {
 		d.log.Error(err, "NodeUnpublishVolume err ")
 	}
@@ -103,10 +103,9 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, request *csi.NodeExpandVo
 		return nil, status.Error(codes.InvalidArgument, "Volume Path cannot be empty")
 	}
 
-	err := d.nodeStorage.ResizeFS(volumePath)
-	// err := d.mounter.Expander.NodeExpand(volumeID, volumePath)
+	err := d.storeManager.ResizeFS(volumePath)
 	if err != nil {
-		d.log.Error(err, "d.mounter.ResizeFS :")
+		d.log.Error(err, "d.mounter.ResizeFS:")
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
