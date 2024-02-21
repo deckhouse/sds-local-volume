@@ -40,9 +40,9 @@ const (
 	KubernetesApiRequestTimeout = 1
 )
 
-func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, LvmLogicalVolumeSpec v1alpha1.LvmLogicalVolumeSpec) (*v1alpha1.LvmLogicalVolume, error) {
+func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, LVMLogicalVolumeSpec v1alpha1.LVMLogicalVolumeSpec) (*v1alpha1.LVMLogicalVolume, error) {
 	var err error
-	llv := &v1alpha1.LvmLogicalVolume{
+	llv := &v1alpha1.LVMLogicalVolume{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.LVMLogicalVolumeKind,
 			APIVersion: v1alpha1.TypeMediaAPIVersion,
@@ -51,7 +51,7 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, 
 			Name:            name,
 			OwnerReferences: []metav1.OwnerReference{},
 		},
-		Spec: LvmLogicalVolumeSpec,
+		Spec: LVMLogicalVolumeSpec,
 	}
 
 	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
@@ -68,16 +68,16 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, 
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("after %d attempts of creating LvmLogicalVolume %s, last error: %w", KubernetesApiRequestLimit, name, err)
+		return nil, fmt.Errorf("after %d attempts of creating LVMLogicalVolume %s, last error: %w", KubernetesApiRequestLimit, name, err)
 	}
 	return llv, nil
 }
 
-func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, LvmLogicalVolumeName string) error {
+func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, LVMLogicalVolumeName string) error {
 	var err error
-	llv := &v1alpha1.LvmLogicalVolume{
+	llv := &v1alpha1.LVMLogicalVolume{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: LvmLogicalVolumeName,
+			Name: LVMLogicalVolumeName,
 		},
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.LVMLogicalVolumeKind,
@@ -94,13 +94,14 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, LvmLogicalVol
 	}
 
 	if err != nil {
-		return fmt.Errorf("after %d attempts of deleting LvmLogicalVolume %s, last error: %w", KubernetesApiRequestLimit, LvmLogicalVolumeName, err)
+		return fmt.Errorf("after %d attempts of deleting LVMLogicalVolume %s, last error: %w", KubernetesApiRequestLimit, LVMLogicalVolumeName, err)
 	}
 	return nil
 }
 
-func WaitForStatusUpdate(ctx context.Context, kc client.Client, log logger.Logger, LvmLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
+func WaitForStatusUpdate(ctx context.Context, kc client.Client, log logger.Logger, LVMLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
 	var attemptCounter int
+	sizeEquals := false
 	for {
 		attemptCounter++
 		select {
@@ -109,32 +110,37 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log logger.Logge
 		case <-time.After(500 * time.Millisecond):
 		}
 
-		llv, err := GetLVMLogicalVolume(ctx, kc, LvmLogicalVolumeName, namespace)
+		llv, err := GetLVMLogicalVolume(ctx, kc, LVMLogicalVolumeName, namespace)
 		if err != nil {
 			return attemptCounter, err
 		}
 
-		sizeEquals := AreSizesEqualWithinDelta(llvSize, llv.Status.ActualSize, delta)
-
 		if attemptCounter%10 == 0 {
-			log.Info(fmt.Sprintf("[WaitForStatusUpdate] Attempt: %d,LVM Logical Volume status: %+v; delta=%s; sizeEquals=%t", attemptCounter, llv.Status, delta.String(), sizeEquals))
-			if llv.Status != nil && llv.Status.Phase == LLVStatusFailed {
-				return attemptCounter, fmt.Errorf("LVM Logical Volume %s in namespace %s failed", LvmLogicalVolumeName, namespace)
+			log.Info(fmt.Sprintf("[WaitForStatusUpdate] Attempt: %d,LVM Logical Volume: %+v; delta=%s; sizeEquals=%t", attemptCounter, llv, delta.String(), sizeEquals))
+		}
+
+		if llv.Status != nil {
+			sizeEquals = AreSizesEqualWithinDelta(llvSize, llv.Status.ActualSize, delta)
+
+			if llv.Status.Phase == LLVStatusFailed {
+				return attemptCounter, fmt.Errorf("LVM Logical Volume %s failed, reason: %s", LVMLogicalVolumeName, llv.Status.Reason)
+			}
+
+			if llv.Status.Phase == LLVStatusCreated && sizeEquals {
+				return attemptCounter, nil
 			}
 		}
-		if llv.Status != nil && llv.Status.Phase == LLVStatusCreated && sizeEquals {
-			return attemptCounter, nil
-		}
+
 	}
 }
 
-func GetLVMLogicalVolume(ctx context.Context, kc client.Client, LvmLogicalVolumeName, namespace string) (*v1alpha1.LvmLogicalVolume, error) {
-	var llv v1alpha1.LvmLogicalVolume
+func GetLVMLogicalVolume(ctx context.Context, kc client.Client, LVMLogicalVolumeName, namespace string) (*v1alpha1.LVMLogicalVolume, error) {
+	var llv v1alpha1.LVMLogicalVolume
 	var err error
 
 	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
 		err = kc.Get(ctx, client.ObjectKey{
-			Name:      LvmLogicalVolumeName,
+			Name:      LVMLogicalVolumeName,
 			Namespace: namespace,
 		}, &llv)
 
@@ -143,7 +149,7 @@ func GetLVMLogicalVolume(ctx context.Context, kc client.Client, LvmLogicalVolume
 		}
 		time.Sleep(KubernetesApiRequestTimeout)
 	}
-	return nil, fmt.Errorf("after %d attempts of getting LvmLogicalVolume %s in namespace %s, last error: %w", KubernetesApiRequestLimit, LvmLogicalVolumeName, namespace, err)
+	return nil, fmt.Errorf("after %d attempts of getting LVMLogicalVolume %s in namespace %s, last error: %w", KubernetesApiRequestLimit, LVMLogicalVolumeName, namespace, err)
 }
 
 func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantity) bool {
@@ -274,7 +280,7 @@ func GetLVMVolumeGroupFreeSpace(lvg v1alpha1.LvmVolumeGroup) (vgFreeSpace resour
 	return vgFreeSpace, nil
 }
 
-func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *v1alpha1.LvmLogicalVolume) error {
+func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *v1alpha1.LVMLogicalVolume) error {
 	var err error
 	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
 		err = kc.Update(ctx, llv)
@@ -285,7 +291,7 @@ func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *v1alpha1
 	}
 
 	if err != nil {
-		return fmt.Errorf("after %d attempts of updating LvmLogicalVolume %s, last error: %w", KubernetesApiRequestLimit, llv.Name, err)
+		return fmt.Errorf("after %d attempts of updating LVMLogicalVolume %s, last error: %w", KubernetesApiRequestLimit, llv.Name, err)
 	}
 	return nil
 }

@@ -115,14 +115,14 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		llvThin.PoolName = lvmVG[lvmVolumeGroupName]
 	}
 
-	spec := v1alpha1.LvmLogicalVolumeSpec{
+	spec := v1alpha1.LVMLogicalVolumeSpec{
 		Type:           LvmType,
 		Size:           *llvSize,
 		LvmVolumeGroup: lvmVolumeGroupName,
 		Thin:           llvThin,
 	}
 
-	d.log.Info(fmt.Sprintf("LvmLogicalVolumeSpec : %+v", spec))
+	d.log.Info(fmt.Sprintf("LVMLogicalVolumeSpec : %+v", spec))
 
 	_, err = utils.CreateLVMLogicalVolume(ctx, d.cl, llvName, spec)
 	if err != nil {
