@@ -123,7 +123,8 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log logger.Logge
 			sizeEquals = AreSizesEqualWithinDelta(llvSize, llv.Status.ActualSize, delta)
 
 			if llv.Status.Phase == LLVStatusFailed {
-				return attemptCounter, fmt.Errorf("LVM Logical Volume %s failed, reason: %s", LVMLogicalVolumeName, llv.Status.Reason)
+				return attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: %s", LVMLogicalVolumeName, llv.Status.Reason)
+
 			}
 
 			if llv.Status.Phase == LLVStatusCreated && sizeEquals {
