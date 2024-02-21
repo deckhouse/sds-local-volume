@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
@@ -58,7 +60,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		mountOptions = append(mountOptions, mnt.GetMountFlags()...)
 	}
 
-	err := d.mounter.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions)
+	err := d.storeManager.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions)
 	if err != nil {
 		d.log.Error(err, "d.mounter.Mount :")
 		return nil, err
@@ -73,7 +75,7 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, request *csi.NodeUnpub
 	fmt.Println(request.String())
 	fmt.Println("------------- NodeUnpublishVolume --------------")
 
-	err := d.mounter.Unmount(request.GetTargetPath())
+	err := d.storeManager.Unmount(request.GetTargetPath())
 	if err != nil {
 		d.log.Error(err, "NodeUnpublishVolume err ")
 	}
@@ -86,13 +88,52 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, request *csi.NodeGetVol
 }
 
 func (d *Driver) NodeExpandVolume(ctx context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	d.log.Info("method NodeExpandVolume")
+	d.log.Info("Call method NodeExpandVolume")
+
+	d.log.Info("========== NodeExpandVolume ============")
+	d.log.Info(request.String())
+	d.log.Info("========== NodeExpandVolume ============")
+
+	volumeID := request.GetVolumeId()
+	volumePath := request.GetVolumePath()
+	if len(volumeID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume id cannot be empty")
+	}
+	if len(volumePath) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume Path cannot be empty")
+	}
+
+	err := d.storeManager.ResizeFS(volumePath)
+	if err != nil {
+		d.log.Error(err, "d.mounter.ResizeFS:")
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
 	return &csi.NodeExpandVolumeResponse{}, nil
 }
 
 func (d *Driver) NodeGetCapabilities(ctx context.Context, request *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	d.log.Info("method NodeGetCapabilities")
-	return &csi.NodeGetCapabilitiesResponse{}, nil
+	d.log.Info("Call method NodeGetCapabilities")
+
+	capabilities := []csi.NodeServiceCapability_RPC_Type{
+		csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+		csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
+	}
+
+	csiCaps := make([]*csi.NodeServiceCapability, len(capabilities))
+	for i, capability := range capabilities {
+		csiCaps[i] = &csi.NodeServiceCapability{
+			Type: &csi.NodeServiceCapability_Rpc{
+				Rpc: &csi.NodeServiceCapability_RPC{
+					Type: capability,
+				},
+			},
+		}
+	}
+
+	return &csi.NodeGetCapabilitiesResponse{
+		Capabilities: csiCaps,
+	}, nil
 }
 
 func (d *Driver) NodeGetInfo(ctx context.Context, request *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
