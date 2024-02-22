@@ -22,9 +22,11 @@ import (
 	"fmt"
 	"math"
 	"sds-lvm-csi/api/v1alpha1"
+	"sds-lvm-csi/internal"
 	"sds-lvm-csi/pkg/logger"
 	"time"
 
+	"gopkg.in/yaml.v2"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -160,33 +162,26 @@ func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantit
 	return math.Abs(leftSizeFloat-rightSizeFloat) < float64(allowedDelta.Value())
 }
 
-func GetNodeMaxFreeVGSize(ctx context.Context, kc client.Client) (nodeName string, freeSpace resource.Quantity, err error) {
-	listLvgs := &v1alpha1.LvmVolumeGroupList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       v1alpha1.LVMVolumeGroupKind,
-			APIVersion: v1alpha1.TypeMediaAPIVersion,
-		},
-		ListMeta: metav1.ListMeta{},
-		Items:    []v1alpha1.LvmVolumeGroup{},
-	}
-
-	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
-		err = kc.List(ctx, listLvgs)
-		if err == nil {
-			break
-		}
-		time.Sleep(KubernetesApiRequestTimeout)
-	}
-
-	if err != nil {
-		return "", freeSpace, fmt.Errorf("after %d attempts of getting LvmVolumeGroups, last error: %w", KubernetesApiRequestLimit, err)
-	}
+func GetNodeWithMaxFreeSpace(log logger.Logger, lvgs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
 
 	var maxFreeSpace int64
-	for _, lvg := range listLvgs.Items {
-		freeSpace, err := GetLVMVolumeGroupFreeSpace(lvg)
-		if err != nil {
-			return "", freeSpace, fmt.Errorf("get free space for lvg %s: %w", lvg.Name, err)
+	for _, lvg := range lvgs {
+
+		switch lvmType {
+		case internal.LLMTypeThick:
+			freeSpace, err = GetLVMVolumeGroupFreeSpace(lvg)
+			if err != nil {
+				return "", freeSpace, fmt.Errorf("get free space for lvg %+v: %w", lvg, err)
+			}
+		case internal.LLMTypeThin:
+			thinPoolName, ok := storageClassLVGParametersMap[lvg.Name]
+			if !ok {
+				return "", freeSpace, fmt.Errorf("thin pool name for lvg %s not found in storage class parameters: %+v", lvg.Name, storageClassLVGParametersMap)
+			}
+			freeSpace, err = GetLVMThinPoolFreeSpace(lvg, thinPoolName)
+			if err != nil {
+				return "", freeSpace, fmt.Errorf("get free space for thin pool %s in lvg %s: %w", thinPoolName, lvg.Name, err)
+			}
 		}
 
 		if freeSpace.Value() > maxFreeSpace {
@@ -281,6 +276,30 @@ func GetLVMVolumeGroupFreeSpace(lvg v1alpha1.LvmVolumeGroup) (vgFreeSpace resour
 	return vgFreeSpace, nil
 }
 
+func GetLVMThinPoolFreeSpace(lvg v1alpha1.LvmVolumeGroup, thinPoolName string) (thinPoolFreeSpace resource.Quantity, err error) {
+	var storagePoolThinPool *v1alpha1.StatusThinPool
+	for _, thinPool := range lvg.Status.ThinPools {
+		if thinPool.Name == thinPoolName {
+			storagePoolThinPool = &thinPool
+		}
+	}
+
+	if storagePoolThinPool == nil {
+		return thinPoolFreeSpace, fmt.Errorf("[GetLVMThinPoolFreeSpace] thin pool %s not found in lvg %+v", thinPoolName, lvg)
+	}
+
+	thinPoolUsedSize, err := resource.ParseQuantity(storagePoolThinPool.UsedSize)
+	if err != nil {
+		return thinPoolFreeSpace, fmt.Errorf("[GetLVMThinPoolFreeSpace] parse size thinPool.UsedSize (%s): %w", storagePoolThinPool.UsedSize, err)
+	}
+
+	thinPoolActualSize := storagePoolThinPool.ActualSize
+
+	thinPoolFreeSpace = thinPoolActualSize.DeepCopy()
+	thinPoolFreeSpace.Sub(thinPoolUsedSize)
+	return thinPoolFreeSpace, nil
+}
+
 func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *v1alpha1.LVMLogicalVolume) error {
 	var err error
 	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
@@ -295,4 +314,85 @@ func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *v1alpha1
 		return fmt.Errorf("after %d attempts of updating LVMLogicalVolume %s, last error: %w", KubernetesApiRequestLimit, llv.Name, err)
 	}
 	return nil
+}
+
+func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
+	var storageClassLVGParametersList LVMVolumeGroups
+	err = yaml.Unmarshal([]byte(storageClassLVGParametersString), &storageClassLVGParametersList)
+	if err != nil {
+		log.Error(err, "unmarshal yaml lvmVolumeGroup")
+		return nil, nil, err
+	}
+
+	storageClassLVGParametersMap = make(map[string]string, len(storageClassLVGParametersList))
+	for _, v := range storageClassLVGParametersList {
+		storageClassLVGParametersMap[v.Name] = v.Thin.PoolName
+	}
+	log.Info(fmt.Sprintf("StorageClass LVM volume groups parameters map: %+v", storageClassLVGParametersMap))
+
+	lvgs, err := GetLVGList(ctx, kc)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, lvg := range lvgs.Items {
+		log.Trace(fmt.Sprintf("[GetStorageClassLVGs] process lvg: %+v", lvg))
+
+		_, ok := storageClassLVGParametersMap[lvg.Name]
+		if ok {
+			log.Info(fmt.Sprintf("[GetStorageClassLVGs] found lvg from storage class: %s", lvg.Name))
+			log.Info(fmt.Sprintf("[GetStorageClassLVGs] lvg.Status.Nodes[0].Name: %s", lvg.Status.Nodes[0].Name))
+			storageClassLVGs = append(storageClassLVGs, lvg)
+		} else {
+			log.Trace(fmt.Sprintf("[GetStorageClassLVGs] skip lvg: %s", lvg.Name))
+		}
+	}
+
+	return storageClassLVGs, storageClassLVGParametersMap, nil
+}
+
+func GetLVGList(ctx context.Context, kc client.Client) (*v1alpha1.LvmVolumeGroupList, error) {
+	var err error
+	listLvgs := &v1alpha1.LvmVolumeGroupList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       v1alpha1.LVMVolumeGroupKind,
+			APIVersion: v1alpha1.TypeMediaAPIVersion,
+		},
+		ListMeta: metav1.ListMeta{},
+		Items:    []v1alpha1.LvmVolumeGroup{},
+	}
+
+	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
+		err = kc.List(ctx, listLvgs)
+		if err == nil {
+			return listLvgs, nil
+		}
+		time.Sleep(KubernetesApiRequestTimeout)
+	}
+
+	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroupList, last error: %w", KubernetesApiRequestLimit, err)
+}
+
+func GetLLVSpec(log logger.Logger, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, nodeName, lvmType string, llvSize resource.Quantity) v1alpha1.LVMLogicalVolumeSpec {
+	var llvThin *v1alpha1.ThinLogicalVolumeSpec
+	if lvmType == internal.LLMTypeThin {
+		llvThin = &v1alpha1.ThinLogicalVolumeSpec{}
+		llvThin.PoolName = storageClassLVGParametersMap[selectedLVG.Name]
+		log.Info(fmt.Sprintf("[GetLLVSpec] Thin pool name: %s", llvThin.PoolName))
+	}
+	return v1alpha1.LVMLogicalVolumeSpec{
+		Type:           lvmType,
+		Size:           llvSize,
+		LvmVolumeGroup: selectedLVG.Name,
+		Thin:           llvThin,
+	}
+}
+
+func SelectLVG(storageClassLVGs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, nodeName string) (v1alpha1.LvmVolumeGroup, error) {
+	for _, lvg := range storageClassLVGs {
+		if lvg.Status.Nodes[0].Name == nodeName {
+			return lvg, nil
+		}
+	}
+	return v1alpha1.LvmVolumeGroup{}, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found for node %s", nodeName)
 }

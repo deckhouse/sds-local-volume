@@ -14,13 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package driver
+package internal
 
-type VolumeGroup struct {
-	Name string `yaml:"name"`
-	Thin struct {
-		PoolName string `yaml:"poolName"`
-	} `yaml:"thin"`
-}
-
-type LVMVolumeGroups []VolumeGroup
+const (
+	LvmTypeKey        = "lvm.csi.storage.deckhouse.io/lvm-type"
+	LvmBindingModeKey = "lvm.csi.storage.deckhouse.io/volume-binding-mode"
+	LvmVolumeGroupKey = "lvm.csi.storage.deckhouse.io/lvm-volume-groups"
+	TopologyKey       = "topology.sds-lvm-csi/node"
+	SubPath           = "subPath"
+	VGNameKey         = "vgname"
+	LLMTypeThin       = "Thin"
+	LLMTypeThick      = "Thick"
+	LLVStatusCreated  = "Created"
+	BindingModeWFFC   = "WaitForFirstConsumer"
+	BindingModeI      = "Immediate"
+	ResizeDelta       = "32Mi"
+)
