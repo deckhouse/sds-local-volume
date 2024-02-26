@@ -38,9 +38,9 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstage
 
 func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	d.log.Info("method NodePublishVolume")
-	d.log.Info("------------- NodePublishVolume --------------")
-	d.log.Info(request.String())
-	d.log.Info("------------- NodePublishVolume --------------")
+	d.log.Trace("------------- NodePublishVolume --------------")
+	d.log.Trace(request.String())
+	d.log.Trace("------------- NodePublishVolume --------------")
 
 	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[internal.VGNameKey], request.VolumeId)
 
@@ -72,9 +72,9 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 
 func (d *Driver) NodeUnpublishVolume(ctx context.Context, request *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	d.log.Info("method NodeUnpublishVolume")
-	fmt.Println("------------- NodeUnpublishVolume --------------")
-	fmt.Println(request.String())
-	fmt.Println("------------- NodeUnpublishVolume --------------")
+	d.log.Trace("------------- NodeUnpublishVolume --------------")
+	d.log.Trace(request.String())
+	d.log.Trace("------------- NodeUnpublishVolume --------------")
 
 	err := d.storeManager.Unmount(request.GetTargetPath())
 	if err != nil {
@@ -91,9 +91,9 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, request *csi.NodeGetVol
 func (d *Driver) NodeExpandVolume(ctx context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	d.log.Info("Call method NodeExpandVolume")
 
-	d.log.Info("========== NodeExpandVolume ============")
-	d.log.Info(request.String())
-	d.log.Info("========== NodeExpandVolume ============")
+	d.log.Trace("========== NodeExpandVolume ============")
+	d.log.Trace(request.String())
+	d.log.Trace("========== NodeExpandVolume ============")
 
 	volumeID := request.GetVolumeId()
 	volumePath := request.GetVolumePath()
@@ -114,7 +114,7 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, request *csi.NodeExpandVo
 }
 
 func (d *Driver) NodeGetCapabilities(ctx context.Context, request *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	d.log.Info("Call method NodeGetCapabilities")
+	d.log.Info("method NodeGetCapabilities")
 
 	capabilities := []csi.NodeServiceCapability_RPC_Type{
 		csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,

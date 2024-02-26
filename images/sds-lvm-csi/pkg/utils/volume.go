@@ -51,9 +51,9 @@ func NewStore(logger *logger.Logger) *Store {
 func (s *Store) Mount(source, target string, isBlock bool, fsType string, readonly bool, mntOpts []string) error {
 	s.Log.Info(" ----== Node Mount ==---- ")
 
-	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
-	s.Log.Info(fmt.Sprintf("[mount] params source=%s target=%s fs=%s blockMode=%t mountOptions=%v", source, target, fsType, isBlock, mntOpts))
-	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+	s.Log.Trace(fmt.Sprintf("[mount] params source=%s target=%s fs=%s blockMode=%t mountOptions=%v", source, target, fsType, isBlock, mntOpts))
+	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
 	info, err := os.Stat(source)
 	if err != nil {
@@ -64,49 +64,49 @@ func (s *Store) Mount(source, target string, isBlock bool, fsType string, readon
 		return fmt.Errorf("[NewMount] path %s is not a device", source)
 	}
 
-	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ MODE SOURCE ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
-	s.Log.Info(info.Mode().String())
-	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ MODE SOURCE  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ MODE SOURCE ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+	s.Log.Trace(info.Mode().String())
+	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ MODE SOURCE  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
-	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ isBlock ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
-	s.Log.Info(fmt.Sprintf("%t ", isBlock))
-	s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ isBlock  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ isBlock ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+	s.Log.Trace(fmt.Sprintf("%t ", isBlock))
+	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ isBlock  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
 	if !isBlock {
-		s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ FS MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
-		s.Log.Info("-----------------== start MkdirAll ==-----------------")
-		s.Log.Info("mkdir create dir =" + target)
+		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ FS MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		s.Log.Trace("-----------------== start MkdirAll ==-----------------")
+		s.Log.Trace("mkdir create dir =" + target)
 		if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
 			return fmt.Errorf("[MkdirAll] could not create target directory %s, %v", target, err)
 		}
-		s.Log.Info("-----------------== stop MkdirAll ==-----------------")
+		s.Log.Trace("-----------------== stop MkdirAll ==-----------------")
 
 		needsMount, err := s.NodeStorage.IsMountPoint(target)
 		if err != nil {
 			return fmt.Errorf("[s.NodeStorage.IsMountPoint] unable to determine mount status of %s %v", target, err)
 		}
 
-		s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ needsMount ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
-		s.Log.Info(fmt.Sprintf("%t", needsMount))
-		s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ needsMount  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ needsMount ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		s.Log.Trace(fmt.Sprintf("%t", needsMount))
+		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ needsMount  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
 		//todo
 		//if !needsMount {
 		//	return nil
 		//}
 
-		s.Log.Info("-----------------== start FormatAndMount ==---------------")
+		s.Log.Trace("-----------------== start FormatAndMount ==---------------")
 		err = s.NodeStorage.FormatAndMount(source, target, fsType, mntOpts)
 		if err != nil {
 			return fmt.Errorf("failed to FormatAndMount : %w", err)
 		}
-		s.Log.Info("-----------------== stop FormatAndMount ==---------------")
+		s.Log.Trace("-----------------== stop FormatAndMount ==---------------")
 		return nil
 	}
 
 	if isBlock {
-		s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ BLOCK MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
-		s.Log.Info("-----------------== start Create File ==---------------")
+		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ BLOCK MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		s.Log.Trace("-----------------== start Create File ==---------------")
 		f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0666))
 		if err != nil {
 			if !os.IsExist(err) {
@@ -115,15 +115,15 @@ func (s *Store) Mount(source, target string, isBlock bool, fsType string, readon
 		} else {
 			_ = f.Close()
 		}
-		s.Log.Info("-----------------== stop Create File ==---------------")
-		s.Log.Info("-----------------== start Mount ==---------------")
+		s.Log.Trace("-----------------== stop Create File ==---------------")
+		s.Log.Trace("-----------------== start Mount ==---------------")
 		err = s.NodeStorage.Mount(source, target, fsType, mntOpts)
 		if err != nil {
 			s.Log.Error(err, "block mount error :")
 			return err
 		}
-		s.Log.Info("-----------------== stop Mount ==---------------")
-		s.Log.Info("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ BLOCK MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		s.Log.Trace("-----------------== stop Mount ==---------------")
+		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ BLOCK MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 		return nil
 	}
 	s.Log.Info("-----------------== Final ==---------------")

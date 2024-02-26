@@ -72,7 +72,7 @@ type Driver struct {
 
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
-// managaing  disks
+// managing  disks
 func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Logger, cl client.Client) (*Driver, error) {
 
 	if driverName == "" {

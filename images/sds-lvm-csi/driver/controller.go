@@ -34,9 +34,9 @@ import (
 func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	d.log.Info("method CreateVolume")
 
-	d.log.Info("========== CreateVolume ============")
-	d.log.Info(request.String())
-	d.log.Info("========== CreateVolume ============")
+	d.log.Trace("========== CreateVolume ============")
+	d.log.Trace(request.String())
+	d.log.Trace("========== CreateVolume ============")
 
 	if len(request.Name) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume Name cannot be empty")
@@ -102,7 +102,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	llvSpec := utils.GetLLVSpec(*d.log, selectedLVG, storageClassLVGParametersMap, preferredNode, LvmType, *llvSize)
 	d.log.Info(fmt.Sprintf("LVMLogicalVolumeSpec : %+v", llvSpec))
 
-	d.log.Info("------------ CreateLVMLogicalVolume ------------")
+	d.log.Trace("------------ CreateLVMLogicalVolume start ------------")
 	_, err = utils.CreateLVMLogicalVolume(ctx, d.cl, llvName, llvSpec)
 	if err != nil {
 		if kerrors.IsAlreadyExists(err) {
@@ -112,9 +112,9 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			return nil, err
 		}
 	}
-	d.log.Info("------------ CreateLVMLogicalVolume ------------")
+	d.log.Trace("------------ CreateLVMLogicalVolume end ------------")
 
-	d.log.Info("start wait CreateLVMLogicalVolume ")
+	d.log.Trace("start wait CreateLVMLogicalVolume ")
 	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
 	if err != nil {
 		d.log.Error(err, "error ParseQuantity for ResizeDelta")
@@ -125,7 +125,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		d.log.Error(err, "error WaitForStatusUpdate")
 		return nil, err
 	}
-	d.log.Info(fmt.Sprintf("stop waiting CreateLVMLogicalVolume, attempt сounter = %d ", attemptCounter))
+	d.log.Trace(fmt.Sprintf("stop waiting CreateLVMLogicalVolume, attempt сounter = %d ", attemptCounter))
 
 	volumeCtx := make(map[string]string, len(request.Parameters))
 	for k, v := range request.Parameters {
@@ -176,12 +176,12 @@ func (d *Driver) ControllerUnpublishVolume(ctx context.Context, request *csi.Con
 }
 
 func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, request *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
-	d.log.Info("method ValidateVolumeCapabilities")
+	d.log.Info("call method ValidateVolumeCapabilities")
 	return nil, nil
 }
 
 func (d *Driver) ListVolumes(ctx context.Context, request *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
-	d.log.Info("method ListVolumes")
+	d.log.Info("call method ListVolumes")
 	return nil, nil
 }
 
@@ -241,11 +241,11 @@ func (d *Driver) ListSnapshots(ctx context.Context, request *csi.ListSnapshotsRe
 }
 
 func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	d.log.Info(" call method ControllerExpandVolume")
+	d.log.Info("method ControllerExpandVolume")
 
-	d.log.Info("========== ControllerExpandVolume ============")
-	d.log.Info(request.String())
-	d.log.Info("========== ControllerExpandVolume ============")
+	d.log.Trace("========== ControllerExpandVolume ============")
+	d.log.Trace(request.String())
+	d.log.Trace("========== ControllerExpandVolume ============")
 
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
