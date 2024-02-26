@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sds-lvm-csi/api/v1alpha1"
+	"sds-lvm-csi/internal"
 	"sds-lvm-csi/pkg/utils"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,7 +28,6 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
@@ -46,30 +45,23 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		return nil, status.Error(codes.InvalidArgument, "Volume Capability cannot de empty")
 	}
 
-	LvmBindingMode := request.GetParameters()[lvmBindingMode]
+	LvmBindingMode := request.GetParameters()[internal.LvmBindingModeKey]
 	d.log.Info(fmt.Sprintf("storage class LvmBindingMode: %s", LvmBindingMode))
 
-	LvmType := request.GetParameters()[lvmType]
+	LvmType := request.GetParameters()[internal.LvmTypeKey]
 	d.log.Info(fmt.Sprintf("storage class LvmType: %s", LvmType))
 
-	if len(request.GetParameters()[lvmVolumeGroup]) == 0 {
+	if len(request.GetParameters()[internal.LvmVolumeGroupKey]) == 0 {
 		err := errors.New("no LVMVolumeGroups specified in a storage class's parameters")
 		d.log.Error(err, fmt.Sprintf("no LVMVolumeGroups were found for the request: %+v", request))
 		return nil, status.Errorf(codes.InvalidArgument, err.Error())
 	}
 
-	var lvmVolumeGroups LVMVolumeGroups
-	err := yaml.Unmarshal([]byte(request.GetParameters()[lvmVolumeGroup]), &lvmVolumeGroups)
+	storageClassLVGs, storageClassLVGParametersMap, err := utils.GetStorageClassLVGsAndParameters(ctx, d.cl, *d.log, request.GetParameters()[internal.LvmVolumeGroupKey])
 	if err != nil {
-		d.log.Error(err, "unmarshal yaml lvmVolumeGroup")
+		d.log.Error(err, "error GetStorageClassLVGs")
+		return nil, status.Errorf(codes.Internal, err.Error())
 	}
-
-	lvmVG := make(map[string]string, len(lvmVolumeGroups))
-	for _, v := range lvmVolumeGroups {
-		lvmVG[v.Name] = v.Thin.PoolName
-	}
-
-	d.log.Info(fmt.Sprintf("StorageClass LVM volume groups names: %+v", lvmVG))
 
 	llvName := request.Name
 	d.log.Info(fmt.Sprintf("llv name: %s ", llvName))
@@ -79,52 +71,39 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	var preferredNode string
 	switch LvmBindingMode {
-	case BindingModeI:
-		d.log.Info(fmt.Sprintf("LvmBindingMode is %s. Start selecting node", BindingModeI))
-		selectedNodeName, freeSpace, err := utils.GetNodeMaxFreeVGSize(ctx, d.cl)
+	case internal.BindingModeI:
+		d.log.Info(fmt.Sprintf("LvmBindingMode is %s. Start selecting node", internal.BindingModeI))
+		selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(*d.log, storageClassLVGs, storageClassLVGParametersMap, LvmType)
 		if err != nil {
 			d.log.Error(err, "error GetNodeMaxVGSize")
 		}
+
 		preferredNode = selectedNodeName
-		if llvSize.Value() > freeSpace.Value() {
-			return nil, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), freeSpace.String())
-		}
 		d.log.Info(fmt.Sprintf("Selected node: %s, free space %s ", selectedNodeName, freeSpace.String()))
-	case BindingModeWFFC:
-		d.log.Info(fmt.Sprintf("LvmBindingMode is %s. Get preferredNode", BindingModeWFFC))
+		if LvmType == internal.LLMTypeThick {
+			if llvSize.Value() > freeSpace.Value() {
+				return nil, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), freeSpace.String())
+			}
+		}
+	case internal.BindingModeWFFC:
+		d.log.Info(fmt.Sprintf("LvmBindingMode is %s. Get preferredNode", internal.BindingModeWFFC))
 		if len(request.AccessibilityRequirements.Preferred) != 0 {
 			t := request.AccessibilityRequirements.Preferred[0].Segments
-			preferredNode = t[topologyKey]
+			preferredNode = t[internal.TopologyKey]
 		}
 	}
 
-	lvmVolumeGroupName, vgName, err := utils.GetLVMVolumeGroupParams(ctx, d.cl, *d.log, lvmVG, preferredNode, LvmType)
+	selectedLVG, err := utils.SelectLVG(storageClassLVGs, storageClassLVGParametersMap, preferredNode)
 	if err != nil {
-		d.log.Error(err, "error GetVGName")
+		d.log.Error(err, "error SelectLVG")
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
-	d.log.Info(fmt.Sprintf("LvmVolumeGroup: %s", lvmVolumeGroupName))
-	d.log.Info(fmt.Sprintf("VGName: %s", vgName))
-	d.log.Info(fmt.Sprintf("prefered node: %s", preferredNode))
+	llvSpec := utils.GetLLVSpec(*d.log, selectedLVG, storageClassLVGParametersMap, preferredNode, LvmType, *llvSize)
+	d.log.Info(fmt.Sprintf("LVMLogicalVolumeSpec : %+v", llvSpec))
 
 	d.log.Info("------------ CreateLVMLogicalVolume ------------")
-	var llvThin *v1alpha1.ThinLogicalVolumeSpec
-	if LvmType == LLVTypeThin {
-		llvThin = &v1alpha1.ThinLogicalVolumeSpec{}
-		llvThin.PoolName = lvmVG[lvmVolumeGroupName]
-	}
-
-	spec := v1alpha1.LvmLogicalVolumeSpec{
-		Type:           LvmType,
-		Size:           *llvSize,
-		LvmVolumeGroup: lvmVolumeGroupName,
-		Thin:           llvThin,
-	}
-
-	d.log.Info(fmt.Sprintf("LvmLogicalVolumeSpec : %+v", spec))
-
-	_, err = utils.CreateLVMLogicalVolume(ctx, d.cl, llvName, spec)
+	_, err = utils.CreateLVMLogicalVolume(ctx, d.cl, llvName, llvSpec)
 	if err != nil {
 		if kerrors.IsAlreadyExists(err) {
 			d.log.Info(fmt.Sprintf("LVMLogicalVolume %s already exists", llvName))
@@ -136,7 +115,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	d.log.Info("------------ CreateLVMLogicalVolume ------------")
 
 	d.log.Info("start wait CreateLVMLogicalVolume ")
-	resizeDelta, err := resource.ParseQuantity(ResizeDelta)
+	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
 	if err != nil {
 		d.log.Error(err, "error ParseQuantity for ResizeDelta")
 		return nil, err
@@ -153,8 +132,8 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		volumeCtx[k] = v
 	}
 
-	volumeCtx[subPath] = request.Name
-	volumeCtx[VGNameKey] = vgName
+	volumeCtx[internal.SubPath] = request.Name
+	volumeCtx[internal.VGNameKey] = selectedLVG.Spec.ActualVGNameOnTheNode
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
@@ -164,7 +143,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			ContentSource: request.VolumeContentSource,
 			AccessibleTopology: []*csi.Topology{
 				{Segments: map[string]string{
-					topologyKey: preferredNode,
+					internal.TopologyKey: preferredNode,
 				}},
 			},
 		},
@@ -278,7 +257,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Errorf(codes.Internal, "error getting LVMLogicalVolume: %s", err.Error())
 	}
 
-	resizeDelta, err := resource.ParseQuantity(ResizeDelta)
+	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
 	if err != nil {
 		d.log.Error(err, "error ParseQuantity for ResizeDelta")
 		return nil, err
@@ -306,13 +285,15 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
 	}
 
-	lvgFreeSpace, err := utils.GetLVMVolumeGroupFreeSpace(*lvg)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroupCapacity: %v", err)
-	}
+	if llv.Spec.Type == internal.LLMTypeThick {
+		lvgFreeSpace, err := utils.GetLVMVolumeGroupFreeSpace(*lvg)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroupCapacity: %v", err)
+		}
 
-	if lvgFreeSpace.Value() < (requestCapacity.Value() - llv.Status.ActualSize.Value()) {
-		return nil, status.Errorf(codes.Internal, "requested size: %s is greater than the capacity of the LVMVolumeGroup: %s", requestCapacity.String(), lvgFreeSpace.String())
+		if lvgFreeSpace.Value() < (requestCapacity.Value() - llv.Status.ActualSize.Value()) {
+			return nil, status.Errorf(codes.Internal, "requested size: %s is greater than the capacity of the LVMVolumeGroup: %s", requestCapacity.String(), lvgFreeSpace.String())
+		}
 	}
 
 	d.log.Info("start resize LVMLogicalVolume")

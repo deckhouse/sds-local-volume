@@ -19,6 +19,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"sds-lvm-csi/internal"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -41,7 +42,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 	d.log.Info(request.String())
 	d.log.Info("------------- NodePublishVolume --------------")
 
-	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[VGNameKey], request.VolumeId)
+	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[internal.VGNameKey], request.VolumeId)
 
 	var mountOptions []string
 	if request.GetReadonly() {
@@ -145,7 +146,7 @@ func (d *Driver) NodeGetInfo(ctx context.Context, request *csi.NodeGetInfoReques
 		MaxVolumesPerNode: 10,
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
-				topologyKey: d.hostID,
+				internal.TopologyKey: d.hostID,
 			},
 		},
 	}, nil
