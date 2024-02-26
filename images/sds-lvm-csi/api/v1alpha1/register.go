@@ -24,7 +24,7 @@ import (
 
 const (
 	LVMVolumeGroupKind   = "LvmVolumeGroup"
-	LVMLogicalVolumeKind = "LvmLogicalVolume"
+	LVMLogicalVolumeKind = "LVMLogicalVolume"
 	APIGroup             = "storage.deckhouse.io"
 	APIVersion           = "v1alpha1"
 	TypeMediaAPIVersion  = APIGroup + "/" + APIVersion
@@ -45,8 +45,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&LvmVolumeGroup{},
 		&LvmVolumeGroupList{},
-		&LvmLogicalVolume{},
-		&LvmLogicalVolumeList{},
+		&LVMLogicalVolume{},
+		&LVMLogicalVolumeList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
