@@ -125,7 +125,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		d.log.Error(err, "error WaitForStatusUpdate")
 		return nil, err
 	}
-	d.log.Trace(fmt.Sprintf("stop waiting CreateLVMLogicalVolume, attempt сounter = %d ", attemptCounter))
+	d.log.Trace(fmt.Sprintf("stop waiting CreateLVMLogicalVolume, attempt counter = %d ", attemptCounter))
 
 	volumeCtx := make(map[string]string, len(request.Parameters))
 	for k, v := range request.Parameters {
@@ -309,7 +309,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		d.log.Error(err, "error WaitForStatusUpdate")
 		return nil, err
 	}
-	d.log.Info(fmt.Sprintf("finish resize LVMLogicalVolume, attempt сounter = %d ", attemptCounter))
+	d.log.Info(fmt.Sprintf("finish resize LVMLogicalVolume, attempt counter = %d ", attemptCounter))
 
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         request.CapacityRange.RequiredBytes,
