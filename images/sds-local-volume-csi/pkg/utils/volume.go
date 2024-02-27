@@ -19,7 +19,7 @@ package utils
 import (
 	"fmt"
 	"os"
-	"sds-lvm-csi/pkg/logger"
+	"sds-local-volume-csi/pkg/logger"
 	"time"
 
 	mu "k8s.io/mount-utils"

@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"sds-lvm-csi/api/v1alpha1"
-	"sds-lvm-csi/config"
-	"sds-lvm-csi/driver"
-	"sds-lvm-csi/pkg/kubutils"
-	"sds-lvm-csi/pkg/logger"
+	"sds-local-volume-csi/api/v1alpha1"
+	"sds-local-volume-csi/config"
+	"sds-local-volume-csi/driver"
+	"sds-local-volume-csi/pkg/kubutils"
+	"sds-local-volume-csi/pkg/logger"
 
 	"syscall"
 

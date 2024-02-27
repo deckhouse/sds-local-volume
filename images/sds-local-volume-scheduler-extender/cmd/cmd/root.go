@@ -23,10 +23,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sds-lvm-scheduler-extender/api/v1alpha1"
-	"sds-lvm-scheduler-extender/pkg/kubutils"
-	"sds-lvm-scheduler-extender/pkg/logger"
-	"sds-lvm-scheduler-extender/pkg/scheduler"
+	"sds-local-volume-scheduler-extender/api/v1alpha1"
+	"sds-local-volume-scheduler-extender/pkg/kubutils"
+	"sds-local-volume-scheduler-extender/pkg/logger"
+	"sds-local-volume-scheduler-extender/pkg/scheduler"
 	"sync"
 	"syscall"
 	"time"
@@ -68,10 +68,10 @@ var config = &Config{
 }
 
 var rootCmd = &cobra.Command{
-	Use:     "sds-lvm-scheduler",
+	Use:     "sds-local-volume-scheduler",
 	Version: "development",
-	Short:   "a scheduler-extender for SDS-LVM",
-	Long: `A scheduler-extender for SDS-LVM.
+	Short:   "a scheduler-extender for sds-local-volume",
+	Long: `A scheduler-extender for sds-local-volume.
 The extender implements filter and prioritize verbs.
 The filter verb is "filter" and served at "/filter" via HTTP.
 It filters out nodes that have less storage capacity than requested.

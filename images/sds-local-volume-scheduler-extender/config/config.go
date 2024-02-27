@@ -15,7 +15,7 @@ package config
 
 import (
 	"os"
-	"sds-lvm-scheduler-extender/pkg/logger"
+	"sds-local-volume-scheduler-extender/pkg/logger"
 )
 
 const (

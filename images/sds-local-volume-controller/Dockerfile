@@ -9,9 +9,9 @@ ADD go.sum .
 RUN go mod download
 COPY . .
 WORKDIR /go/src/cmd
-RUN GOOS=linux GOARCH=amd64 go build -o sds-lvm-controller
+RUN GOOS=linux GOARCH=amd64 go build -o sds-local-volume-controller
 
 FROM --platform=linux/amd64 $BASE_ALPINE
-COPY --from=builder /go/src/cmd/sds-lvm-controller /go/src/cmd/sds-lvm-controller
+COPY --from=builder /go/src/cmd/sds-local-volume-controller /go/src/cmd/sds-local-volume-controller
 
-ENTRYPOINT ["/go/src/cmd/sds-lvm-controller"]
+ENTRYPOINT ["/go/src/cmd/sds-local-volume-controller"]

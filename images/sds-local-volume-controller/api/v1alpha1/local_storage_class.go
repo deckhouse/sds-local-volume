@@ -18,38 +18,38 @@ package v1alpha1
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-type LVMStorageClass struct {
+type LocalStorageClass struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              LVMStorageClassSpec    `json:"spec"`
-	Status            *LVMStorageClassStatus `json:"status,omitempty"`
+	Spec              LocalStorageClassSpec    `json:"spec"`
+	Status            *LocalStorageClassStatus `json:"status,omitempty"`
 }
 
-// LVMStorageClassList contains a list of empty block device
-type LVMStorageClassList struct {
+// LocalStorageClassList contains a list of empty block device
+type LocalStorageClassList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
-	Items           []LVMStorageClass `json:"items"`
+	Items           []LocalStorageClass `json:"items"`
 }
 
-type LVMStorageClassSpec struct {
-	IsDefault         bool                 `json:"isDefault"`
-	Type              string               `json:"type"`
-	ReclaimPolicy     string               `json:"reclaimPolicy"`
-	VolumeBindingMode string               `json:"volumeBindingMode"`
-	LVMVolumeGroups   []LVMStorageClassLVG `json:"lvmVolumeGroups"`
+type LocalStorageClassSpec struct {
+	IsDefault         bool                   `json:"isDefault"`
+	Type              string                 `json:"type"`
+	ReclaimPolicy     string                 `json:"reclaimPolicy"`
+	VolumeBindingMode string                 `json:"volumeBindingMode"`
+	LVMVolumeGroups   []LocalStorageClassLVG `json:"lvmVolumeGroups"`
 }
 
-type LVMStorageClassStatus struct {
+type LocalStorageClassStatus struct {
 	Phase  string `json:"phase,omitempty"`
 	Reason string `json:"reason,omitempty"`
 }
 
-type LVMStorageClassLVG struct {
-	Name string                   `json:"name"`
-	Thin *LVMStorageClassThinPool `json:"thin,omitempty"`
+type LocalStorageClassLVG struct {
+	Name string                     `json:"name"`
+	Thin *LocalStorageClassThinPool `json:"thin,omitempty"`
 }
 
-type LVMStorageClassThinPool struct {
+type LocalStorageClassThinPool struct {
 	PoolName string `json:"poolName"`
 }

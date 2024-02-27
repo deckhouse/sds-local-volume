@@ -22,8 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sds-lvm-scheduler-extender/api/v1alpha1"
-	"sds-lvm-scheduler-extender/pkg/logger"
+	"sds-local-volume-scheduler-extender/api/v1alpha1"
+	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,8 +34,8 @@ import (
 )
 
 const (
-	lvmTypeParamKey         = "lvm.csi.storage.deckhouse.io/lvm-type"
-	lvmVolumeGroupsParamKey = "lvm.csi.storage.deckhouse.io/lvm-volume-groups"
+	lvmTypeParamKey         = "local.csi.storage.deckhouse.io/lvm-type"
+	lvmVolumeGroupsParamKey = "local.csi.storage.deckhouse.io/lvm-volume-groups"
 
 	thick = "Thick"
 	thin  = "Thin"

@@ -15,7 +15,7 @@ package config
 
 import (
 	"os"
-	"sds-lvm-controller/pkg/logger"
+	"sds-local-volume-controller/pkg/logger"
 	"time"
 )
 

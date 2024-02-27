@@ -21,9 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sds-lvm-csi/api/v1alpha1"
-	"sds-lvm-csi/internal"
-	"sds-lvm-csi/pkg/logger"
+	"sds-local-volume-csi/api/v1alpha1"
+	"sds-local-volume-csi/internal"
+	"sds-local-volume-csi/pkg/logger"
 	"time"
 
 	"gopkg.in/yaml.v2"

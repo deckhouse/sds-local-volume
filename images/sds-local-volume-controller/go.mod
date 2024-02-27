@@ -1,4 +1,4 @@
-module sds-lvm-controller
+module sds-local-volume-controller
 
 go 1.21
 

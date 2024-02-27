@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"os"
 	goruntime "runtime"
-	"sds-lvm-controller/api/v1alpha1"
-	"sds-lvm-controller/pkg/config"
-	"sds-lvm-controller/pkg/controller"
-	"sds-lvm-controller/pkg/kubutils"
-	"sds-lvm-controller/pkg/logger"
-	"sds-lvm-controller/pkg/monitoring"
+	"sds-local-volume-controller/api/v1alpha1"
+	"sds-local-volume-controller/pkg/config"
+	"sds-local-volume-controller/pkg/controller"
+	"sds-local-volume-controller/pkg/kubutils"
+	"sds-local-volume-controller/pkg/logger"
+	"sds-local-volume-controller/pkg/monitoring"
 
 	v1 "k8s.io/api/core/v1"
 	sv1 "k8s.io/api/storage/v1"
@@ -98,7 +98,7 @@ func main() {
 
 	metrics := monitoring.GetMetrics("")
 
-	if _, err = controller.RunLVMStorageClassWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
+	if _, err = controller.RunLocalStorageClassWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
 		log.Error(err, "[main] unable to controller.RunBlockDeviceController")
 		os.Exit(1)
 	}

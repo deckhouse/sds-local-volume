@@ -17,10 +17,10 @@ limitations under the License.
 package internal
 
 const (
-	LvmTypeKey        = "lvm.csi.storage.deckhouse.io/lvm-type"
-	LvmBindingModeKey = "lvm.csi.storage.deckhouse.io/volume-binding-mode"
-	LvmVolumeGroupKey = "lvm.csi.storage.deckhouse.io/lvm-volume-groups"
-	TopologyKey       = "topology.sds-lvm-csi/node"
+	LvmTypeKey        = "local.csi.storage.deckhouse.io/lvm-type"
+	BindingModeKey    = "local.csi.storage.deckhouse.io/volume-binding-mode"
+	LvmVolumeGroupKey = "local.csi.storage.deckhouse.io/lvm-volume-groups"
+	TopologyKey       = "topology.sds-local-volume-csi/node"
 	SubPath           = "subPath"
 	VGNameKey         = "vgname"
 	LLMTypeThin       = "Thin"

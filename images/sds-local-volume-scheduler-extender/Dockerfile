@@ -13,9 +13,9 @@ RUN go mod download
 COPY . .
 
 WORKDIR /go/src/cmd
-RUN GOOS=linux GOARCH=amd64 go build -o sds-lvm-scheduler-extender
+RUN GOOS=linux GOARCH=amd64 go build -o sds-local-volume-scheduler-extender
 
 FROM --platform=linux/amd64 $BASE_GOLANG_20_ALPINE
-COPY --from=builder /go/src/cmd/sds-lvm-scheduler-extender /go/src/cmd/sds-lvm-scheduler-extender
+COPY --from=builder /go/src/cmd/sds-local-volume-scheduler-extender /go/src/cmd/sds-local-volume-scheduler-extender
 
-ENTRYPOINT ["/go/src/cmd/sds-lvm-scheduler-extender"]
+ENTRYPOINT ["/go/src/cmd/sds-local-volume-scheduler-extender"]

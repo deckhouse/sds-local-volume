@@ -19,7 +19,7 @@ package config
 import (
 	"fmt"
 	"os"
-	"sds-lvm-csi/pkg/logger"
+	"sds-local-volume-csi/pkg/logger"
 )
 
 const (

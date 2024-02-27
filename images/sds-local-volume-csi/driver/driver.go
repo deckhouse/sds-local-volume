@@ -26,8 +26,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sds-lvm-csi/pkg/logger"
-	"sds-lvm-csi/pkg/utils"
+	"sds-local-volume-csi/pkg/logger"
+	"sds-local-volume-csi/pkg/utils"
 	"sync"
 	"time"
 
@@ -40,7 +40,7 @@ import (
 const (
 	// DefaultDriverName defines the name that is used in Kubernetes and the CSI
 	// system for the canonical, official name of this plugin
-	DefaultDriverName = "lvm.csi.storage.deckhouse.io"
+	DefaultDriverName = "local.csi.storage.deckhouse.io"
 	// DefaultAddress is the default address that the csi plugin will serve its
 	// http handler on.
 	DefaultAddress           = "127.0.0.1:12302"

@@ -39,14 +39,14 @@ memory: 25Mi
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
-  name: sds-lvm-csi-controller
+  name: sds-local-volume-csi-controller
   namespace: d8-{{ .Chart.Name }}
-  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-csi-controller")) | nindent 2 }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-local-volume-csi-controller")) | nindent 2 }}
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: Deployment
-    name: sds-lvm-csi-controller
+    name: sds-local-volume-csi-controller
   updatePolicy:
     updateMode: "Auto"
   resourcePolicy:
@@ -69,7 +69,7 @@ spec:
       maxAllowed:
         cpu: 20m
         memory: 50Mi
-    - containerName: sds-lvm-csi-plugin
+    - containerName: sds-local-volume-csi-plugin
       minAllowed:
         {{- include "sds_lvm_csi_plugin_resources" . | nindent 8 }}
       maxAllowed:
@@ -91,19 +91,19 @@ spec:
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
 metadata:
-  name: sds-lvm-csi-node
+  name: sds-local-volume-csi-node
   namespace: d8-{{ .Chart.Name }}
-  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-csi-node" "workload-resource-policy.deckhouse.io" "every-node")) | nindent 2 }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-local-volume-csi-node" "workload-resource-policy.deckhouse.io" "every-node")) | nindent 2 }}
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: DaemonSet
-    name: sds-lvm-csi-node
+    name: sds-local-volume-csi-node
   updatePolicy:
     updateMode: "Auto"
   resourcePolicy:
     containerPolicies:
-    - containerName: sds-lvm-csi-plugin
+    - containerName: sds-local-volume-csi-plugin
       minAllowed:
         {{- include "sds_lvm_csi_plugin_resources" . | nindent 8 }}
       maxAllowed:
@@ -126,31 +126,31 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: sds-lvm-csi-controller
+  name: sds-local-volume-csi-controller
   namespace: d8-{{ .Chart.Name }}
-  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-csi-controller")) | nindent 2 }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-local-volume-csi-controller")) | nindent 2 }}
 spec:
   minAvailable: {{ include "helm_lib_is_ha_to_value" (list . 1 0) }}
   selector:
     matchLabels:
-      app: sds-lvm-csi-controller
+      app: sds-local-volume-csi-controller
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: sds-lvm-csi-node
+  name: sds-local-volume-csi-node
   namespace: d8-{{ .Chart.Name }}
-  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-csi-node")) | nindent 2 }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-local-volume-csi-node")) | nindent 2 }}
 spec:
   revisionHistoryLimit: 2
   selector:
     matchLabels:
-      app: sds-lvm-csi-node
+      app: sds-local-volume-csi-node
   template:
     metadata:
       labels:
-        app: sds-lvm-csi-node
-      name: sds-lvm-csi-node
+        app: sds-local-volume-csi-node
+      name: sds-local-volume-csi-node
       namespace: d8-{{ .Chart.Name }}
     spec:
       {{- include "helm_lib_tolerations" (tuple . "any-node" "storage-problems") | nindent 6 }}
@@ -166,7 +166,7 @@ spec:
           - name: CSI_ENDPOINT
             value: /csi/csi.sock
           - name: DRIVER_REG_SOCK_PATH
-            value: /var/lib/kubelet/plugins/lvm.csi.storage.deckhouse.io/csi.sock
+            value: /var/lib/kubelet/plugins/local.csi.storage.deckhouse.io/csi.sock
           - name: KUBE_NODE_NAME
             valueFrom:
               fieldRef:
@@ -180,7 +180,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - rm -rf /registration/lvm.csi.storage.deckhouse.io /registration/lvm.csi.storage.deckhouse.io-reg.sock
+                - rm -rf /registration/local.csi.storage.deckhouse.io /registration/local.csi.storage.deckhouse.io-reg.sock
         name: csi-node-driver-registrar
         resources:
           requests:
@@ -227,13 +227,13 @@ spec:
           - name: CSI_ENDPOINT
             value: /csi/csi.sock
           - name: DRIVER_REG_SOCK_PATH
-            value: /var/lib/kubelet/plugins/lvm.csi.storage.deckhouse.io/csi.sock
+            value: /var/lib/kubelet/plugins/local.csi.storage.deckhouse.io/csi.sock
           - name: KUBE_NODE_NAME
             valueFrom:
               fieldRef:
                 apiVersion: v1
                 fieldPath: spec.nodeName
-        image: {{ include "helm_lib_module_image" (list . "sdsLvmCsi") }}
+        image: {{ include "helm_lib_module_image" (list . "sdsLocalVolumeCsi") }}
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -244,7 +244,7 @@ spec:
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 1
-        name: sds-lvm-csi-plugin
+        name: sds-local-volume-csi-plugin
         ports:
           - containerPort: 9808
             name: healthz
@@ -284,7 +284,7 @@ spec:
             type: ""
           name: device-dir
         - hostPath:
-            path: /var/lib/kubelet/plugins/lvm.csi.storage.deckhouse.io
+            path: /var/lib/kubelet/plugins/local.csi.storage.deckhouse.io
             type: DirectoryOrCreate
           name: plugin-dir
         - hostPath:
@@ -304,16 +304,16 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sds-lvm-csi-controller
+  name: sds-local-volume-csi-controller
   namespace: d8-{{ .Chart.Name }}
-  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-csi-controller" "workload-resource-policy.deckhouse.io" "system")) | nindent 2 }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-local-volume-csi-controller" "workload-resource-policy.deckhouse.io" "system")) | nindent 2 }}
 spec:
   progressDeadlineSeconds: 600
   replicas: {{ include "helm_lib_is_ha_to_value" (list . 2 1) }}
   revisionHistoryLimit: 2
   selector:
     matchLabels:
-      app: sds-lvm-csi-controller
+      app: sds-local-volume-csi-controller
   strategy:
     type: RollingUpdate
     {{- if (include "helm_lib_ha_enabled" .) }}
@@ -324,8 +324,8 @@ spec:
   template:
     metadata:
       labels:
-        app: sds-lvm-csi-controller
-      name: sds-lvm-csi-controller
+        app: sds-local-volume-csi-controller
+      name: sds-local-volume-csi-controller
       namespace: d8-{{ .Chart.Name }}
     spec:
       {{- include "helm_lib_priority_class" (tuple . "cluster-medium") | nindent 6 }}
@@ -346,7 +346,7 @@ spec:
 {{- else }}
         nodeAffinity: {}
 {{- end }}
-{{- with (index (fromYaml (include "helm_lib_pod_anti_affinity_for_ha" (list . (dict "app" "sds-lvm-csi-controller")))) "affinity") }}
+{{- with (index (fromYaml (include "helm_lib_pod_anti_affinity_for_ha" (list . (dict "app" "sds-local-volume-csi-controller")))) "affinity") }}
         {{ toYaml . | nindent 8 }}
 {{- else }}
         podAntiAffinity: {}
@@ -511,7 +511,7 @@ spec:
               fieldRef:
                 apiVersion: v1
                 fieldPath: spec.nodeName
-        image: {{ include "helm_lib_module_image" (list . "sdsLvmCsi") }}
+        image: {{ include "helm_lib_module_image" (list . "sdsLocalVolumeCsi") }}
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -522,7 +522,7 @@ spec:
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 1
-        name: sds-lvm-csi-plugin
+        name: sds-local-volume-csi-plugin
         ports:
           - containerPort: 9808
             name: healthz

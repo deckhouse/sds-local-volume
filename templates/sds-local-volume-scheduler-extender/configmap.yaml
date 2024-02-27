@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: sds-lvm-scheduler
+  name: sds-local-volume-scheduler
   namespace: d8-{{ .Chart.Name }}
-  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-lvm-scheduler")) | nindent 2 }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-local-volume-scheduler")) | nindent 2 }}
 data:
   scheduler-extender-config.yaml: |-
     listen: "localhost:8099"
@@ -19,7 +19,7 @@ data:
     {{- end }}
     kind: KubeSchedulerConfiguration
     profiles:
-      - schedulerName: sds-lvm
+      - schedulerName: sds-local-volume
     extenders:
       - urlPrefix: http://localhost:8099
         filterVerb: filter

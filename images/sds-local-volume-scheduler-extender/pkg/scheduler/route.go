@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sds-lvm-scheduler-extender/pkg/logger"
+	"sds-local-volume-scheduler-extender/pkg/logger"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

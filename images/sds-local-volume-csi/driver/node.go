@@ -19,7 +19,7 @@ package driver
 import (
 	"context"
 	"fmt"
-	"sds-lvm-csi/internal"
+	"sds-local-volume-csi/internal"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"

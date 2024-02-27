@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sds-lvm-csi/internal"
-	"sds-lvm-csi/pkg/utils"
+	"sds-local-volume-csi/internal"
+	"sds-local-volume-csi/pkg/utils"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -45,8 +45,8 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		return nil, status.Error(codes.InvalidArgument, "Volume Capability cannot de empty")
 	}
 
-	LvmBindingMode := request.GetParameters()[internal.LvmBindingModeKey]
-	d.log.Info(fmt.Sprintf("storage class LvmBindingMode: %s", LvmBindingMode))
+	BindingMode := request.GetParameters()[internal.BindingModeKey]
+	d.log.Info(fmt.Sprintf("storage class BindingMode: %s", BindingMode))
 
 	LvmType := request.GetParameters()[internal.LvmTypeKey]
 	d.log.Info(fmt.Sprintf("storage class LvmType: %s", LvmType))
@@ -70,9 +70,9 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	d.log.Info(fmt.Sprintf("llv size: %s ", llvSize.String()))
 
 	var preferredNode string
-	switch LvmBindingMode {
+	switch BindingMode {
 	case internal.BindingModeI:
-		d.log.Info(fmt.Sprintf("LvmBindingMode is %s. Start selecting node", internal.BindingModeI))
+		d.log.Info(fmt.Sprintf("BindingMode is %s. Start selecting node", internal.BindingModeI))
 		selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(*d.log, storageClassLVGs, storageClassLVGParametersMap, LvmType)
 		if err != nil {
 			d.log.Error(err, "error GetNodeMaxVGSize")
@@ -86,7 +86,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			}
 		}
 	case internal.BindingModeWFFC:
-		d.log.Info(fmt.Sprintf("LvmBindingMode is %s. Get preferredNode", internal.BindingModeWFFC))
+		d.log.Info(fmt.Sprintf("BindingMode is %s. Get preferredNode", internal.BindingModeWFFC))
 		if len(request.AccessibilityRequirements.Preferred) != 0 {
 			t := request.AccessibilityRequirements.Preferred[0].Segments
 			preferredNode = t[internal.TopologyKey]

@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"sds-lvm-scheduler-extender/pkg/logger"
+	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"

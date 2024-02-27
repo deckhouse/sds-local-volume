@@ -1,4 +1,4 @@
-module sds-lvm-csi
+module sds-local-volume-csi
 
 go 1.21
 
