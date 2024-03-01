@@ -1,4 +1,4 @@
-project: sds-lvm
+project: sds-local-volume
 configVersion: 1
 ---
 {{ tpl (.Files.Get ".werf/images.yaml") $ }}

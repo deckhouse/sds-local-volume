@@ -24,7 +24,7 @@ webhooks:
         name: "webhooks"
         path: "/pod-scheduler-mutation"
       caBundle: |
-        {{ .Values.sdsLvm.internal.customWebhookCert.ca }}
+        {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca }}
 
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None

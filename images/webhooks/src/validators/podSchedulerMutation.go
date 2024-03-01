@@ -30,8 +30,8 @@ import (
 const (
 	annBetaStorageProvisioner = "volume.beta.kubernetes.io/storage-provisioner"
 	annStorageProvisioner     = "volume.kubernetes.io/storage-provisioner"
-	csiEndpoint               = "lvm.csi.storage.deckhouse.io"
-	schedulerName             = "sds-lvm"
+	csiEndpoint               = "local.csi.storage.deckhouse.io"
+	schedulerName             = "sds-local-volume"
 )
 
 func PodSchedulerMutation(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhmutating.MutatorResult, error) {

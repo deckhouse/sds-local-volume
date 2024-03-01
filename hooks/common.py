@@ -22,8 +22,8 @@ import os
 import unittest
 
 
-NAMESPACE   = "d8-sds-lvm"
-MODULE_NAME = "sdsLvm"
+NAMESPACE   = "d8-sds-local-volume"
+MODULE_NAME = "sdsLocalVolume"
 
 def json_load(path: str):
     with open(path, "r", encoding="utf-8") as f:

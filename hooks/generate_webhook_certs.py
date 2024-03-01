@@ -32,7 +32,7 @@ def main():
                 f"webhooks.{common.NAMESPACE}.svc"]),
             values_path_prefix=f"{common.MODULE_NAME}.internal.customWebhookCert"
             ),
-        cn="sds-lvm-webhooks",
+        cn="sds-local-volume-webhooks",
         common_ca=True,
         namespace=common.NAMESPACE)
 
