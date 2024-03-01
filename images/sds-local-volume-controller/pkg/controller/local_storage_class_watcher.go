@@ -273,7 +273,7 @@ func reconcileLSCDeleteFunc(
 	}
 
 	log.Debug(fmt.Sprintf("[reconcileLSCDeleteFunc] starts removing a finalizer %s from the LocalStorageClass, name: %s", LocalStorageClassFinalizerName, lsc.Name))
-	removed, err := removeLVMSCFinalizerIfExists(ctx, cl, lsc)
+	removed, err := removeLocalSCFinalizerIfExists(ctx, cl, lsc)
 	if err != nil {
 		log.Error(err, "[reconcileLSCDeleteFunc] unable to remove a finalizer %s from the LocalStorageClass, name: %s", LocalStorageClassFinalizerName, lsc.Name)
 		upErr := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, fmt.Sprintf("Unable to remove a finalizer, err: %s", err.Error()))
@@ -288,7 +288,7 @@ func reconcileLSCDeleteFunc(
 	return false, nil
 }
 
-func removeLVMSCFinalizerIfExists(ctx context.Context, cl client.Client, lsc *v1alpha1.LocalStorageClass) (bool, error) {
+func removeLocalSCFinalizerIfExists(ctx context.Context, cl client.Client, lsc *v1alpha1.LocalStorageClass) (bool, error) {
 	removed := false
 	for i, f := range lsc.Finalizers {
 		if f == LocalStorageClassFinalizerName {
