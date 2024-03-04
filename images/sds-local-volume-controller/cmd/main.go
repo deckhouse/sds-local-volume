@@ -49,9 +49,7 @@ var (
 )
 
 func main() {
-
 	ctx := context.Background()
-
 	cfgParams := config.NewConfig()
 
 	log, err := logger.NewLogger(cfgParams.Loglevel)

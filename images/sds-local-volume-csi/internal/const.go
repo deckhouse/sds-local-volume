@@ -17,6 +17,8 @@ limitations under the License.
 package internal
 
 const (
+	TypeKey           = "local.csi.storage.deckhouse.io/type"
+	Lvm               = "lvm"
 	LvmTypeKey        = "local.csi.storage.deckhouse.io/lvm-type"
 	BindingModeKey    = "local.csi.storage.deckhouse.io/volume-binding-mode"
 	LvmVolumeGroupKey = "local.csi.storage.deckhouse.io/lvm-volume-groups"

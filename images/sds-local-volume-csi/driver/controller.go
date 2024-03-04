@@ -38,6 +38,10 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	d.log.Trace(request.String())
 	d.log.Trace("========== CreateVolume ============")
 
+	if request.GetParameters()[internal.TypeKey] != internal.Lvm {
+		return nil, status.Error(codes.InvalidArgument, "Unsupported Storage Class type")
+	}
+
 	if len(request.Name) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume Name cannot be empty")
 	}

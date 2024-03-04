@@ -32,10 +32,8 @@ spec:
               description: |
                 Defines a Kubernetes Storage class configuration.
               required:
-                - type
                 - reclaimPolicy
                 - volumeBindingMode
-                - lvmVolumeGroups
               properties:
                 isDefault:
                   type: boolean
@@ -44,16 +42,6 @@ spec:
                     Should this Storage class be used as default.
                     
                     > Note that the default value is false.
-                type:
-                  type: string
-                  x-kubernetes-validations:
-                    - rule: self == oldSelf
-                      message: Value is immutable.
-                  description: |
-                    The type of the device.
-                  enum:
-                    - Thick
-                    - Thin
                 reclaimPolicy:
                   type: string
                   x-kubernetes-validations:
@@ -78,31 +66,48 @@ spec:
                   enum:
                     - Immediate
                     - WaitForFirstConsumer
-                lvmVolumeGroups:
-                  type: array
-                  x-kubernetes-validations:
-                    - rule: self == oldSelf
-                      message: Value is immutable.
+                lvm:
+                  type: object
                   description: |
-                    LVMVolumeGroup resources where Persistent Volume will be create on.
-                  items:
-                    type: object
-                    properties:
-                      name:
-                        type: string
-                        description: |
-                          The LVMVolumeGroup resource's name.
-                      thin:
+                    The field provides a LVM configuration.
+                  required:
+                    - type
+                  properties:
+                    type:
+                      type: string
+                      x-kubernetes-validations:
+                        - rule: self == oldSelf
+                          message: Value is immutable.
+                      description: |
+                        The type of the device.
+                      enum:
+                        - Thick
+                        - Thin
+                    lvmVolumeGroups:
+                      type: array
+                      x-kubernetes-validations:
+                        - rule: self == oldSelf
+                          message: Value is immutable.
+                      description: |
+                        LVMVolumeGroup resources where Persistent Volume will be create on.
+                      items:
                         type: object
-                        description: |
-                          Thin pool in a LVMVolumeGroup resource.
                         properties:
-                          poolName:
+                          name:
                             type: string
                             description: |
-                              The name of the thin pool.
-                            minLength: 1
-                            pattern: ^.*$
+                              The LVMVolumeGroup resource's name.
+                          thin:
+                            type: object
+                            description: |
+                              Thin pool in a LVMVolumeGroup resource.
+                            properties:
+                              poolName:
+                                type: string
+                                description: |
+                                  The name of the thin pool.
+                                minLength: 1
+                                pattern: ^.*$
             status:
               type: object
               description: |

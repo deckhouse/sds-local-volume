@@ -51,10 +51,13 @@ const (
 	Thin  = "Thin"
 	Thick = "Thick"
 
+	Lvm = "lvm"
+
 	StorageClassKind       = "StorageClass"
 	StorageClassAPIVersion = "storage.k8s.io/v1"
 
 	LocalStorageClassProvisioner = "local.csi.storage.deckhouse.io"
+	TypeParamKey                 = LocalStorageClassProvisioner + "/type"
 	LVMTypeParamKey              = LocalStorageClassProvisioner + "/lvm-type"
 	LVMVolumeBindingModeParamKey = LocalStorageClassProvisioner + "/volume-binding-mode"
 	LVMVolumeGroupsParamKey      = LocalStorageClassProvisioner + "/lvm-volume-groups"
@@ -149,6 +152,11 @@ func RunLocalStorageClassWatcherController(
 			shouldRequeue, err := runEventReconcile(ctx, cl, log, scList, lsc)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[CreateFunc] an error occured while reconciles the LocalStorageClass, name: %s", lsc.Name))
+				err = updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+				if err != nil {
+					log.Error(err, fmt.Sprintf("[CreateFunc] unable to update the LocalStorageClass %s", lsc.Name))
+					shouldRequeue = true
+				}
 			}
 
 			if shouldRequeue {
@@ -188,6 +196,11 @@ func RunLocalStorageClassWatcherController(
 			shouldRequeue, err := runEventReconcile(ctx, cl, log, scList, lsc)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[UpdateFunc] an error occured while reconciles the LocalStorageClass, name: %s", lsc.Name))
+				err = updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+				if err != nil {
+					log.Error(err, fmt.Sprintf("[UpdateFunc] unable to update the LocalStorageClass %s", lsc.Name))
+					shouldRequeue = true
+				}
 			}
 
 			if shouldRequeue {
@@ -546,9 +559,21 @@ func configureStorageClass(lsc *v1alpha1.LocalStorageClass) (*v1.StorageClass, e
 	volumeBindingMode := v1.VolumeBindingMode(lsc.Spec.VolumeBindingMode)
 	AllowVolumeExpansion := AllowVolumeExpansionDefaultValue
 
-	lvgsParam, err := yaml.Marshal(lsc.Spec.LVMVolumeGroups)
+	if lsc.Spec.LVM == nil {
+		//TODO: add support for other LSC types
+		return nil, fmt.Errorf("unable to identify the LocalStorageClass type")
+	}
+
+	lvgsParam, err := yaml.Marshal(lsc.Spec.LVM.LVMVolumeGroups)
 	if err != nil {
 		return nil, err
+	}
+
+	params := map[string]string{
+		TypeParamKey:                 Lvm,
+		LVMTypeParamKey:              lsc.Spec.LVM.Type,
+		LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
+		LVMVolumeGroupsParamKey:      string(lvgsParam),
 	}
 
 	isDefault := "false"
@@ -568,12 +593,8 @@ func configureStorageClass(lsc *v1alpha1.LocalStorageClass) (*v1.StorageClass, e
 				DefaultStorageClassAnnotationKey: isDefault,
 			},
 		},
-		Provisioner: LocalStorageClassProvisioner,
-		Parameters: map[string]string{
-			LVMTypeParamKey:              lsc.Spec.Type,
-			LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
-			LVMVolumeGroupsParamKey:      string(lvgsParam),
-		},
+		Provisioner:          LocalStorageClassProvisioner,
+		Parameters:           params,
 		ReclaimPolicy:        &reclaimPolicy,
 		AllowVolumeExpansion: &AllowVolumeExpansion,
 		VolumeBindingMode:    &volumeBindingMode,
@@ -637,30 +658,36 @@ func validateLocalStorageClass(
 		return valid, failedMsgBuilder.String()
 	}
 
-	nonexistentLVGs := findNonexistentLVGs(lvgList, lsc)
-	if len(nonexistentLVGs) != 0 {
-		valid = false
-		failedMsgBuilder.WriteString(fmt.Sprintf("Some of selected LVMVolumeGroups are nonexistent, LVG names: %s\n", strings.Join(nonexistentLVGs, ",")))
-	}
-
-	LVGsFromTheSameNode := findLVMVolumeGroupsOnTheSameNode(lvgList, lsc)
-	if len(LVGsFromTheSameNode) != 0 {
-		valid = false
-		failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use the same node, LVG names: %s\n", strings.Join(LVGsFromTheSameNode, "")))
-	}
-
-	if lsc.Spec.Type == Thin {
-		LVGSWithNonexistentTps := findNonexistentThinPools(lvgList, lsc)
-		if len(LVGSWithNonexistentTps) != 0 {
+	if lsc.Spec.LVM != nil {
+		LVGsFromTheSameNode := findLVMVolumeGroupsOnTheSameNode(lvgList, lsc)
+		if len(LVGsFromTheSameNode) != 0 {
 			valid = false
-			failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use nonexistent thin pools, LVG names: %s\n", strings.Join(LVGSWithNonexistentTps, ",")))
+			failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use the same node, LVG names: %s\n", strings.Join(LVGsFromTheSameNode, "")))
+		}
+
+		nonexistentLVGs := findNonexistentLVGs(lvgList, lsc)
+		if len(nonexistentLVGs) != 0 {
+			valid = false
+			failedMsgBuilder.WriteString(fmt.Sprintf("Some of selected LVMVolumeGroups are nonexistent, LVG names: %s\n", strings.Join(nonexistentLVGs, ",")))
+		}
+
+		if lsc.Spec.LVM.Type == Thin {
+			LVGSWithNonexistentTps := findNonexistentThinPools(lvgList, lsc)
+			if len(LVGSWithNonexistentTps) != 0 {
+				valid = false
+				failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use nonexistent thin pools, LVG names: %s\n", strings.Join(LVGSWithNonexistentTps, ",")))
+			}
+		} else {
+			LVGsWithTps := findAnyThinPool(lsc)
+			if len(LVGsWithTps) != 0 {
+				valid = false
+				failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use thin pools though device type is Thick, LVG names: %s\n", strings.Join(LVGsWithTps, ",")))
+			}
 		}
 	} else {
-		LVGsWithTps := findAnyThinPool(lsc)
-		if len(LVGsWithTps) != 0 {
-			valid = false
-			failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use thin pools though device type is Thick, LVG names: %s\n", strings.Join(LVGsWithTps, ",")))
-		}
+		// TODO: add support for other types
+		valid = false
+		failedMsgBuilder.WriteString(fmt.Sprintf("Unable to identify a type of LocalStorageClass %s", lsc.Name))
 	}
 
 	return valid, failedMsgBuilder.String()
@@ -677,8 +704,8 @@ func findUnmanagedDuplicatedSC(scList *v1.StorageClassList, lsc *v1alpha1.LocalS
 }
 
 func findAnyThinPool(lsc *v1alpha1.LocalStorageClass) []string {
-	badLvgs := make([]string, 0, len(lsc.Spec.LVMVolumeGroups))
-	for _, lvs := range lsc.Spec.LVMVolumeGroups {
+	badLvgs := make([]string, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
+	for _, lvs := range lsc.Spec.LVM.LVMVolumeGroups {
 		if lvs.Thin != nil {
 			badLvgs = append(badLvgs, lvs.Name)
 		}
@@ -693,8 +720,8 @@ func findNonexistentThinPools(lvgList *v1alpha1.LvmVolumeGroupList, lsc *v1alpha
 		lvgs[lvg.Name] = lvg
 	}
 
-	badLvgs := make([]string, 0, len(lsc.Spec.LVMVolumeGroups))
-	for _, lscLvg := range lsc.Spec.LVMVolumeGroups {
+	badLvgs := make([]string, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
+	for _, lscLvg := range lsc.Spec.LVM.LVMVolumeGroups {
 		if lscLvg.Thin == nil {
 			badLvgs = append(badLvgs, lscLvg.Name)
 			continue
@@ -724,8 +751,8 @@ func findNonexistentLVGs(lvgList *v1alpha1.LvmVolumeGroupList, lsc *v1alpha1.Loc
 		lvgs[lvg.Name] = struct{}{}
 	}
 
-	nonexistent := make([]string, 0, len(lsc.Spec.LVMVolumeGroups))
-	for _, lvg := range lsc.Spec.LVMVolumeGroups {
+	nonexistent := make([]string, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
+	for _, lvg := range lsc.Spec.LVM.LVMVolumeGroups {
 		if _, exist := lvgs[lvg.Name]; !exist {
 			nonexistent = append(nonexistent, lvg.Name)
 		}
@@ -735,13 +762,13 @@ func findNonexistentLVGs(lvgList *v1alpha1.LvmVolumeGroupList, lsc *v1alpha1.Loc
 }
 
 func findLVMVolumeGroupsOnTheSameNode(lvgList *v1alpha1.LvmVolumeGroupList, lsc *v1alpha1.LocalStorageClass) []string {
-	nodesWithLVGs := make(map[string][]string, len(lsc.Spec.LVMVolumeGroups))
-	usedLVGs := make(map[string]struct{}, len(lsc.Spec.LVMVolumeGroups))
-	for _, lvg := range lsc.Spec.LVMVolumeGroups {
+	nodesWithLVGs := make(map[string][]string, len(lsc.Spec.LVM.LVMVolumeGroups))
+	usedLVGs := make(map[string]struct{}, len(lsc.Spec.LVM.LVMVolumeGroups))
+	for _, lvg := range lsc.Spec.LVM.LVMVolumeGroups {
 		usedLVGs[lvg.Name] = struct{}{}
 	}
 
-	badLVGs := make([]string, 0, len(lsc.Spec.LVMVolumeGroups))
+	badLVGs := make([]string, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
 	for _, lvg := range lvgList.Items {
 		if _, used := usedLVGs[lvg.Name]; used {
 			for _, node := range lvg.Status.Nodes {
