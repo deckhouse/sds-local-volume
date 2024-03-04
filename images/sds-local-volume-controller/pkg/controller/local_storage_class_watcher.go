@@ -444,6 +444,10 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *v1alpha1.Loca
 }
 
 func shouldReconcileByCreateFunc(scList *v1.StorageClassList, lsc *v1alpha1.LocalStorageClass) bool {
+	if lsc.DeletionTimestamp != nil {
+		return false
+	}
+
 	for _, sc := range scList.Items {
 		if sc.Name == lsc.Name &&
 			lsc.Status != nil {

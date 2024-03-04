@@ -29,11 +29,21 @@ spec:
           properties:
             spec:
               type: object
+              x-kubernetes-validations:
+                - rule: "!has(self.fileSystem)"
+                  message: "The 'fileSystem' field is not supported yet and cannot be used."
+                - rule: has(self.lvm) == has(oldSelf.lvm) && has(self.fileSystem) == has(oldSelf.fileSystem)
+                  message: "Modification error: Once defined, 'lvm' or 'fileSystem' configuration cannot be replaced or removed. Ensure the existing storage configuration type is maintained."
               description: |
                 Defines a Kubernetes Storage class configuration.
               required:
                 - reclaimPolicy
                 - volumeBindingMode
+              oneOf:
+                - required:
+                    - lvm
+                - required:
+                    - fileSystem
               properties:
                 isDefault:
                   type: boolean
@@ -72,6 +82,7 @@ spec:
                     The field provides a LVM configuration.
                   required:
                     - type
+                    - lvmVolumeGroups
                   properties:
                     type:
                       type: string
@@ -92,6 +103,8 @@ spec:
                         LVMVolumeGroup resources where Persistent Volume will be create on.
                       items:
                         type: object
+                        required:
+                          - name
                         properties:
                           name:
                             type: string
@@ -101,6 +114,8 @@ spec:
                             type: object
                             description: |
                               Thin pool in a LVMVolumeGroup resource.
+                            required:
+                              - poolName
                             properties:
                               poolName:
                                 type: string
@@ -108,6 +123,16 @@ spec:
                                   The name of the thin pool.
                                 minLength: 1
                                 pattern: ^.*$
+                fileSystem:
+                  type: object
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: Value is immutable.
+                  required:
+                    - localPath
+                  properties:
+                    localPath:
+                      type: string
             status:
               type: object
               description: |
