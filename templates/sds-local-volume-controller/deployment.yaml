@@ -1,4 +1,4 @@
-{{- define "sds_lvm_controller_resources" }}
+{{- define "sds_local_volume_controller_resources" }}
 cpu: 10m
 memory: 25Mi
 {{- end }}
@@ -22,7 +22,7 @@ spec:
     containerPolicies:
     - containerName: "sds-local-volume-controller"
       minAllowed:
-        {{- include "sds_lvm_controller_resources" . | nindent 8 }}
+        {{- include "sds_local_volume_controller_resources" . | nindent 8 }}
       maxAllowed:
         cpu: 200m
         memory: 100Mi
@@ -72,7 +72,7 @@ spec:
             requests:
               {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 14 }}
 {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
-              {{- include "sds_lvm_controller_resources" . | nindent 14 }}
+              {{- include "sds_local_volume_controller_resources" . | nindent 14 }}
 {{- end }}
           securityContext:
             privileged: true

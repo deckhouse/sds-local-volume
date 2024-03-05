@@ -13,7 +13,7 @@ cpu: 10m
 memory: 25Mi
 {{- end }}
 
-{{- define "sds_lvm_csi_plugin_resources" }}
+{{- define "sds_local_volume_csi_plugin_resources" }}
 cpu: 35m
 memory: 50Mi
 {{- end }}
@@ -71,7 +71,7 @@ spec:
         memory: 50Mi
     - containerName: sds-local-volume-csi-plugin
       minAllowed:
-        {{- include "sds_lvm_csi_plugin_resources" . | nindent 8 }}
+        {{- include "sds_local_volume_csi_plugin_resources" . | nindent 8 }}
       maxAllowed:
         cpu: 70m
         memory: 100Mi
@@ -105,7 +105,7 @@ spec:
     containerPolicies:
     - containerName: sds-local-volume-csi-plugin
       minAllowed:
-        {{- include "sds_lvm_csi_plugin_resources" . | nindent 8 }}
+        {{- include "sds_local_volume_csi_plugin_resources" . | nindent 8 }}
       maxAllowed:
         cpu: 70m
         memory: 100Mi
@@ -253,7 +253,7 @@ spec:
           requests:
             {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 12 }}
 {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
-            {{- include "sds_lvm_csi_plugin_resources" . | nindent 12 }}
+            {{- include "sds_local_volume_csi_plugin_resources" . | nindent 12 }}
 {{- end }}
         securityContext:
           capabilities:
@@ -531,7 +531,7 @@ spec:
           requests:
             {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 12 }}
 {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
-            {{- include "sds_lvm_csi_plugin_resources" . | nindent 12 }}
+            {{- include "sds_local_volume_csi_plugin_resources" . | nindent 12 }}
 {{- end }}
         securityContext:
           capabilities:
