@@ -29,13 +29,21 @@ spec:
           properties:
             spec:
               type: object
+              x-kubernetes-validations:
+                - rule: "!has(self.fileSystem)"
+                  message: "The 'fileSystem' field is not supported yet and cannot be used."
+                - rule: has(self.lvm) == has(oldSelf.lvm) && has(self.fileSystem) == has(oldSelf.fileSystem)
+                  message: "Modification error: Once defined, 'lvm' or 'fileSystem' configuration cannot be replaced or removed. Ensure the existing storage configuration type is maintained."
               description: |
                 Defines a Kubernetes Storage class configuration.
               required:
-                - type
                 - reclaimPolicy
                 - volumeBindingMode
-                - lvmVolumeGroups
+              oneOf:
+                - required:
+                    - lvm
+                - required:
+                    - fileSystem
               properties:
                 isDefault:
                   type: boolean
@@ -44,16 +52,6 @@ spec:
                     Should this Storage class be used as default.
                     
                     > Note that the default value is false.
-                type:
-                  type: string
-                  x-kubernetes-validations:
-                    - rule: self == oldSelf
-                      message: Value is immutable.
-                  description: |
-                    The type of the device.
-                  enum:
-                    - Thick
-                    - Thin
                 reclaimPolicy:
                   type: string
                   x-kubernetes-validations:
@@ -78,31 +76,63 @@ spec:
                   enum:
                     - Immediate
                     - WaitForFirstConsumer
-                lvmVolumeGroups:
-                  type: array
+                lvm:
+                  type: object
+                  description: |
+                    The field provides a LVM configuration.
+                  required:
+                    - type
+                    - lvmVolumeGroups
+                  properties:
+                    type:
+                      type: string
+                      x-kubernetes-validations:
+                        - rule: self == oldSelf
+                          message: Value is immutable.
+                      description: |
+                        The type of the device.
+                      enum:
+                        - Thick
+                        - Thin
+                    lvmVolumeGroups:
+                      type: array
+                      x-kubernetes-validations:
+                        - rule: self == oldSelf
+                          message: Value is immutable.
+                      description: |
+                        LVMVolumeGroup resources where Persistent Volume will be create on.
+                      items:
+                        type: object
+                        required:
+                          - name
+                        properties:
+                          name:
+                            type: string
+                            description: |
+                              The LVMVolumeGroup resource's name.
+                          thin:
+                            type: object
+                            description: |
+                              Thin pool in a LVMVolumeGroup resource.
+                            required:
+                              - poolName
+                            properties:
+                              poolName:
+                                type: string
+                                description: |
+                                  The name of the thin pool.
+                                minLength: 1
+                                pattern: ^.*$
+                fileSystem:
+                  type: object
                   x-kubernetes-validations:
                     - rule: self == oldSelf
                       message: Value is immutable.
-                  description: |
-                    LVMVolumeGroup resources where Persistent Volume will be create on.
-                  items:
-                    type: object
-                    properties:
-                      name:
-                        type: string
-                        description: |
-                          The LVMVolumeGroup resource's name.
-                      thin:
-                        type: object
-                        description: |
-                          Thin pool in a LVMVolumeGroup resource.
-                        properties:
-                          poolName:
-                            type: string
-                            description: |
-                              The name of the thin pool.
-                            minLength: 1
-                            pattern: ^.*$
+                  required:
+                    - localPath
+                  properties:
+                    localPath:
+                      type: string
             status:
               type: object
               description: |

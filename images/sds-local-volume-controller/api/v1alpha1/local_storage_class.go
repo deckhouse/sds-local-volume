@@ -33,11 +33,15 @@ type LocalStorageClassList struct {
 }
 
 type LocalStorageClassSpec struct {
-	IsDefault         bool                   `json:"isDefault"`
-	Type              string                 `json:"type"`
-	ReclaimPolicy     string                 `json:"reclaimPolicy"`
-	VolumeBindingMode string                 `json:"volumeBindingMode"`
-	LVMVolumeGroups   []LocalStorageClassLVG `json:"lvmVolumeGroups"`
+	IsDefault         bool                  `json:"isDefault"`
+	ReclaimPolicy     string                `json:"reclaimPolicy"`
+	VolumeBindingMode string                `json:"volumeBindingMode"`
+	LVM               *LocalStorageClassLVM `json:"lvm,omitempty"`
+}
+
+type LocalStorageClassLVM struct {
+	Type            string                 `json:"type"`
+	LVMVolumeGroups []LocalStorageClassLVG `json:"lvmVolumeGroups"`
 }
 
 type LocalStorageClassStatus struct {
