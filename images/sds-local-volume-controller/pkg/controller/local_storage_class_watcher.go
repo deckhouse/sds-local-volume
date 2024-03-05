@@ -46,7 +46,7 @@ import (
 )
 
 const (
-	LocalStorageClassCtrlName = "lvm-storage-class-controller"
+	LocalStorageClassCtrlName = "local-volume-storage-class-controller"
 
 	Thin  = "Thin"
 	Thick = "Thick"

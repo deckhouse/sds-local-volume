@@ -3,7 +3,7 @@ cpu: 10m
 memory: 30Mi
 {{- end }}
 
-{{- define "sds_lvm_scheduler_extender_resources" }}
+{{- define "sds_local_volume_scheduler_extender_resources" }}
 cpu: 10m
 memory: 25Mi
 {{- end }}
@@ -34,7 +34,7 @@ spec:
         cpu: 20m
     - containerName: sds-local-volume-scheduler-extender
       minAllowed:
-        {{- include "sds_lvm_scheduler_extender_resources" . | nindent 8 }}
+        {{- include "sds_local_volume_scheduler_extender_resources" . | nindent 8 }}
       maxAllowed:
         memory: 40Mi
         cpu: 20m
@@ -144,7 +144,7 @@ spec:
             requests:
               {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 14 }}
               {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
-              {{- include "sds_lvm_scheduler_extender_resources" . | nindent 14 }}
+              {{- include "sds_local_volume_scheduler_extender_resources" . | nindent 14 }}
               {{- end }}
       {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
       volumes:

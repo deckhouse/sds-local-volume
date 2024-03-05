@@ -75,8 +75,6 @@ var rootCmd = &cobra.Command{
 The extender implements filter and prioritize verbs.
 The filter verb is "filter" and served at "/filter" via HTTP.
 It filters out nodes that have less storage capacity than requested.
-The requested capacity is read from "capacity.topolvm.io/<device-class>"
-resource value.
 The prioritize verb is "prioritize" and served at "/prioritize" via HTTP.
 It scores nodes with this formula:
     min(10, max(0, log2(capacity >> 30 / divisor)))
