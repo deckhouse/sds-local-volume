@@ -68,6 +68,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	}
 
 	llvName := request.Name
+	lvName := request.Name
 	d.log.Info(fmt.Sprintf("llv name: %s ", llvName))
 
 	llvSize := resource.NewQuantity(request.CapacityRange.GetRequiredBytes(), resource.BinarySI)
@@ -103,8 +104,13 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
-	llvSpec := utils.GetLLVSpec(*d.log, selectedLVG, storageClassLVGParametersMap, preferredNode, LvmType, *llvSize)
+	llvSpec := utils.GetLLVSpec(*d.log, lvName, selectedLVG, storageClassLVGParametersMap, preferredNode, LvmType, *llvSize)
 	d.log.Info(fmt.Sprintf("LVMLogicalVolumeSpec : %+v", llvSpec))
+	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
+	if err != nil {
+		d.log.Error(err, "error ParseQuantity for ResizeDelta")
+		return nil, err
+	}
 
 	d.log.Trace("------------ CreateLVMLogicalVolume start ------------")
 	_, err = utils.CreateLVMLogicalVolume(ctx, d.cl, llvName, llvSpec)
@@ -119,14 +125,15 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	d.log.Trace("------------ CreateLVMLogicalVolume end ------------")
 
 	d.log.Trace("start wait CreateLVMLogicalVolume ")
-	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
-	if err != nil {
-		d.log.Error(err, "error ParseQuantity for ResizeDelta")
-		return nil, err
-	}
+
 	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, *d.log, request.Name, "", *llvSize, resizeDelta)
 	if err != nil {
-		d.log.Error(err, "error WaitForStatusUpdate")
+		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, request.Name)
+
+		d.log.Error(err, fmt.Sprintf("error WaitForStatusUpdate. Delete LVMLogicalVolume %s", request.Name))
+		if deleteErr != nil {
+			d.log.Error(deleteErr, "error DeleteLVMLogicalVolume")
+		}
 		return nil, err
 	}
 	d.log.Trace(fmt.Sprintf("stop waiting CreateLVMLogicalVolume, attempt counter = %d ", attemptCounter))
@@ -284,7 +291,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		}, nil
 	}
 
-	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LvmVolumeGroup, llv.Namespace)
+	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LvmVolumeGroupName, llv.Namespace)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
 	}
