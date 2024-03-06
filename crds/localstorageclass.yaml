@@ -96,9 +96,6 @@ spec:
                         - Thin
                     lvmVolumeGroups:
                       type: array
-                      x-kubernetes-validations:
-                        - rule: self == oldSelf
-                          message: Value is immutable.
                       description: |
                         LVMVolumeGroup resources where Persistent Volume will be create on.
                       items:

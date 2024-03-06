@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	NodeName        = "KUBE_NODE_NAME"
 	LogLevel        = "LOG_LEVEL"
 	RequeueInterval = "REQUEUE_INTERVAL"
 )
@@ -40,7 +39,7 @@ func NewConfig() *Options {
 		opts.Loglevel = logger.Verbosity(loglevel)
 	}
 
-	opts.RequeueInterval = 5
+	opts.RequeueInterval = 10
 
 	return &opts
 }
