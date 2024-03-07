@@ -146,7 +146,7 @@ func extractRequestedSize(
 				}
 			case thin:
 				pvcRequests[pvc.Name] = PVCRequest{
-					DeviceType:    thick,
+					DeviceType:    thin,
 					RequestedSize: pvc.Spec.Resources.Requests.Storage().Value() - pv.Spec.Capacity.Storage().Value(),
 				}
 			}
@@ -181,7 +181,13 @@ func filterNodes(
 		return nil, err
 	}
 
-	scLVGs, err := getLVGsFromStorageClasses(scs)
+	lvgsThickFree, err := getLVGThickFreeSpaces(lvgs)
+	if err != nil {
+		return nil, err
+	}
+	log.Trace(fmt.Sprintf("[filterNodes] LVGs Thick FreeSpace: %+v", lvgsThickFree))
+
+	scLVGs, err := getSortedLVGsFromStorageClasses(scs)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +201,7 @@ func filterNodes(
 		}
 	}
 
-	generalNodes, err := getGeneralNodesByStorageClasses(scs, nodeLVGs)
+	commonNodes, err := getCommonNodesByStorageClasses(scs, nodeLVGs)
 
 	result := &ExtenderFilterResult{
 		Nodes:       &corev1.NodeList{},
@@ -214,13 +220,13 @@ func filterNodes(
 				wg.Done()
 			}()
 
-			if _, general := generalNodes[node.Name]; !general {
-				log.Debug(fmt.Sprintf("[filterNodes] node %s is not general for used Storage Classes", node.Name))
-				result.FailedNodes[node.Name] = "node is not general for used Storage Classes"
+			if _, common := commonNodes[node.Name]; !common {
+				log.Debug(fmt.Sprintf("[filterNodes] node %s is not common for used Storage Classes", node.Name))
+				result.FailedNodes[node.Name] = "node is not common for used Storage Classes"
 				return
 			}
 
-			lvgsFromNode := generalNodes[node.Name]
+			lvgsFromNode := commonNodes[node.Name]
 			hasEnoughSpace := true
 
 			for _, pvc := range pvcs {
@@ -236,17 +242,15 @@ func filterNodes(
 				switch pvcReq.DeviceType {
 				case thick:
 					lvg := lvgs[matchedLVG.Name]
-					freeSpace, err := getVGFreeSpace(&lvg)
-					if err != nil {
-						errs <- err
-						return
-					}
+					freeSpace := lvgsThickFree[lvg.Name]
 
-					log.Trace(fmt.Sprintf("[filterNodes] ThinPool free space: %d, PVC requested space: %d", freeSpace.Value(), pvcReq.RequestedSize))
-					if freeSpace.Value() < pvcReq.RequestedSize {
+					log.Trace(fmt.Sprintf("[filterNodes] Thick free space: %d, PVC requested space: %d", freeSpace, pvcReq.RequestedSize))
+					if freeSpace < pvcReq.RequestedSize {
 						hasEnoughSpace = false
+						break
 					}
 
+					lvgsThickFree[lvg.Name] -= pvcReq.RequestedSize
 				case thin:
 					lvg := lvgs[matchedLVG.Name]
 					targetThinPool := findMatchedThinPool(lvg.Status.ThinPools, matchedLVG.Thin.PoolName)
@@ -279,8 +283,6 @@ func filterNodes(
 				return
 			}
 
-			// TODO: add logic to filter nodes when pvcs has same storage class
-
 			result.Nodes.Items = append(result.Nodes.Items, node)
 		}(i, node)
 	}
@@ -302,6 +304,21 @@ func filterNodes(
 
 	for node, reason := range result.FailedNodes {
 		log.Trace(fmt.Sprintf("[filterNodes] failed node: %s, reason: %s", node, reason))
+	}
+
+	return result, nil
+}
+
+func getLVGThickFreeSpaces(lvgs map[string]v1alpha1.LvmVolumeGroup) (map[string]int64, error) {
+	result := make(map[string]int64, len(lvgs))
+
+	for _, lvg := range lvgs {
+		free, err := getVGFreeSpace(&lvg)
+		if err != nil {
+			return nil, err
+		}
+
+		result[lvg.Name] = free.Value()
 	}
 
 	return result, nil
@@ -332,7 +349,7 @@ func findMatchedLVG(nodeLVGs []v1alpha1.LvmVolumeGroup, scLVGs LVMVolumeGroups) 
 	return nil
 }
 
-func getGeneralNodesByStorageClasses(scs map[string]v1.StorageClass, nodesWithLVGs map[string][]v1alpha1.LvmVolumeGroup) (map[string][]v1alpha1.LvmVolumeGroup, error) {
+func getCommonNodesByStorageClasses(scs map[string]v1.StorageClass, nodesWithLVGs map[string][]v1alpha1.LvmVolumeGroup) (map[string][]v1alpha1.LvmVolumeGroup, error) {
 	result := make(map[string][]v1alpha1.LvmVolumeGroup, len(nodesWithLVGs))
 
 	for nodeName, lvgs := range nodesWithLVGs {
@@ -389,7 +406,7 @@ func removeUnusedLVGs(lvgs map[string]v1alpha1.LvmVolumeGroup, scsLVGs map[strin
 	return result
 }
 
-func getLVGsFromStorageClasses(scs map[string]v1.StorageClass) (map[string]LVMVolumeGroups, error) {
+func getSortedLVGsFromStorageClasses(scs map[string]v1.StorageClass) (map[string]LVMVolumeGroups, error) {
 	result := make(map[string]LVMVolumeGroups, len(scs))
 
 	for _, sc := range scs {

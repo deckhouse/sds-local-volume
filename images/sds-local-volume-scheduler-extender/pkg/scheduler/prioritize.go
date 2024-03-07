@@ -103,7 +103,7 @@ func scoreNodes(
 		return nil, err
 	}
 
-	scLVGs, err := getLVGsFromStorageClasses(scs)
+	scLVGs, err := getSortedLVGsFromStorageClasses(scs)
 	if err != nil {
 		return nil, err
 	}
