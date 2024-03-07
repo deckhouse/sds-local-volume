@@ -63,7 +63,7 @@ func main() {
 
 	log.Info("[main] CfgParams has been successfully created")
 	log.Info(fmt.Sprintf("[main] %s = %s", config.LogLevel, cfgParams.Loglevel))
-	log.Info(fmt.Sprintf("[main] %s = %s", config.RequeueInterval, cfgParams.RequeueInterval.String()))
+	log.Info(fmt.Sprintf("[main] %s = %d", config.RequeueInterval, cfgParams.RequeueInterval))
 
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {
