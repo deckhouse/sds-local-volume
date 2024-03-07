@@ -78,7 +78,7 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, 
 	return llv, nil
 }
 
-func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, LVMLogicalVolumeName string) error {
+func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, LVMLogicalVolumeName string) error {
 	var err error
 
 	llv, err := GetLVMLogicalVolume(ctx, kc, LVMLogicalVolumeName, "")
@@ -86,9 +86,14 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, LVMLogicalVol
 		return fmt.Errorf("get LVMLogicalVolume %s: %w", LVMLogicalVolumeName, err)
 	}
 
-	err = removeLLVFinalizerIfExist(ctx, kc, llv, SDSLocalVolumeCSIFinalizer)
+	removed, err := removeLLVFinalizerIfExist(ctx, kc, llv, SDSLocalVolumeCSIFinalizer)
 	if err != nil {
 		return fmt.Errorf("remove finalizers from LVMLogicalVolume %s: %w", LVMLogicalVolumeName, err)
+	}
+	if removed {
+		log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume] finalizer %s removed from LVMLogicalVolume %s", SDSLocalVolumeCSIFinalizer, LVMLogicalVolumeName))
+	} else {
+		log.Warning(fmt.Sprintf("[DeleteLVMLogicalVolume] finalizer %s not found in LVMLogicalVolume %s", SDSLocalVolumeCSIFinalizer, LVMLogicalVolumeName))
 	}
 
 	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
@@ -105,7 +110,7 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, LVMLogicalVol
 	return nil
 }
 
-func WaitForStatusUpdate(ctx context.Context, kc client.Client, log logger.Logger, LVMLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
+func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logger, LVMLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
 	var attemptCounter int
 	sizeEquals := false
 	for {
@@ -166,7 +171,7 @@ func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantit
 	return math.Abs(leftSizeFloat-rightSizeFloat) < float64(allowedDelta.Value())
 }
 
-func GetNodeWithMaxFreeSpace(log logger.Logger, lvgs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
+func GetNodeWithMaxFreeSpace(log *logger.Logger, lvgs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
 
 	var maxFreeSpace int64
 	for _, lvg := range lvgs {
@@ -320,7 +325,7 @@ func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *v1alpha1
 	return nil
 }
 
-func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
+func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log *logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
 	var storageClassLVGParametersList LVMVolumeGroups
 	err = yaml.Unmarshal([]byte(storageClassLVGParametersString), &storageClassLVGParametersList)
 	if err != nil {
@@ -377,7 +382,7 @@ func GetLVGList(ctx context.Context, kc client.Client) (*v1alpha1.LvmVolumeGroup
 	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroupList, last error: %w", KubernetesApiRequestLimit, err)
 }
 
-func GetLLVSpec(log logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, nodeName, lvmType string, llvSize resource.Quantity) v1alpha1.LVMLogicalVolumeSpec {
+func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, nodeName, lvmType string, llvSize resource.Quantity) v1alpha1.LVMLogicalVolumeSpec {
 	var llvThin *v1alpha1.ThinLogicalVolumeSpec
 	if lvmType == internal.LLMTypeThin {
 		llvThin = &v1alpha1.ThinLogicalVolumeSpec{}
@@ -402,7 +407,7 @@ func SelectLVG(storageClassLVGs []v1alpha1.LvmVolumeGroup, storageClassLVGParame
 	return v1alpha1.LvmVolumeGroup{}, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found for node %s", nodeName)
 }
 
-func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *v1alpha1.LVMLogicalVolume, finalizer string) error {
+func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *v1alpha1.LVMLogicalVolume, finalizer string) (bool, error) {
 	removed := false
 
 	for i, val := range llv.Finalizers {
@@ -414,7 +419,11 @@ func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *v1alp
 	}
 
 	if removed {
-		return UpdateLVMLogicalVolume(ctx, kc, llv)
+		err := UpdateLVMLogicalVolume(ctx, kc, llv)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
