@@ -66,7 +66,12 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		d.log.Error(err, "error GetStorageClassLVGs")
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
-
+// TODO: Consider refactoring the naming strategy for llvName and lvName.
+// Currently, we use the same name for llvName (the name of the LVMLogicalVolume resource in Kubernetes)
+// and lvName (the name of the LV in LVM on the node) because the PV name is unique within the cluster,
+// preventing name collisions. This approach simplifies matching between nodes and Kubernetes by maintaining
+// the same name in both contexts. Future consideration should be given to optimizing this logic to enhance
+// code readability and maintainability.
 	llvName := request.Name
 	lvName := request.Name
 	d.log.Info(fmt.Sprintf("llv name: %s ", llvName))
