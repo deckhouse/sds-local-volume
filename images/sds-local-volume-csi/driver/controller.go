@@ -61,13 +61,19 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		return nil, status.Errorf(codes.InvalidArgument, err.Error())
 	}
 
-	storageClassLVGs, storageClassLVGParametersMap, err := utils.GetStorageClassLVGsAndParameters(ctx, d.cl, *d.log, request.GetParameters()[internal.LvmVolumeGroupKey])
+	storageClassLVGs, storageClassLVGParametersMap, err := utils.GetStorageClassLVGsAndParameters(ctx, d.cl, d.log, request.GetParameters()[internal.LvmVolumeGroupKey])
 	if err != nil {
 		d.log.Error(err, "error GetStorageClassLVGs")
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
-
+// TODO: Consider refactoring the naming strategy for llvName and lvName.
+// Currently, we use the same name for llvName (the name of the LVMLogicalVolume resource in Kubernetes)
+// and lvName (the name of the LV in LVM on the node) because the PV name is unique within the cluster,
+// preventing name collisions. This approach simplifies matching between nodes and Kubernetes by maintaining
+// the same name in both contexts. Future consideration should be given to optimizing this logic to enhance
+// code readability and maintainability.
 	llvName := request.Name
+	lvName := request.Name
 	d.log.Info(fmt.Sprintf("llv name: %s ", llvName))
 
 	llvSize := resource.NewQuantity(request.CapacityRange.GetRequiredBytes(), resource.BinarySI)
@@ -77,7 +83,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	switch BindingMode {
 	case internal.BindingModeI:
 		d.log.Info(fmt.Sprintf("BindingMode is %s. Start selecting node", internal.BindingModeI))
-		selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(*d.log, storageClassLVGs, storageClassLVGParametersMap, LvmType)
+		selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(d.log, storageClassLVGs, storageClassLVGParametersMap, LvmType)
 		if err != nil {
 			d.log.Error(err, "error GetNodeMaxVGSize")
 		}
@@ -103,8 +109,13 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
-	llvSpec := utils.GetLLVSpec(*d.log, selectedLVG, storageClassLVGParametersMap, preferredNode, LvmType, *llvSize)
+	llvSpec := utils.GetLLVSpec(d.log, lvName, selectedLVG, storageClassLVGParametersMap, preferredNode, LvmType, *llvSize)
 	d.log.Info(fmt.Sprintf("LVMLogicalVolumeSpec : %+v", llvSpec))
+	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
+	if err != nil {
+		d.log.Error(err, "error ParseQuantity for ResizeDelta")
+		return nil, err
+	}
 
 	d.log.Trace("------------ CreateLVMLogicalVolume start ------------")
 	_, err = utils.CreateLVMLogicalVolume(ctx, d.cl, llvName, llvSpec)
@@ -119,14 +130,15 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	d.log.Trace("------------ CreateLVMLogicalVolume end ------------")
 
 	d.log.Trace("start wait CreateLVMLogicalVolume ")
-	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
+
+	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, d.log, request.Name, "", *llvSize, resizeDelta)
 	if err != nil {
-		d.log.Error(err, "error ParseQuantity for ResizeDelta")
-		return nil, err
-	}
-	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, *d.log, request.Name, "", *llvSize, resizeDelta)
-	if err != nil {
-		d.log.Error(err, "error WaitForStatusUpdate")
+		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, request.Name)
+
+		d.log.Error(err, fmt.Sprintf("error WaitForStatusUpdate. Delete LVMLogicalVolume %s", request.Name))
+		if deleteErr != nil {
+			d.log.Error(deleteErr, "error DeleteLVMLogicalVolume")
+		}
 		return nil, err
 	}
 	d.log.Trace(fmt.Sprintf("stop waiting CreateLVMLogicalVolume, attempt counter = %d ", attemptCounter))
@@ -156,7 +168,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	d.log.Info("method DeleteVolume")
-	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, request.VolumeId)
+	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, request.VolumeId)
 	if err != nil {
 		d.log.Error(err, "error DeleteLVMLogicalVolume")
 	}
@@ -284,7 +296,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		}, nil
 	}
 
-	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LvmVolumeGroup, llv.Namespace)
+	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LvmVolumeGroupName, llv.Namespace)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
 	}
@@ -308,7 +320,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Errorf(codes.Internal, "error updating LVMLogicalVolume: %v", err)
 	}
 
-	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, *d.log, llv.Name, llv.Namespace, *requestCapacity, resizeDelta)
+	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, d.log, llv.Name, llv.Namespace, *requestCapacity, resizeDelta)
 	if err != nil {
 		d.log.Error(err, "error WaitForStatusUpdate")
 		return nil, err

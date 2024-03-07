@@ -24,6 +24,7 @@ import (
 	"sds-local-volume-csi/api/v1alpha1"
 	"sds-local-volume-csi/internal"
 	"sds-local-volume-csi/pkg/logger"
+	"slices"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -40,6 +41,7 @@ const (
 	LLVTypeThin                 = "Thin"
 	KubernetesApiRequestLimit   = 3
 	KubernetesApiRequestTimeout = 1
+	SDSLocalVolumeCSIFinalizer  = "storage.deckhouse.io/sds-local-volume-csi"
 )
 
 func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, LVMLogicalVolumeSpec v1alpha1.LVMLogicalVolumeSpec) (*v1alpha1.LVMLogicalVolume, error) {
@@ -52,6 +54,7 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            name,
 			OwnerReferences: []metav1.OwnerReference{},
+			Finalizers:      []string{SDSLocalVolumeCSIFinalizer},
 		},
 		Spec: LVMLogicalVolumeSpec,
 	}
@@ -75,20 +78,26 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, 
 	return llv, nil
 }
 
-func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, LVMLogicalVolumeName string) error {
+func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, LVMLogicalVolumeName string) error {
 	var err error
-	llv := &v1alpha1.LVMLogicalVolume{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: LVMLogicalVolumeName,
-		},
-		TypeMeta: metav1.TypeMeta{
-			Kind:       v1alpha1.LVMLogicalVolumeKind,
-			APIVersion: v1alpha1.TypeMediaAPIVersion,
-		},
+
+	llv, err := GetLVMLogicalVolume(ctx, kc, LVMLogicalVolumeName, "")
+	if err != nil {
+		return fmt.Errorf("get LVMLogicalVolume %s: %w", LVMLogicalVolumeName, err)
+	}
+
+	removed, err := removeLLVFinalizerIfExist(ctx, kc, llv, SDSLocalVolumeCSIFinalizer)
+	if err != nil {
+		return fmt.Errorf("remove finalizers from LVMLogicalVolume %s: %w", LVMLogicalVolumeName, err)
+	}
+	if removed {
+		log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume] finalizer %s removed from LVMLogicalVolume %s", SDSLocalVolumeCSIFinalizer, LVMLogicalVolumeName))
+	} else {
+		log.Warning(fmt.Sprintf("[DeleteLVMLogicalVolume] finalizer %s not found in LVMLogicalVolume %s", SDSLocalVolumeCSIFinalizer, LVMLogicalVolumeName))
 	}
 
 	for attempt := 0; attempt < KubernetesApiRequestLimit; attempt++ {
-		err := kc.Delete(ctx, llv)
+		err = kc.Delete(ctx, llv)
 		if err == nil {
 			return nil
 		}
@@ -101,7 +110,7 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, LVMLogicalVol
 	return nil
 }
 
-func WaitForStatusUpdate(ctx context.Context, kc client.Client, log logger.Logger, LVMLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
+func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logger, LVMLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
 	var attemptCounter int
 	sizeEquals := false
 	for {
@@ -162,7 +171,7 @@ func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantit
 	return math.Abs(leftSizeFloat-rightSizeFloat) < float64(allowedDelta.Value())
 }
 
-func GetNodeWithMaxFreeSpace(log logger.Logger, lvgs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
+func GetNodeWithMaxFreeSpace(log *logger.Logger, lvgs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
 
 	var maxFreeSpace int64
 	for _, lvg := range lvgs {
@@ -316,7 +325,7 @@ func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *v1alpha1
 	return nil
 }
 
-func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
+func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log *logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
 	var storageClassLVGParametersList LVMVolumeGroups
 	err = yaml.Unmarshal([]byte(storageClassLVGParametersString), &storageClassLVGParametersList)
 	if err != nil {
@@ -373,7 +382,7 @@ func GetLVGList(ctx context.Context, kc client.Client) (*v1alpha1.LvmVolumeGroup
 	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroupList, last error: %w", KubernetesApiRequestLimit, err)
 }
 
-func GetLLVSpec(log logger.Logger, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, nodeName, lvmType string, llvSize resource.Quantity) v1alpha1.LVMLogicalVolumeSpec {
+func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, nodeName, lvmType string, llvSize resource.Quantity) v1alpha1.LVMLogicalVolumeSpec {
 	var llvThin *v1alpha1.ThinLogicalVolumeSpec
 	if lvmType == internal.LLMTypeThin {
 		llvThin = &v1alpha1.ThinLogicalVolumeSpec{}
@@ -381,10 +390,11 @@ func GetLLVSpec(log logger.Logger, selectedLVG v1alpha1.LvmVolumeGroup, storageC
 		log.Info(fmt.Sprintf("[GetLLVSpec] Thin pool name: %s", llvThin.PoolName))
 	}
 	return v1alpha1.LVMLogicalVolumeSpec{
-		Type:           lvmType,
-		Size:           llvSize,
-		LvmVolumeGroup: selectedLVG.Name,
-		Thin:           llvThin,
+		ActualLVNameOnTheNode: lvName,
+		Type:                  lvmType,
+		Size:                  llvSize,
+		LvmVolumeGroupName:    selectedLVG.Name,
+		Thin:                  llvThin,
 	}
 }
 
@@ -395,4 +405,25 @@ func SelectLVG(storageClassLVGs []v1alpha1.LvmVolumeGroup, storageClassLVGParame
 		}
 	}
 	return v1alpha1.LvmVolumeGroup{}, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found for node %s", nodeName)
+}
+
+func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *v1alpha1.LVMLogicalVolume, finalizer string) (bool, error) {
+	removed := false
+
+	for i, val := range llv.Finalizers {
+		if val == finalizer {
+			llv.Finalizers = slices.Delete(llv.Finalizers, i, i+1)
+			removed = true
+			break
+		}
+	}
+
+	if removed {
+		err := UpdateLVMLogicalVolume(ctx, kc, llv)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
