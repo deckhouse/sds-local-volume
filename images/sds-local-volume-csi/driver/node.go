@@ -142,8 +142,8 @@ func (d *Driver) NodeGetInfo(ctx context.Context, request *csi.NodeGetInfoReques
 	d.log.Info("hostID = ", d.hostID)
 
 	return &csi.NodeGetInfoResponse{
-		NodeId:            d.hostID,
-		MaxVolumesPerNode: 10,
+		NodeId: d.hostID,
+		//MaxVolumesPerNode: 10,
 		AccessibleTopology: &csi.Topology{
 			Segments: map[string]string{
 				internal.TopologyKey: d.hostID,

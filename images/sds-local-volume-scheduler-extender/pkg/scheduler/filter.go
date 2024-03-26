@@ -186,7 +186,6 @@ func filterNodes(
 		return nil, err
 	}
 	log.Trace(fmt.Sprintf("[filterNodes] LVGs Thick FreeSpace: %+v", lvgsThickFree))
-
 	scLVGs, err := getSortedLVGsFromStorageClasses(scs)
 	if err != nil {
 		return nil, err
@@ -208,6 +207,7 @@ func filterNodes(
 		FailedNodes: FailedNodesMap{},
 	}
 
+	mutex := &sync.RWMutex{}
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodes.Items))
 	errs := make(chan error, len(nodes.Items)*len(pvcs))
@@ -242,7 +242,9 @@ func filterNodes(
 				switch pvcReq.DeviceType {
 				case thick:
 					lvg := lvgs[matchedLVG.Name]
+					mutex.RLock()
 					freeSpace := lvgsThickFree[lvg.Name]
+					mutex.RUnlock()
 
 					log.Trace(fmt.Sprintf("[filterNodes] Thick free space: %d, PVC requested space: %d", freeSpace, pvcReq.RequestedSize))
 					if freeSpace < pvcReq.RequestedSize {
@@ -250,7 +252,9 @@ func filterNodes(
 						break
 					}
 
+					mutex.Lock()
 					lvgsThickFree[lvg.Name] -= pvcReq.RequestedSize
+					mutex.Unlock()
 				case thin:
 					lvg := lvgs[matchedLVG.Name]
 					targetThinPool := findMatchedThinPool(lvg.Status.ThinPools, matchedLVG.Thin.PoolName)
