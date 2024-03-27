@@ -23,9 +23,11 @@ import (
 	kwhhttp "github.com/slok/kubewebhook/v2/pkg/http"
 	kwhlogrus "github.com/slok/kubewebhook/v2/pkg/log/logrus"
 	kwhmutating "github.com/slok/kubewebhook/v2/pkg/webhook/mutating"
+	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	corev1 "k8s.io/api/core/v1"
 	"net/http"
 	"os"
+	"webhooks/v1alpha1"
 	"webhooks/validators"
 )
 
@@ -61,29 +63,51 @@ func main() {
 
 	cfg := initFlags()
 
-	mt := kwhmutating.MutatorFunc(validators.PodSchedulerMutation)
+	pscmMF := kwhmutating.MutatorFunc(validators.PodSchedulerMutation)
 
-	mcfg := kwhmutating.WebhookConfig{
+	pscmMCfg := kwhmutating.WebhookConfig{
 		ID:      "PodSchedulerMutation",
 		Obj:     &corev1.Pod{},
-		Mutator: mt,
+		Mutator: pscmMF,
 		Logger:  logger,
 	}
-	wh, err := kwhmutating.NewWebhook(mcfg)
+	pscmWh, err := kwhmutating.NewWebhook(pscmMCfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating webhook: %s", err)
 		os.Exit(1)
 	}
 
 	// Get the handler for our webhook.
-	whHandler, err := kwhhttp.HandlerFor(kwhhttp.HandlerConfig{Webhook: wh, Logger: logger})
+	pscmWhHandler, err := kwhhttp.HandlerFor(kwhhttp.HandlerConfig{Webhook: pscmWh, Logger: logger})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error creating webhook handler: %s", err)
+		os.Exit(1)
+	}
+
+	scuMF := kwhvalidating.ValidatorFunc(validators.StorageClassUpdate)
+
+	scuMCfg := kwhvalidating.WebhookConfig{
+		ID:        "StorageClassUpdate",
+		Obj:       &v1alpha1.LocalStorageClass{},
+		Validator: scuMF,
+		Logger:    logger,
+	}
+	scuWh, err := kwhvalidating.NewWebhook(scuMCfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error creating webhook: %s", err)
+		os.Exit(1)
+	}
+
+	// Get the handler for our webhook.
+	scuWhHandler, err := kwhhttp.HandlerFor(kwhhttp.HandlerConfig{Webhook: scuWh, Logger: logger})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating webhook handler: %s", err)
 		os.Exit(1)
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/pod-scheduler-mutation", whHandler)
+	mux.Handle("/pod-scheduler-mutation", pscmWhHandler)
+	mux.Handle("/storage-class-update", scuWhHandler)
 	mux.HandleFunc("/healthz", httpHandlerHealthz)
 
 	logger.Infof("Listening on %s", port)

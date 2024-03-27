@@ -29,3 +29,29 @@ webhooks:
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: "d8-{{ .Chart.Name }}-storage-class-update"
+webhooks:
+  - name: "d8-{{ .Chart.Name }}-storage-class-update.deckhouse.io"
+    failurePolicy: Fail
+    rules:
+      - apiGroups: ["storage.deckhouse.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["localstorageclasses"]
+        scope: "Cluster"
+    clientConfig:
+      service:
+        namespace: "d8-{{ .Chart.Name }}"
+        name: "webhooks"
+        path: "/storage-class-update"
+      caBundle: |
+        {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca }}
+
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
