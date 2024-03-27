@@ -11,4 +11,4 @@ properties:
       - DEBUG
       - TRACE
     description: Module log level
-    default: INFO
+    default: DEBUG
