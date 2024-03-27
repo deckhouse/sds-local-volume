@@ -201,6 +201,9 @@ func filterNodes(
 	}
 
 	commonNodes, err := getCommonNodesByStorageClasses(scs, nodeLVGs)
+	for nodeName := range commonNodes {
+		log.Trace(fmt.Sprintf("[filterNodes] common node %s", nodeName))
+	}
 
 	result := &ExtenderFilterResult{
 		Nodes:       &corev1.NodeList{},
@@ -232,21 +235,22 @@ func filterNodes(
 			for _, pvc := range pvcs {
 				pvcReq := pvcRequests[pvc.Name]
 				lvgsFromSC := scLVGs[*pvc.Spec.StorageClassName]
-				matchedLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
-				if matchedLVG == nil {
+				commonLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
+				if commonLVG == nil {
 					err = errors.New(fmt.Sprintf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
 					errs <- err
 					return
 				}
+				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s is common for storage class %s and node %s", commonLVG.Name, *pvc.Spec.StorageClassName, node.Name))
 
 				switch pvcReq.DeviceType {
 				case thick:
-					lvg := lvgs[matchedLVG.Name]
+					lvg := lvgs[commonLVG.Name]
 					mutex.RLock()
 					freeSpace := lvgsThickFree[lvg.Name]
 					mutex.RUnlock()
 
-					log.Trace(fmt.Sprintf("[filterNodes] Thick free space: %d, PVC requested space: %d", freeSpace, pvcReq.RequestedSize))
+					log.Trace(fmt.Sprintf("[filterNodes] LVMVolumeGroup %s Thick free space: %s, PVC requested space: %s", lvg.Name, resource.NewQuantity(freeSpace, resource.BinarySI), resource.NewQuantity(pvcReq.RequestedSize, resource.BinarySI)))
 					if freeSpace < pvcReq.RequestedSize {
 						hasEnoughSpace = false
 						break
@@ -256,10 +260,10 @@ func filterNodes(
 					lvgsThickFree[lvg.Name] -= pvcReq.RequestedSize
 					mutex.Unlock()
 				case thin:
-					lvg := lvgs[matchedLVG.Name]
-					targetThinPool := findMatchedThinPool(lvg.Status.ThinPools, matchedLVG.Thin.PoolName)
+					lvg := lvgs[commonLVG.Name]
+					targetThinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 					if targetThinPool == nil {
-						err = fmt.Errorf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s; node: %s; lvg thin pools: %+v; thin.poolName from StorageClass: %s", *pvc.Spec.StorageClassName, node.Name, lvg.Status.ThinPools, matchedLVG.Thin.PoolName)
+						err = fmt.Errorf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s; node: %s; lvg thin pools: %+v; thin.poolName from StorageClass: %s", *pvc.Spec.StorageClassName, node.Name, lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 						errs <- err
 						return
 					}

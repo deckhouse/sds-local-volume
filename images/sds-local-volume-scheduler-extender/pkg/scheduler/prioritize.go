@@ -109,11 +109,14 @@ func scoreNodes(
 	}
 
 	usedLVGs := removeUnusedLVGs(lvgs, scLVGs)
+	for lvgName := range usedLVGs {
+		log.Trace(fmt.Sprintf("[scoreNodes] used LVMVolumeGroup %s", lvgName))
+	}
 
 	nodeLVGs := sortLVGsByNodeName(usedLVGs)
 	for n, ls := range nodeLVGs {
 		for _, l := range ls {
-			log.Trace(fmt.Sprintf("[filterNodes] the LVMVolumeGroup %s belongs to node %s", l.Name, n))
+			log.Trace(fmt.Sprintf("[scoreNodes] the LVMVolumeGroup %s belongs to node %s", l.Name, n))
 		}
 	}
 
@@ -124,9 +127,9 @@ func scoreNodes(
 
 	for i, node := range nodes.Items {
 		go func(i int, node corev1.Node) {
-			log.Debug(fmt.Sprintf("[filterNodes] gourutine %d starts the work", i))
+			log.Debug(fmt.Sprintf("[scoreNodes] gourutine %d starts the work", i))
 			defer func() {
-				log.Debug(fmt.Sprintf("[filterNodes] gourutine %d ends the work", i))
+				log.Debug(fmt.Sprintf("[scoreNodes] gourutine %d ends the work", i))
 				wg.Done()
 			}()
 
@@ -136,29 +139,30 @@ func scoreNodes(
 			for _, pvc := range pvcs {
 				pvcReq := pvcRequests[pvc.Name]
 				lvgsFromSC := scLVGs[*pvc.Spec.StorageClassName]
-				matchedLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
-				if matchedLVG == nil {
+				commonLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
+				if commonLVG == nil {
 					err = errors.New(fmt.Sprintf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
 					errs <- err
 					return
 				}
+				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s is common for storage class %s and node %s", commonLVG.Name, *pvc.Spec.StorageClassName, node.Name))
 
 				switch pvcReq.DeviceType {
 				case thick:
-					lvg := lvgs[matchedLVG.Name]
+					lvg := lvgs[commonLVG.Name]
 					freeSpace, err := getVGFreeSpace(&lvg)
 					if err != nil {
 						errs <- err
 						return
 					}
-
-					totalFreeSpaceLeft = getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize)
+					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space %s", lvg.Name, freeSpace.String()))
+					totalFreeSpaceLeft += getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize)
 				case thin:
-					lvg := lvgs[matchedLVG.Name]
-					thinPool := findMatchedThinPool(lvg.Status.ThinPools, matchedLVG.Thin.PoolName)
+					lvg := lvgs[commonLVG.Name]
+					thinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 					if thinPool == nil {
 						err = errors.New(fmt.Sprintf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
-						log.Error(err, "an error occurs while searching for target LVMVolumeGroup")
+						log.Error(err, "[scoreNodes] an error occurs while searching for target LVMVolumeGroup")
 						errs <- err
 						return
 					}
@@ -169,18 +173,19 @@ func scoreNodes(
 						return
 					}
 
-					totalFreeSpaceLeft = getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize)
+					totalFreeSpaceLeft += getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize)
 				}
 			}
 
 			averageFreeSpace := totalFreeSpaceLeft / int64(len(pvcs))
 			score := getNodeScore(averageFreeSpace, divisor)
+			log.Trace(fmt.Sprintf("[scoreNodes] node %s has score %d with average free space percent %d", node.Name, score, averageFreeSpace))
+
 			result = append(result, HostPriority{
 				Host:  node.Name,
 				Score: score,
 			})
 		}(i, node)
-
 	}
 	wg.Wait()
 
@@ -194,6 +199,7 @@ func scoreNodes(
 		return nil, err
 	}
 
+	log.Trace("[scoreNodes] final result")
 	for _, n := range result {
 		log.Trace(fmt.Sprintf("[scoreNodes] host: %s", n.Host))
 		log.Trace(fmt.Sprintf("[scoreNodes] score: %d", n.Score))
@@ -208,7 +214,7 @@ func getFreeSpaceLeftPercent(freeSpace int64, requestedSpace int64) int64 {
 }
 
 func getNodeScore(freeSpace int64, divisor float64) int {
-	converted := int(math.Log2(float64(freeSpace) / divisor))
+	converted := int(math.Round(math.Log2(float64(freeSpace) / divisor)))
 	switch {
 	case converted < 1:
 		return 1
