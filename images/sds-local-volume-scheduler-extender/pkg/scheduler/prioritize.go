@@ -28,6 +28,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -147,18 +148,18 @@ func scoreNodes(
 				}
 				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s is common for storage class %s and node %s", commonLVG.Name, *pvc.Spec.StorageClassName, node.Name))
 
+				var freeSpace resource.Quantity
+				lvg := lvgs[commonLVG.Name]
 				switch pvcReq.DeviceType {
 				case thick:
-					lvg := lvgs[commonLVG.Name]
-					freeSpace, err := getVGFreeSpace(&lvg)
+					freeSpace, err = getVGFreeSpace(&lvg)
 					if err != nil {
 						errs <- err
 						return
 					}
 					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space %s", lvg.Name, freeSpace.String()))
-					totalFreeSpaceLeft += getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize)
+
 				case thin:
-					lvg := lvgs[commonLVG.Name]
 					thinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 					if thinPool == nil {
 						err = errors.New(fmt.Sprintf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
@@ -167,14 +168,19 @@ func scoreNodes(
 						return
 					}
 
-					freeSpace, err := getThinPoolFreeSpace(thinPool)
+					freeSpace, err = getThinPoolFreeSpace(thinPool)
 					if err != nil {
 						errs <- err
 						return
 					}
 
-					totalFreeSpaceLeft += getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize)
 				}
+				lvgTotalSize, err := resource.ParseQuantity(lvg.Status.VGSize)
+				if err != nil {
+					errs <- err
+					return
+				}
+				totalFreeSpaceLeft += getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize, lvgTotalSize.Value())
 			}
 
 			averageFreeSpace := totalFreeSpaceLeft / int64(len(pvcs))
@@ -208,9 +214,11 @@ func scoreNodes(
 	return result, nil
 }
 
-func getFreeSpaceLeftPercent(freeSpace int64, requestedSpace int64) int64 {
-	left := freeSpace - requestedSpace
-	return left * 100 / freeSpace
+func getFreeSpaceLeftPercent(freeSize, requestedSpace, totalSize int64) int64 {
+	leftFreeSize := freeSize - requestedSpace
+	fraction := float64(leftFreeSize) / float64(totalSize)
+	percent := fraction * 100
+	return int64(percent)
 }
 
 func getNodeScore(freeSpace int64, divisor float64) int {
