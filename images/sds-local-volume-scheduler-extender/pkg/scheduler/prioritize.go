@@ -179,7 +179,7 @@ func scoreNodes(
 
 			averageFreeSpace := totalFreeSpaceLeft / int64(len(pvcs))
 			score := getNodeScore(averageFreeSpace, divisor)
-			log.Trace(fmt.Sprintf("[scoreNodes] node %s has score %d with average free space percent %d", node.Name, score, averageFreeSpace))
+			log.Trace(fmt.Sprintf("[scoreNodes] node %s has score %d with average free space left (after all PVC bounded), percent %d", node.Name, score, averageFreeSpace))
 
 			result = append(result, HostPriority{
 				Host:  node.Name,

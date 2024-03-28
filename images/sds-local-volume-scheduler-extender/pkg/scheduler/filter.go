@@ -186,6 +186,8 @@ func filterNodes(
 		return nil, err
 	}
 	log.Trace(fmt.Sprintf("[filterNodes] LVGs Thick FreeSpace: %+v", lvgsThickFree))
+	lvgsThickFreeMutex := &sync.RWMutex{}
+
 	scLVGs, err := getSortedLVGsFromStorageClasses(scs)
 	if err != nil {
 		return nil, err
@@ -209,8 +211,8 @@ func filterNodes(
 		Nodes:       &corev1.NodeList{},
 		FailedNodes: FailedNodesMap{},
 	}
+	failedNodesMapMutex := &sync.Mutex{}
 
-	mutex := &sync.RWMutex{}
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodes.Items))
 	errs := make(chan error, len(nodes.Items)*len(pvcs))
@@ -225,7 +227,9 @@ func filterNodes(
 
 			if _, common := commonNodes[node.Name]; !common {
 				log.Debug(fmt.Sprintf("[filterNodes] node %s is not common for used Storage Classes", node.Name))
+				failedNodesMapMutex.Lock()
 				result.FailedNodes[node.Name] = "node is not common for used Storage Classes"
+				failedNodesMapMutex.Unlock()
 				return
 			}
 
@@ -246,9 +250,9 @@ func filterNodes(
 				switch pvcReq.DeviceType {
 				case thick:
 					lvg := lvgs[commonLVG.Name]
-					mutex.RLock()
+					lvgsThickFreeMutex.RLock()
 					freeSpace := lvgsThickFree[lvg.Name]
-					mutex.RUnlock()
+					lvgsThickFreeMutex.RUnlock()
 
 					log.Trace(fmt.Sprintf("[filterNodes] LVMVolumeGroup %s Thick free space: %s, PVC requested space: %s", lvg.Name, resource.NewQuantity(freeSpace, resource.BinarySI), resource.NewQuantity(pvcReq.RequestedSize, resource.BinarySI)))
 					if freeSpace < pvcReq.RequestedSize {
@@ -256,9 +260,9 @@ func filterNodes(
 						break
 					}
 
-					mutex.Lock()
+					lvgsThickFreeMutex.Lock()
 					lvgsThickFree[lvg.Name] -= pvcReq.RequestedSize
-					mutex.Unlock()
+					lvgsThickFreeMutex.Unlock()
 				case thin:
 					lvg := lvgs[commonLVG.Name]
 					targetThinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
@@ -287,7 +291,9 @@ func filterNodes(
 			}
 
 			if !hasEnoughSpace {
+				failedNodesMapMutex.Lock()
 				result.FailedNodes[node.Name] = "not enough space"
+				failedNodesMapMutex.Unlock()
 				return
 			}
 
