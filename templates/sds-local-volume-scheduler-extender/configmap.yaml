@@ -9,7 +9,17 @@ data:
   scheduler-extender-config.yaml: |-
     listen: "localhost:8099"
     default-divisor: 1
+{{- if eq .Values.sdsLocalVolume.logLevel "ERROR" }}
+    log-level: "0"
+{{- else if eq .Values.sdsLocalVolume.logLevel "WARN" }}
+    log-level: "1"
+{{- else if eq .Values.sdsLocalVolume.logLevel "INFO" }}
     log-level: "2"
+{{- else if eq .Values.sdsLocalVolume.logLevel "DEBUG" }}
+    log-level: "3"
+{{- else if eq .Values.sdsLocalVolume.logLevel "TRACE" }}
+    log-level: "4"
+{{- end }}
     {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
   scheduler-config.yaml: |-
     {{- if semverCompare ">= 1.23" .Values.global.discovery.kubernetesVersion }}
