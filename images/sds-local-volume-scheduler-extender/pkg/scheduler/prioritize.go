@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (s scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
+func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug("[prioritize] starts serving")
 	var input ExtenderArgs
 	reader := http.MaxBytesReader(w, r.Body, 10<<20)
@@ -99,22 +99,22 @@ func scoreNodes(
 	pvcRequests map[string]PVCRequest,
 	divisor float64,
 ) ([]HostPriority, error) {
-	lvgs, err := getLVMVolumeGroups(ctx, cl)
+	lvgs, err := GetLVMVolumeGroups(ctx, cl)
 	if err != nil {
 		return nil, err
 	}
 
-	scLVGs, err := getSortedLVGsFromStorageClasses(scs)
+	scLVGs, err := GetSortedLVGsFromStorageClasses(scs)
 	if err != nil {
 		return nil, err
 	}
 
-	usedLVGs := removeUnusedLVGs(lvgs, scLVGs)
+	usedLVGs := RemoveUnusedLVGs(lvgs, scLVGs)
 	for lvgName := range usedLVGs {
 		log.Trace(fmt.Sprintf("[scoreNodes] used LVMVolumeGroup %s", lvgName))
 	}
 
-	nodeLVGs := sortLVGsByNodeName(usedLVGs)
+	nodeLVGs := SortLVGsByNodeName(usedLVGs)
 	for n, ls := range nodeLVGs {
 		for _, l := range ls {
 			log.Trace(fmt.Sprintf("[scoreNodes] the LVMVolumeGroup %s belongs to node %s", l.Name, n))

@@ -24,21 +24,23 @@ import (
 	"os"
 	"os/signal"
 	"sds-local-volume-scheduler-extender/api/v1alpha1"
+	"sds-local-volume-scheduler-extender/pkg/cache"
+	"sds-local-volume-scheduler-extender/pkg/controller"
 	"sds-local-volume-scheduler-extender/pkg/kubutils"
 	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sds-local-volume-scheduler-extender/pkg/scheduler"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	sv1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/spf13/cobra"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/yaml"
 )
 
@@ -53,18 +55,21 @@ var resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
 const (
 	defaultDivisor    = 1
 	defaultListenAddr = ":8000"
+	defaultCacheSize  = 10
 )
 
 type Config struct {
 	ListenAddr     string  `json:"listen"`
 	DefaultDivisor float64 `json:"default-divisor"`
 	LogLevel       string  `json:"log-level"`
+	CacheSize      int     `json:"cache-size"`
 }
 
 var config = &Config{
 	ListenAddr:     defaultListenAddr,
 	DefaultDivisor: defaultDivisor,
 	LogLevel:       "2",
+	CacheSize:      defaultCacheSize,
 }
 
 var rootCmd = &cobra.Command{
@@ -122,22 +127,62 @@ func subMain(parentCtx context.Context) error {
 	}
 	log.Info("[subMain] successfully read scheme CR")
 
-	cl, err := client.New(kConfig, client.Options{
-		Scheme:         scheme,
-		WarningHandler: client.WarningHandlerOptions{},
-	})
+	managerOpts := manager.Options{
+		Scheme: scheme,
+		Logger: log.GetLogger(),
+	}
 
-	h, err := scheduler.NewHandler(ctx, cl, *log, config.DefaultDivisor)
+	mgr, err := manager.New(kConfig, managerOpts)
+	if err != nil {
+		return err
+	}
+
+	//cl, err := client.New(kConfig, client.Options{
+	//	Scheme:         scheme,
+	//	WarningHandler: client.WarningHandlerOptions{},
+	//})
+
+	schedulerCache := cache.NewCache(config.CacheSize)
+	log.Info("[subMain] scheduler cache was initialized")
+	log.Debug(fmt.Sprintf("[subMain] scheduler cache struct: %+v", schedulerCache))
+
+	h, err := scheduler.NewHandler(ctx, mgr.GetClient(), *log, schedulerCache, config.DefaultDivisor)
 	if err != nil {
 		return err
 	}
 	log.Info("[subMain] scheduler handler initialized")
+
+	_, err = controller.RunLVGWatcherCacheController(mgr, *log, schedulerCache)
+	if err != nil {
+		log.Error(err, fmt.Sprintf("[subMain] unable to run %s controller", controller.LVGWatcherCacheCtrlName))
+	}
+	log.Info(fmt.Sprintf("[subMain] successfully ran %s controller", controller.LVGWatcherCacheCtrlName))
+
+	err = controller.RunPVCWatcherCacheController(ctx, mgr, *log, schedulerCache)
+	if err != nil {
+		log.Error(err, fmt.Sprintf("[subMain] unable to run %s controller", controller.PVCWatcherCacheCtrlName))
+	}
+	log.Info(fmt.Sprintf("[subMain] successfully ran %s controller", controller.PVCWatcherCacheCtrlName))
+
+	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		log.Error(err, "[subMain] unable to mgr.AddHealthzCheck")
+		os.Exit(1)
+	}
+	log.Info("[subMain] successfully AddHealthzCheck")
+
+	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		log.Error(err, "[subMain] unable to mgr.AddReadyzCheck")
+		os.Exit(1)
+	}
+	log.Info("[subMain] successfully AddReadyzCheck")
 
 	serv := &http.Server{
 		Addr:        config.ListenAddr,
 		Handler:     accessLogHandler(parentCtx, h),
 		ReadTimeout: 30 * time.Second,
 	}
+	log.Info("[subMain] server was initialized")
+
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	ctx, stop := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
@@ -151,11 +196,22 @@ func subMain(parentCtx context.Context) error {
 		}
 	}()
 
+	go func() {
+		log.Info("[subMain] kube manager will start now")
+		err = mgr.Start(ctx)
+		if err != nil {
+			log.Error(err, "[subMain] unable to mgr.Start")
+			os.Exit(1)
+		}
+	}()
+
 	log.Info(fmt.Sprintf("[subMain] starts serving on: %s", config.ListenAddr))
 	err = serv.ListenAndServe()
 	if !errors.Is(err, http.ErrServerClosed) {
+		log.Error(err, "[subMain] unable to run the server")
 		return err
 	}
+
 	return nil
 }
 

@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/logger"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -30,9 +30,10 @@ type scheduler struct {
 	log            logger.Logger
 	client         client.Client
 	ctx            context.Context
+	cache          *cache.Cache
 }
 
-func (s scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/filter":
 		s.log.Debug("[ServeHTTP] filter route starts handling the request")
@@ -46,18 +47,23 @@ func (s scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.log.Debug("[ServeHTTP] status route starts handling the request")
 		status(w, r)
 		s.log.Debug("[ServeHTTP] status route ends handling the request")
+	case "/cache":
+		s.log.Debug("[ServeHTTP] cache route starts handling the request")
+		s.getCache(w, r)
+		s.log.Debug("[ServeHTTP] cache route ends handling the request")
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}
 }
 
 // NewHandler return new http.Handler of the scheduler extender
-func NewHandler(ctx context.Context, cl client.Client, log logger.Logger, defaultDiv float64) (http.Handler, error) {
-	return scheduler{
+func NewHandler(ctx context.Context, cl client.Client, log logger.Logger, lvgCache *cache.Cache, defaultDiv float64) (http.Handler, error) {
+	return &scheduler{
 		defaultDivisor: defaultDiv,
 		log:            log,
 		client:         cl,
 		ctx:            ctx,
+		cache:          lvgCache,
 	}, nil
 }
 
@@ -66,5 +72,40 @@ func status(w http.ResponseWriter, r *http.Request) {
 	_, err := w.Write([]byte("ok"))
 	if err != nil {
 		fmt.Println(fmt.Sprintf("error occurs on status route, err: %s", err.Error()))
+	}
+}
+
+func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+
+	result := make(map[string][]struct {
+		pvcName  string
+		nodeName string
+	})
+
+	lvgs := s.cache.GetLVGNames()
+	s.log.Info(fmt.Sprintf("LVG from cache: %v", lvgs))
+	for _, lvg := range lvgs {
+		pvcs := s.cache.GetAllPVCByLVG(lvg)
+		s.log.Info(fmt.Sprintf("LVG %s has PVC from cache: %v", lvg, pvcs))
+
+		result[lvg] = make([]struct {
+			pvcName  string
+			nodeName string
+		}, 0)
+
+		for _, pvc := range pvcs {
+			result[lvg] = append(result[lvg], struct {
+				pvcName  string
+				nodeName string
+			}{pvcName: pvc.Name, nodeName: s.cache.GetPVCNodeName(pvc.Name)})
+		}
+	}
+	s.log.Info(fmt.Sprintf("Result len: %d", len(result)))
+
+	_, err := w.Write([]byte(fmt.Sprintf("%+v", result)))
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("unable to write the cache"))
 	}
 }

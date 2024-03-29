@@ -41,7 +41,7 @@ const (
 	thin  = "Thin"
 )
 
-func (s scheduler) filter(w http.ResponseWriter, r *http.Request) {
+func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug("[filter] starts the serving")
 	var input ExtenderArgs
 	reader := http.MaxBytesReader(w, r.Body, 10<<20)
@@ -176,7 +176,7 @@ func filterNodes(
 		}, nil
 	}
 
-	lvgs, err := getLVMVolumeGroups(ctx, cl)
+	lvgs, err := GetLVMVolumeGroups(ctx, cl)
 	if err != nil {
 		return nil, err
 	}
@@ -188,14 +188,14 @@ func filterNodes(
 	log.Trace(fmt.Sprintf("[filterNodes] LVGs Thick FreeSpace: %+v", lvgsThickFree))
 	lvgsThickFreeMutex := &sync.RWMutex{}
 
-	scLVGs, err := getSortedLVGsFromStorageClasses(scs)
+	scLVGs, err := GetSortedLVGsFromStorageClasses(scs)
 	if err != nil {
 		return nil, err
 	}
 
-	usedLVGs := removeUnusedLVGs(lvgs, scLVGs)
+	usedLVGs := RemoveUnusedLVGs(lvgs, scLVGs)
 
-	nodeLVGs := sortLVGsByNodeName(usedLVGs)
+	nodeLVGs := SortLVGsByNodeName(usedLVGs)
 	for n, ls := range nodeLVGs {
 		for _, l := range ls {
 			log.Trace(fmt.Sprintf("[filterNodes] the LVMVolumeGroup %s belongs to node %s", l.Name, n))
@@ -374,7 +374,7 @@ func getCommonNodesByStorageClasses(scs map[string]v1.StorageClass, nodesWithLVG
 
 		nodeIncludesLVG := true
 		for _, sc := range scs {
-			scLvgs, err := extractLVGsFromSC(sc)
+			scLvgs, err := ExtractLVGsFromSC(sc)
 			if err != nil {
 				return nil, err
 			}
@@ -401,7 +401,7 @@ func getCommonNodesByStorageClasses(scs map[string]v1.StorageClass, nodesWithLVG
 	return result, nil
 }
 
-func removeUnusedLVGs(lvgs map[string]v1alpha1.LvmVolumeGroup, scsLVGs map[string]LVMVolumeGroups) map[string]v1alpha1.LvmVolumeGroup {
+func RemoveUnusedLVGs(lvgs map[string]v1alpha1.LvmVolumeGroup, scsLVGs map[string]LVMVolumeGroups) map[string]v1alpha1.LvmVolumeGroup {
 	result := make(map[string]v1alpha1.LvmVolumeGroup, len(lvgs))
 	usedLvgs := make(map[string]struct{}, len(lvgs))
 
@@ -420,11 +420,11 @@ func removeUnusedLVGs(lvgs map[string]v1alpha1.LvmVolumeGroup, scsLVGs map[strin
 	return result
 }
 
-func getSortedLVGsFromStorageClasses(scs map[string]v1.StorageClass) (map[string]LVMVolumeGroups, error) {
+func GetSortedLVGsFromStorageClasses(scs map[string]v1.StorageClass) (map[string]LVMVolumeGroups, error) {
 	result := make(map[string]LVMVolumeGroups, len(scs))
 
 	for _, sc := range scs {
-		lvgs, err := extractLVGsFromSC(sc)
+		lvgs, err := ExtractLVGsFromSC(sc)
 		if err != nil {
 			return nil, err
 		}
@@ -445,7 +445,7 @@ type LVMVolumeGroup struct {
 }
 type LVMVolumeGroups []LVMVolumeGroup
 
-func extractLVGsFromSC(sc v1.StorageClass) (LVMVolumeGroups, error) {
+func ExtractLVGsFromSC(sc v1.StorageClass) (LVMVolumeGroups, error) {
 	var lvmVolumeGroups LVMVolumeGroups
 	err := yaml.Unmarshal([]byte(sc.Parameters[lvmVolumeGroupsParamKey]), &lvmVolumeGroups)
 	if err != nil {
@@ -454,7 +454,7 @@ func extractLVGsFromSC(sc v1.StorageClass) (LVMVolumeGroups, error) {
 	return lvmVolumeGroups, nil
 }
 
-func sortLVGsByNodeName(lvgs map[string]v1alpha1.LvmVolumeGroup) map[string][]v1alpha1.LvmVolumeGroup {
+func SortLVGsByNodeName(lvgs map[string]v1alpha1.LvmVolumeGroup) map[string][]v1alpha1.LvmVolumeGroup {
 	sorted := make(map[string][]v1alpha1.LvmVolumeGroup, len(lvgs))
 	for _, lvg := range lvgs {
 		for _, node := range lvg.Status.Nodes {
@@ -465,7 +465,7 @@ func sortLVGsByNodeName(lvgs map[string]v1alpha1.LvmVolumeGroup) map[string][]v1
 	return sorted
 }
 
-func getLVMVolumeGroups(ctx context.Context, cl client.Client) (map[string]v1alpha1.LvmVolumeGroup, error) {
+func GetLVMVolumeGroups(ctx context.Context, cl client.Client) (map[string]v1alpha1.LvmVolumeGroup, error) {
 	lvgl := &v1alpha1.LvmVolumeGroupList{}
 	err := cl.List(ctx, lvgl)
 	if err != nil {
