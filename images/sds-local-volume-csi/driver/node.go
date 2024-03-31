@@ -43,6 +43,8 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 	d.log.Trace("------------- NodePublishVolume --------------")
 
 	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[internal.VGNameKey], request.VolumeId)
+	lvmType := request.GetVolumeContext()[internal.LvmTypeKey]
+	lvmThinPoolName := request.GetVolumeContext()[internal.ThinPoolNameKey]
 	d.log.Info(fmt.Sprintf("dev = %s", dev))
 
 	var mountOptions []string
@@ -63,10 +65,12 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 	}
 
 	d.log.Info(fmt.Sprintf("mountOptions = %s", mountOptions))
+	d.log.Info(fmt.Sprintf("lvmType = %s", lvmType))
+	d.log.Info(fmt.Sprintf("lvmThinPoolName = %s", lvmThinPoolName))
 	d.log.Info(fmt.Sprintf("fsType = %s", fsType))
 	d.log.Info(fmt.Sprintf("IsBlock = %t", IsBlock))
 
-	err := d.storeManager.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions)
+	err := d.storeManager.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions, lvmType, lvmThinPoolName)
 	if err != nil {
 		d.log.Error(err, "d.mounter.Mount :")
 		return nil, err
@@ -146,7 +150,7 @@ func (d *Driver) NodeGetCapabilities(ctx context.Context, request *csi.NodeGetCa
 
 func (d *Driver) NodeGetInfo(ctx context.Context, request *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	d.log.Info("method NodeGetInfo")
-	d.log.Info("hostID = ", d.hostID)
+	d.log.Info(fmt.Sprintf("hostID = %s", d.hostID))
 
 	return &csi.NodeGetInfoResponse{
 		NodeId: d.hostID,

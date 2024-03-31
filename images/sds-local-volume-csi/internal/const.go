@@ -25,6 +25,7 @@ const (
 	TopologyKey       = "topology.sds-local-volume-csi/node"
 	SubPath           = "subPath"
 	VGNameKey         = "vgname"
+	ThinPoolNameKey   = "thinPoolName"
 	LLMTypeThin       = "Thin"
 	LLMTypeThick      = "Thick"
 	LLVStatusCreated  = "Created"
