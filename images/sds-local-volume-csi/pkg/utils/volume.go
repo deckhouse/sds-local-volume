@@ -19,17 +19,18 @@ package utils
 import (
 	"fmt"
 	"os"
+	"sds-local-volume-csi/internal"
 	"sds-local-volume-csi/pkg/logger"
+	"strings"
 
 	mu "k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
 )
 
 type NodeStoreManager interface {
-	Mount(source, target string, isBlock bool, fsType string, readonly bool, mntOpts []string) error
+	Mount(source, target string, isBlock bool, fsType string, readonly bool, mntOpts []string, lvmType, lvmThinPoolName string) error
 	Unmount(target string) error
 	IsNotMountPoint(target string) (bool, error)
-	IsMountPointCorrect(mountRefs []string, target string) bool
 	ResizeFS(target string) error
 }
 
@@ -48,20 +49,20 @@ func NewStore(logger *logger.Logger) *Store {
 	}
 }
 
-func (s *Store) Mount(source, target string, isBlock bool, fsType string, readonly bool, mntOpts []string) error {
+func (s *Store) Mount(devSourcePath, target string, isBlock bool, fsType string, readonly bool, mntOpts []string, lvmType, lvmThinPoolName string) error {
 	s.Log.Info(" ----== Node Mount ==---- ")
 
 	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
-	s.Log.Trace(fmt.Sprintf("[mount] params source=%s target=%s fs=%s blockMode=%t mountOptions=%v", source, target, fsType, isBlock, mntOpts))
+	s.Log.Trace(fmt.Sprintf("[mount] params source=%s target=%s fs=%s blockMode=%t mountOptions=%v", devSourcePath, target, fsType, isBlock, mntOpts))
 	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
-	info, err := os.Stat(source)
+	info, err := os.Stat(devSourcePath)
 	if err != nil {
 		return fmt.Errorf("failed to stat source device: %w", err)
 	}
 
 	if (info.Mode() & os.ModeDevice) != os.ModeDevice {
-		return fmt.Errorf("[NewMount] path %s is not a device", source)
+		return fmt.Errorf("[NewMount] path %s is not a device", devSourcePath)
 	}
 
 	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ MODE SOURCE ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
@@ -91,24 +92,29 @@ func (s *Store) Mount(source, target string, isBlock bool, fsType string, readon
 		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ isMountPoint  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
 		if isMountPoint {
-			s.Log.Trace(fmt.Sprintf("Try to find mount refs for source %s", source))
-			mountRefs, err := s.NodeStorage.GetMountRefs(source)
+			mapperSourcePath := toMapperPath(devSourcePath)
+			s.Log.Trace(fmt.Sprintf("Target %s is a mount point. Checking if it is already mounted to source %s or %s", target, devSourcePath, mapperSourcePath))
+
+			mountedDevicePath, _, err := mu.GetDeviceNameFromMount(s.NodeStorage.Interface, target)
 			if err != nil {
-				return fmt.Errorf("failed to get mount refs for source %s: %w", source, err)
+				return fmt.Errorf("failed to find the device mounted at %s: %w", target, err)
 			}
-			s.Log.Trace(fmt.Sprintf("Found mount refs: %v", mountRefs))
-			mountPointCorrect := s.IsMountPointCorrect(mountRefs, target)
-			if !mountPointCorrect {
-				return fmt.Errorf("target %s is a mount point and is not mounted to source %s", target, source)
+			s.Log.Trace(fmt.Sprintf("Found device mounted at %s: %s", target, mountedDevicePath))
+
+			if mountedDevicePath != devSourcePath && mountedDevicePath != mapperSourcePath {
+				return fmt.Errorf("target %s is a mount point and is not mounted to source %s or %s", target, devSourcePath, mapperSourcePath)
 			}
 
-			s.Log.Trace(fmt.Sprintf("Target %s is a mount point and already mounted to source %s. Skipping FormatAndMount without any checks", target, source))
+			s.Log.Trace(fmt.Sprintf("Target %s is a mount point and already mounted to source %s. Skipping FormatAndMount without any checks", target, devSourcePath))
 			return nil
 		}
 
 		s.Log.Trace("-----------------== start FormatAndMount ==---------------")
 
-		err = s.NodeStorage.FormatAndMount(source, target, fsType, mntOpts)
+		if lvmType == internal.LLMTypeThin {
+			s.Log.Trace(fmt.Sprintf("LVM type is Thin. Ckecking free space in thin pool %s", lvmThinPoolName))
+		}
+		err = s.NodeStorage.FormatAndMount(devSourcePath, target, fsType, mntOpts)
 		if err != nil {
 			return fmt.Errorf("failed to FormatAndMount : %w", err)
 		}
@@ -129,7 +135,7 @@ func (s *Store) Mount(source, target string, isBlock bool, fsType string, readon
 		}
 		s.Log.Trace("-----------------== stop Create File ==---------------")
 		s.Log.Trace("-----------------== start Mount ==---------------")
-		err = s.NodeStorage.Mount(source, target, fsType, mntOpts)
+		err = s.NodeStorage.Mount(devSourcePath, target, fsType, mntOpts)
 		if err != nil {
 			s.Log.Error(err, "block mount error :")
 			return err
@@ -184,11 +190,13 @@ func (s *Store) ResizeFS(mountTarget string) error {
 	return nil
 }
 
-func (s *Store) IsMountPointCorrect(mountRefs []string, target string) bool {
-	for _, ref := range mountRefs {
-		if ref == target {
-			return true
-		}
+func toMapperPath(devPath string) string {
+	if !strings.HasPrefix(devPath, "/dev/") {
+		return ""
 	}
-	return false
+
+	shortPath := strings.TrimPrefix(devPath, "/dev/")
+	mapperPath := strings.Replace(shortPath, "-", "--", -1)
+	mapperPath = strings.Replace(mapperPath, "/", "-", -1)
+	return "/dev/mapper/" + mapperPath
 }
