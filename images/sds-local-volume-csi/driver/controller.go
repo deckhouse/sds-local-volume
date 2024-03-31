@@ -90,7 +90,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 		preferredNode = selectedNodeName
 		d.log.Info(fmt.Sprintf("Selected node: %s, free space %s ", selectedNodeName, freeSpace.String()))
-		if LvmType == internal.LLMTypeThick {
+		if LvmType == internal.LVMTypeThick {
 			if llvSize.Value() > freeSpace.Value() {
 				return nil, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), freeSpace.String())
 			}
@@ -150,7 +150,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	volumeCtx[internal.SubPath] = request.Name
 	volumeCtx[internal.VGNameKey] = selectedLVG.Spec.ActualVGNameOnTheNode
-	if llvSpec.Type == internal.LLMTypeThin {
+	if llvSpec.Type == internal.LVMTypeThin {
 		volumeCtx[internal.ThinPoolNameKey] = llvSpec.Thin.PoolName
 	} else {
 		volumeCtx[internal.ThinPoolNameKey] = ""
@@ -306,7 +306,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
 	}
 
-	if llv.Spec.Type == internal.LLMTypeThick {
+	if llv.Spec.Type == internal.LVMTypeThick {
 		lvgFreeSpace, err := utils.GetLVMVolumeGroupFreeSpace(*lvg)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroupCapacity: %v", err)
