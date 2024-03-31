@@ -91,22 +91,23 @@ func (s *Store) Mount(source, target string, isBlock bool, fsType string, readon
 		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ isMountPoint  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
 		if isMountPoint {
-			s.Log.Trace("Try to find mount refs for source %s", source)
+			s.Log.Trace(fmt.Sprintf("Try to find mount refs for source %s", source))
 			mountRefs, err := s.NodeStorage.GetMountRefs(source)
 			if err != nil {
 				return fmt.Errorf("failed to get mount refs for source %s: %w", source, err)
 			}
-			s.Log.Trace("Found mount refs: %v", mountRefs)
+			s.Log.Trace(fmt.Sprintf("Found mount refs: %v", mountRefs))
 			mountPointCorrect := s.IsMountPointCorrect(mountRefs, target)
 			if !mountPointCorrect {
 				return fmt.Errorf("target %s is a mount point and is not mounted to source %s", target, source)
 			}
 
-			s.Log.Trace("Target %s is a mount point and already mounted to source %s. Skipping FormatAndMount without any checks", target, source)
+			s.Log.Trace(fmt.Sprintf("Target %s is a mount point and already mounted to source %s. Skipping FormatAndMount without any checks", target, source))
 			return nil
 		}
 
 		s.Log.Trace("-----------------== start FormatAndMount ==---------------")
+
 		err = s.NodeStorage.FormatAndMount(source, target, fsType, mntOpts)
 		if err != nil {
 			return fmt.Errorf("failed to FormatAndMount : %w", err)
