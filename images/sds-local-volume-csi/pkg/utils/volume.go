@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"sds-local-volume-csi/pkg/logger"
-	"time"
 
 	mu "k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
@@ -30,6 +29,7 @@ type NodeStoreManager interface {
 	Mount(source, target string, isBlock bool, fsType string, readonly bool, mntOpts []string) error
 	Unmount(target string) error
 	IsNotMountPoint(target string) (bool, error)
+	IsMountPointCorrect(mountRefs []string, target string) bool
 	ResizeFS(target string) error
 }
 
@@ -77,23 +77,34 @@ func (s *Store) Mount(source, target string, isBlock bool, fsType string, readon
 		s.Log.Trace("-----------------== start MkdirAll ==-----------------")
 		s.Log.Trace("mkdir create dir =" + target)
 		if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
-			return fmt.Errorf("[MkdirAll] could not create target directory %s, %v", target, err)
+			return fmt.Errorf("[MkdirAll] could not create target directory %s: %w", target, err)
 		}
 		s.Log.Trace("-----------------== stop MkdirAll ==-----------------")
 
-		needsMount, err := s.NodeStorage.IsMountPoint(target)
+		isMountPoint, err := s.NodeStorage.IsMountPoint(target)
 		if err != nil {
-			return fmt.Errorf("[s.NodeStorage.IsMountPoint] unable to determine mount status of %s %v", target, err)
+			return fmt.Errorf("[s.NodeStorage.IsMountPoint] unable to determine mount status of %s: %w", target, err)
 		}
 
-		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ needsMount ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
-		s.Log.Trace(fmt.Sprintf("%t", needsMount))
-		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ needsMount  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ isMountPoint ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+		s.Log.Trace(fmt.Sprintf("%t", isMountPoint))
+		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ isMountPoint  ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 
-		//todo
-		//if !needsMount {
-		//	return nil
-		//}
+		if isMountPoint {
+			s.Log.Trace("Try to find mount refs for source %s", source)
+			mountRefs, err := s.NodeStorage.GetMountRefs(source)
+			if err != nil {
+				return fmt.Errorf("failed to get mount refs for source %s: %w", source, err)
+			}
+			s.Log.Trace("Found mount refs: %v", mountRefs)
+			mountPointCorrect := s.IsMountPointCorrect(mountRefs, target)
+			if !mountPointCorrect {
+				return fmt.Errorf("target %s is a mount point and is not mounted to source %s", target, source)
+			}
+
+			s.Log.Trace("Target %s is a mount point and already mounted to source %s. Skipping FormatAndMount without any checks", target, source)
+			return nil
+		}
 
 		s.Log.Trace("-----------------== start FormatAndMount ==---------------")
 		err = s.NodeStorage.FormatAndMount(source, target, fsType, mntOpts)
@@ -138,7 +149,6 @@ func (s *Store) Unmount(target string) error {
 		s.Log.Error(err, "[s.NodeStorage.Unmount]: ")
 		return err
 	}
-	time.Sleep(time.Second * 1)
 	return nil
 }
 
@@ -171,4 +181,13 @@ func (s *Store) ResizeFS(mountTarget string) error {
 
 	s.Log.Info("Filesystem resized successfully", "devicePath", devicePath)
 	return nil
+}
+
+func (s *Store) IsMountPointCorrect(mountRefs []string, target string) bool {
+	for _, ref := range mountRefs {
+		if ref == target {
+			return true
+		}
+	}
+	return false
 }
