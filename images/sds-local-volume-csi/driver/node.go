@@ -43,7 +43,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 	d.log.Trace("------------- NodePublishVolume --------------")
 
 	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[internal.VGNameKey], request.VolumeId)
-	d.log.Info("dev = ", dev)
+	d.log.Info(fmt.Sprintf("dev = %s", dev))
 
 	var mountOptions []string
 	if request.GetReadonly() {
@@ -62,9 +62,9 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		mountOptions = append(mountOptions, mnt.GetMountFlags()...)
 	}
 
-	d.log.Info("mountOptions = ", mountOptions)
-	d.log.Info("fsType = ", fsType)
-	d.log.Info("IsBlock = ", IsBlock)
+	d.log.Info(fmt.Sprintf("mountOptions = %s", mountOptions))
+	d.log.Info(fmt.Sprintf("fsType = %s", fsType))
+	d.log.Info(fmt.Sprintf("IsBlock = %t", IsBlock))
 
 	err := d.storeManager.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions)
 	if err != nil {
