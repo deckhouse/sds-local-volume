@@ -149,7 +149,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	}
 
 	volumeCtx[internal.SubPath] = request.Name
-	volumeCtx[internal.VGNameKey] = llvSpec.LvmVolumeGroupName
+	volumeCtx[internal.VGNameKey] = selectedLVG.Spec.ActualVGNameOnTheNode
 	if llvSpec.Type == internal.LLMTypeThin {
 		volumeCtx[internal.ThinPoolNameKey] = llvSpec.Thin.PoolName
 	} else {
