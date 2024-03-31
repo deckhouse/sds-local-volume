@@ -111,7 +111,7 @@ func (s *Store) Mount(devSourcePath, target string, isBlock bool, fsType string,
 
 		s.Log.Trace("-----------------== start FormatAndMount ==---------------")
 
-		if lvmType == internal.LLMTypeThin {
+		if lvmType == internal.LVMTypeThin {
 			s.Log.Trace(fmt.Sprintf("LVM type is Thin. Ckecking free space in thin pool %s", lvmThinPoolName))
 		}
 		err = s.NodeStorage.FormatAndMount(devSourcePath, target, fsType, mntOpts)
