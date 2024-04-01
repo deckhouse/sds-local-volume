@@ -83,25 +83,27 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 		nodeName string
 	})
 
-	lvgs := s.cache.GetLVGNames()
-	s.log.Info(fmt.Sprintf("LVG from cache: %v", lvgs))
+	lvgs := s.cache.GetAllLVG()
+	//s.log.Info(fmt.Sprintf("LVG from cache: %v", lvgs))
 	for _, lvg := range lvgs {
-		pvcs := s.cache.GetAllPVCByLVG(lvg)
-		s.log.Info(fmt.Sprintf("LVG %s has PVC from cache: %v", lvg, pvcs))
+		pvcs := s.cache.GetAllPVCByLVG(lvg.Name)
+		//for _, pvc := range pvcs {
+		//	s.log.Trace(fmt.Sprintf("LVG %s has PVC from cache: %v", lvg, pvc.Name))
+		//}
 
-		result[lvg] = make([]struct {
+		result[lvg.Name] = make([]struct {
 			pvcName  string
 			nodeName string
 		}, 0)
 
 		for _, pvc := range pvcs {
-			result[lvg] = append(result[lvg], struct {
+			result[lvg.Name] = append(result[lvg.Name], struct {
 				pvcName  string
 				nodeName string
-			}{pvcName: pvc.Name, nodeName: s.cache.GetPVCNodeName(pvc.Name)})
+			}{pvcName: pvc.Name, nodeName: s.cache.GetPVCNodeName(lvg.Name, pvc)})
 		}
 	}
-	s.log.Info(fmt.Sprintf("Result len: %d", len(result)))
+	//s.log.Info(fmt.Sprintf("Result len: %d", len(result)))
 
 	_, err := w.Write([]byte(fmt.Sprintf("%+v", result)))
 	if err != nil {

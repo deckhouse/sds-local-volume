@@ -4,13 +4,19 @@ import (
 	"fmt"
 	v1 "k8s.io/api/core/v1"
 	"sds-local-volume-scheduler-extender/api/v1alpha1"
+	"sds-local-volume-scheduler-extender/pkg/logger"
 )
 
-const pvcPerLVGCount = 150
+const (
+	pvcPerLVGCount         = 150
+	SelectedNodeAnnotation = "volume.kubernetes.io/selected-node"
+)
 
 type Cache struct {
-	lvgs   map[string]*lvgCache
-	pvcLVG map[string]string
+	lvgs     map[string]*lvgCache
+	pvcQueue map[string]*v1.PersistentVolumeClaim
+	pvcLVGs  map[string][]string
+	nodeLVGs map[string][]string
 }
 
 type lvgCache struct {
@@ -25,8 +31,10 @@ type pvcCache struct {
 
 func NewCache(size int) *Cache {
 	return &Cache{
-		lvgs:   make(map[string]*lvgCache, size),
-		pvcLVG: make(map[string]string, size),
+		lvgs:     make(map[string]*lvgCache, size),
+		pvcQueue: make(map[string]*v1.PersistentVolumeClaim, size),
+		pvcLVGs:  make(map[string][]string, size),
+		nodeLVGs: make(map[string][]string, size),
 	}
 }
 
@@ -38,6 +46,10 @@ func (c *Cache) AddLVG(lvg *v1alpha1.LvmVolumeGroup) error {
 	c.lvgs[lvg.Name] = &lvgCache{
 		lvg:  lvg,
 		pvcs: make(map[string]*pvcCache, pvcPerLVGCount),
+	}
+
+	for _, node := range lvg.Status.Nodes {
+		c.nodeLVGs[node.Name] = append(c.nodeLVGs[node.Name], lvg.Name)
 	}
 
 	return nil
@@ -60,13 +72,17 @@ func (c *Cache) TryGetLVG(name string) *v1alpha1.LvmVolumeGroup {
 	return c.lvgs[name].lvg
 }
 
-func (c *Cache) GetLVGNames() []string {
-	names := make([]string, 0, len(c.lvgs))
-	for lvgName := range c.lvgs {
-		names = append(names, lvgName)
+func (c *Cache) GetLVGNamesByNodeName(nodeName string) []string {
+	return c.nodeLVGs[nodeName]
+}
+
+func (c *Cache) GetAllLVG() map[string]*v1alpha1.LvmVolumeGroup {
+	lvgs := make(map[string]*v1alpha1.LvmVolumeGroup, len(c.lvgs))
+	for _, lvgCh := range c.lvgs {
+		lvgs[lvgCh.lvg.Name] = lvgCh.lvg
 	}
 
-	return names
+	return lvgs
 }
 
 func (c *Cache) GetLVGReservedSpace(lvgName string) int64 {
@@ -84,40 +100,70 @@ func (c *Cache) DeleteLVG(lvgName string) {
 	delete(c.lvgs, lvgName)
 }
 
-func (c *Cache) AddPVC(lvgName string, pvc *v1.PersistentVolumeClaim, pvcNodeName string) error {
-	if c.lvgs[lvgName].pvcs[pvc.Name] != nil {
+func (c *Cache) AddPVCToFilterQueue(pvc *v1.PersistentVolumeClaim) {
+	pvcKey := configurePVCKey(pvc)
+	c.pvcQueue[pvcKey] = pvc
+}
+
+func (c *Cache) AddUnboundedPVCToLVG(lvgName string, pvc *v1.PersistentVolumeClaim) error {
+	if pvc.Annotations[SelectedNodeAnnotation] != "" {
+		return fmt.Errorf("PVC %s is expected to not have a selected node, but got one: %s", pvc.Name, pvc.Annotations[SelectedNodeAnnotation])
+	}
+
+	pvcKey := configurePVCKey(pvc)
+	if c.lvgs[lvgName].pvcs[pvcKey] != nil {
 		return fmt.Errorf("PVC %s already exist in the cache", pvc.Name)
 	}
 
-	c.lvgs[lvgName].pvcs[pvc.Name] = &pvcCache{pvc: pvc, nodeName: pvcNodeName}
-	c.pvcLVG[pvc.Name] = lvgName
+	c.lvgs[lvgName].pvcs[pvcKey] = &pvcCache{pvc: pvc, nodeName: ""}
+	c.pvcLVGs[pvcKey] = append(c.pvcLVGs[pvcKey], lvgName)
+
 	return nil
 }
 
-func (c *Cache) UpdatePVC(pvc *v1.PersistentVolumeClaim, pvcNodeName string) error {
-	lvgName := c.pvcLVG[pvc.Name]
-	if c.lvgs[lvgName].pvcs[pvc.Name] == nil {
+func (c *Cache) UpdatePVC(lvgName string, pvc *v1.PersistentVolumeClaim) error {
+	pvcKey := configurePVCKey(pvc)
+	if c.lvgs[lvgName].pvcs[pvcKey] == nil {
 		return fmt.Errorf("PVC %s not found", pvc.Name)
 	}
 
-	c.lvgs[lvgName].pvcs[pvc.Name].pvc = pvc
-	c.lvgs[lvgName].pvcs[pvc.Name].nodeName = pvcNodeName
+	c.lvgs[lvgName].pvcs[pvcKey].pvc = pvc
+	c.lvgs[lvgName].pvcs[pvcKey].nodeName = pvc.Annotations[SelectedNodeAnnotation]
+
 	return nil
 }
 
-func (c *Cache) TryGetPVC(name string) *v1.PersistentVolumeClaim {
-	lvgName := c.pvcLVG[name]
+func (c *Cache) TryGetPVC(lvgName string, pvc *v1.PersistentVolumeClaim) *v1.PersistentVolumeClaim {
+	pvcKey := configurePVCKey(pvc)
 
 	if c.lvgs[lvgName] == nil {
 		return nil
 	}
 
-	return c.lvgs[lvgName].pvcs[name].pvc
+	return c.lvgs[lvgName].pvcs[pvcKey].pvc
 }
 
-//func (c *Cache) GetCorrespondingLVGNameByPVC(pvcName string) string {
-//	return c.pvcLVG[pvcName]
-//}
+func (c *Cache) CheckPVCInQueue(pvc *v1.PersistentVolumeClaim) bool {
+	pvcKey := configurePVCKey(pvc)
+
+	if _, exist := c.pvcQueue[pvcKey]; !exist {
+		return false
+	}
+
+	return true
+}
+
+func (c *Cache) GetPVCsFromQueue(namespace string) map[string]*v1.PersistentVolumeClaim {
+	result := make(map[string]*v1.PersistentVolumeClaim, len(c.pvcQueue))
+
+	for _, pvc := range c.pvcQueue {
+		if pvc.Namespace == namespace {
+			result[pvc.Name] = pvc
+		}
+	}
+
+	return result
+}
 
 func (c *Cache) GetAllPVCByLVG(lvgName string) []*v1.PersistentVolumeClaim {
 	pvcsCache := c.lvgs[lvgName]
@@ -130,22 +176,61 @@ func (c *Cache) GetAllPVCByLVG(lvgName string) []*v1.PersistentVolumeClaim {
 	return result
 }
 
-func (c *Cache) GetPVCNodeName(pvcName string) string {
-	lvgName := c.pvcLVG[pvcName]
-	return c.lvgs[lvgName].pvcs[pvcName].nodeName
+func (c *Cache) GetPVCNodeName(lvgName string, pvc *v1.PersistentVolumeClaim) string {
+	pvcKey := configurePVCKey(pvc)
+	return c.lvgs[lvgName].pvcs[pvcKey].nodeName
 }
 
-func (c *Cache) GetAllPVCNames() []string {
-	result := make([]string, 0, len(c.pvcLVG))
+func (c *Cache) GetLVGNamesForPVC(pvc *v1.PersistentVolumeClaim) []string {
+	pvcKey := configurePVCKey(pvc)
+	return c.pvcLVGs[pvcKey]
+}
 
-	for pvcName := range c.pvcLVG {
-		result = append(result, pvcName)
+func (c *Cache) RemoveBoundedPVCSpaceReservation(lvgName string, pvc *v1.PersistentVolumeClaim) error {
+	pvcKey := configurePVCKey(pvc)
+	pvcCh := c.lvgs[lvgName].pvcs[pvcKey]
+	if pvcCh.nodeName == "" {
+		return fmt.Errorf("no node selected for PVC %s", pvc.Name)
 	}
 
-	return result
+	delete(c.lvgs[lvgName].pvcs, pvcKey)
+	delete(c.pvcLVGs, pvcKey)
+	delete(c.pvcQueue, pvcKey)
+
+	return nil
 }
 
-func (c *Cache) RemovePVCSpaceReservation(pvcName string) {
-	lvgName := c.pvcLVG[pvcName]
-	delete(c.lvgs[lvgName].pvcs, pvcName)
+func (c *Cache) RemoveUnboundedPVCSpaceReservation(log logger.Logger, pvc *v1.PersistentVolumeClaim) error {
+	pvcKey := configurePVCKey(pvc)
+
+	for _, lvgCh := range c.lvgs {
+		pvcCh, exist := lvgCh.pvcs[pvcKey]
+		if exist {
+			if pvcCh.nodeName == "" {
+				delete(lvgCh.pvcs, pvcKey)
+				delete(c.pvcQueue, pvcKey)
+				log.Debug(fmt.Sprintf("[RemoveUnboundedPVCSpaceReservation] removed unbound cache PVC %s from LVG %s", pvc.Name, lvgCh.lvg.Name))
+				continue
+			}
+
+			log.Debug(fmt.Sprintf("[RemoveUnboundedPVCSpaceReservation] PVC %s has bounded to node %s. It should not be revomed from LVG %s", pvc.Name, pvcCh.nodeName, lvgCh.lvg.Name))
+		}
+	}
+
+	return nil
+}
+
+func (c *Cache) RemovePVCSpaceReservationForced(pvc *v1.PersistentVolumeClaim) {
+	pvcKey := configurePVCKey(pvc)
+
+	for _, lvgName := range c.pvcLVGs[pvcKey] {
+		delete(c.lvgs[lvgName].pvcs, pvcKey)
+	}
+
+	delete(c.pvcLVGs, pvcKey)
+	delete(c.pvcQueue, pvcKey)
+}
+
+func configurePVCKey(pvc *v1.PersistentVolumeClaim) string {
+	return fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
 }

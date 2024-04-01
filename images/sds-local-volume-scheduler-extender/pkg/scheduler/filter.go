@@ -21,16 +21,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"sds-local-volume-scheduler-extender/api/v1alpha1"
-	"sds-local-volume-scheduler-extender/pkg/logger"
-	"sync"
-
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/strings/slices"
+	"net/http"
+	"sds-local-volume-scheduler-extender/api/v1alpha1"
+	"sds-local-volume-scheduler-extender/pkg/cache"
+	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+	"sync"
+	"time"
 )
 
 const (
@@ -56,12 +58,13 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 		s.log.Trace(fmt.Sprintf("[filter] a node from request, name :%s", n.Name))
 	}
 
-	pvcs, err := getUsedPVC(s.ctx, s.client, input.Pod)
-	if err != nil {
-		s.log.Error(err, "[filter] unable to get PVC from the Pod")
+	pvcs := getUsedPVC(s.log, s.cache, input.Pod)
+	if len(pvcs) == 0 {
+		s.log.Error(fmt.Errorf("no PVC was found for pod %s in namespace %s", input.Pod.Name, input.Pod.Namespace), fmt.Sprintf("[filter] unable to get used PVC for Pod %s", input.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+
 	for _, pvc := range pvcs {
 		s.log.Trace(fmt.Sprintf("[filter] used PVC: %s", pvc.Name))
 	}
@@ -81,24 +84,71 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.Error(err, fmt.Sprintf("[filter] unable to extract request size for a pod %s", input.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
+		return
 	}
 	s.log.Debug("[filter] successfully extracted the pvcRequests size")
 
 	s.log.Debug("[filter] starts to filter the nodes")
-	result, err := filterNodes(s.ctx, s.client, s.log, input.Nodes, pvcs, scs, pvcRequests)
+	filteredNodes, err := filterNodes(s.log, s.cache, input.Nodes, pvcs, scs, pvcRequests)
 	if err != nil {
 		s.log.Error(err, "[filter] unable to filter the nodes")
 		http.Error(w, "bad request", http.StatusBadRequest)
+		return
 	}
 	s.log.Debug("[filter] successfully filtered the nodes")
 
+	s.log.Debug("[filter] starts to populate the cache")
+	err = populateCache(s.log, filteredNodes.Nodes.Items, input.Pod, s.cache, pvcs, scs)
+	if err != nil {
+		s.log.Error(err, "[filter] unable to populate cache")
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	s.log.Debug("[filter] successfully populated the cache")
+
 	w.Header().Set("content-type", "application/json")
-	err = json.NewEncoder(w).Encode(result)
+	err = json.NewEncoder(w).Encode(filteredNodes)
 	if err != nil {
 		s.log.Error(err, "[filter] unable to encode a response")
 		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
 	s.log.Debug("[filter] ends the serving")
+}
+
+func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, schedulerCache *cache.Cache, pvcs map[string]*corev1.PersistentVolumeClaim, scs map[string]*v1.StorageClass) error {
+	for _, node := range nodes {
+		for _, volume := range pod.Spec.Volumes {
+			if volume.PersistentVolumeClaim != nil {
+				lvgNamesForTheNode := schedulerCache.GetLVGNamesByNodeName(node.Name)
+				log.Trace(fmt.Sprintf("[populateCache] LVGs from cache for the node %s: %v", node.Name, lvgNamesForTheNode))
+				pvc := pvcs[volume.PersistentVolumeClaim.ClaimName]
+				sc := scs[*pvc.Spec.StorageClassName]
+				if sc.Parameters[lvmTypeParamKey] == thick {
+					log.Debug(fmt.Sprintf("[populateCache] Storage Class %s has device type Thick, so the cache will be populated by PVC space requests", sc.Name))
+					lvgsForPVC, err := ExtractLVGsFromSC(sc)
+					if err != nil {
+						return err
+					}
+					log.Trace(fmt.Sprintf("[populateCache] LVGs for PVC %s: %+v", volume.PersistentVolumeClaim.ClaimName, lvgsForPVC))
+
+					for _, lvg := range lvgsForPVC {
+						if slices.Contains(lvgNamesForTheNode, lvg.Name) {
+							log.Trace(fmt.Sprintf("[populateCache] LVG %s in the cache will be populated with unbounded PVC %s", lvg.Name, volume.PersistentVolumeClaim.ClaimName))
+							err = schedulerCache.AddUnboundedPVCToLVG(lvg.Name, pvcs[volume.PersistentVolumeClaim.ClaimName])
+							if err != nil {
+								return err
+							}
+						}
+					}
+				} else {
+					log.Debug(fmt.Sprintf("[populateCache] Storage Class %s has device type Thin, so the cache should NOT be populated by PVC space requests", sc.Name))
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 type PVCRequest struct {
@@ -110,8 +160,8 @@ func extractRequestedSize(
 	ctx context.Context,
 	cl client.Client,
 	log logger.Logger,
-	pvcs map[string]corev1.PersistentVolumeClaim,
-	scs map[string]v1.StorageClass,
+	pvcs map[string]*corev1.PersistentVolumeClaim,
+	scs map[string]*v1.StorageClass,
 ) (map[string]PVCRequest, error) {
 	pvs, err := getPersistentVolumes(ctx, cl)
 	if err != nil {
@@ -161,12 +211,11 @@ func extractRequestedSize(
 }
 
 func filterNodes(
-	ctx context.Context,
-	cl client.Client,
 	log logger.Logger,
+	schedulerCache *cache.Cache,
 	nodes *corev1.NodeList,
-	pvcs map[string]corev1.PersistentVolumeClaim,
-	scs map[string]v1.StorageClass,
+	pvcs map[string]*corev1.PersistentVolumeClaim,
+	scs map[string]*v1.StorageClass,
 	pvcRequests map[string]PVCRequest,
 ) (*ExtenderFilterResult, error) {
 	// Param "pvcRequests" is a total amount of the pvcRequests space (both thick and thin) for Pod (i.e. from every PVC)
@@ -176,16 +225,22 @@ func filterNodes(
 		}, nil
 	}
 
-	lvgs, err := GetLVMVolumeGroups(ctx, cl)
-	if err != nil {
-		return nil, err
-	}
+	lvgs := schedulerCache.GetAllLVG()
 
 	lvgsThickFree, err := getLVGThickFreeSpaces(lvgs)
 	if err != nil {
 		return nil, err
 	}
-	log.Trace(fmt.Sprintf("[filterNodes] LVGs Thick FreeSpace: %+v", lvgsThickFree))
+	log.Trace(fmt.Sprintf("[filterNodes] current LVGs Thick FreeSpace on the node: %+v", lvgsThickFree))
+
+	for lvgName, freeSpace := range lvgsThickFree {
+		log.Trace(fmt.Sprintf("[filterNodes] current LVG %s Thick free space %s", lvgName, resource.NewQuantity(freeSpace, resource.BinarySI)))
+		reservedSize := schedulerCache.GetLVGReservedSpace(lvgName)
+		log.Trace(fmt.Sprintf("[filterNodes] current LVG %s reserved by pvc from cache space %s", lvgName, resource.NewQuantity(reservedSize, resource.BinarySI)))
+		lvgsThickFree[lvgName] -= reservedSize
+	}
+	log.Trace(fmt.Sprintf("[filterNodes] current LVGs Thick FreeSpace with reserved PVC: %+v", lvgsThickFree))
+
 	lvgsThickFreeMutex := &sync.RWMutex{}
 
 	scLVGs, err := GetSortedLVGsFromStorageClasses(scs)
@@ -323,11 +378,11 @@ func filterNodes(
 	return result, nil
 }
 
-func getLVGThickFreeSpaces(lvgs map[string]v1alpha1.LvmVolumeGroup) (map[string]int64, error) {
+func getLVGThickFreeSpaces(lvgs map[string]*v1alpha1.LvmVolumeGroup) (map[string]int64, error) {
 	result := make(map[string]int64, len(lvgs))
 
 	for _, lvg := range lvgs {
-		free, err := getVGFreeSpace(&lvg)
+		free, err := getVGFreeSpace(lvg)
 		if err != nil {
 			return nil, err
 		}
@@ -348,7 +403,7 @@ func findMatchedThinPool(thinPools []v1alpha1.StatusThinPool, name string) *v1al
 	return nil
 }
 
-func findMatchedLVG(nodeLVGs []v1alpha1.LvmVolumeGroup, scLVGs LVMVolumeGroups) *LVMVolumeGroup {
+func findMatchedLVG(nodeLVGs []*v1alpha1.LvmVolumeGroup, scLVGs LVMVolumeGroups) *LVMVolumeGroup {
 	nodeLVGNames := make(map[string]struct{}, len(nodeLVGs))
 	for _, lvg := range nodeLVGs {
 		nodeLVGNames[lvg.Name] = struct{}{}
@@ -363,8 +418,8 @@ func findMatchedLVG(nodeLVGs []v1alpha1.LvmVolumeGroup, scLVGs LVMVolumeGroups) 
 	return nil
 }
 
-func getCommonNodesByStorageClasses(scs map[string]v1.StorageClass, nodesWithLVGs map[string][]v1alpha1.LvmVolumeGroup) (map[string][]v1alpha1.LvmVolumeGroup, error) {
-	result := make(map[string][]v1alpha1.LvmVolumeGroup, len(nodesWithLVGs))
+func getCommonNodesByStorageClasses(scs map[string]*v1.StorageClass, nodesWithLVGs map[string][]*v1alpha1.LvmVolumeGroup) (map[string][]*v1alpha1.LvmVolumeGroup, error) {
+	result := make(map[string][]*v1alpha1.LvmVolumeGroup, len(nodesWithLVGs))
 
 	for nodeName, lvgs := range nodesWithLVGs {
 		lvgNames := make(map[string]struct{}, len(lvgs))
@@ -401,8 +456,8 @@ func getCommonNodesByStorageClasses(scs map[string]v1.StorageClass, nodesWithLVG
 	return result, nil
 }
 
-func RemoveUnusedLVGs(lvgs map[string]v1alpha1.LvmVolumeGroup, scsLVGs map[string]LVMVolumeGroups) map[string]v1alpha1.LvmVolumeGroup {
-	result := make(map[string]v1alpha1.LvmVolumeGroup, len(lvgs))
+func RemoveUnusedLVGs(lvgs map[string]*v1alpha1.LvmVolumeGroup, scsLVGs map[string]LVMVolumeGroups) map[string]*v1alpha1.LvmVolumeGroup {
+	result := make(map[string]*v1alpha1.LvmVolumeGroup, len(lvgs))
 	usedLvgs := make(map[string]struct{}, len(lvgs))
 
 	for _, scLvgs := range scsLVGs {
@@ -420,7 +475,7 @@ func RemoveUnusedLVGs(lvgs map[string]v1alpha1.LvmVolumeGroup, scsLVGs map[strin
 	return result
 }
 
-func GetSortedLVGsFromStorageClasses(scs map[string]v1.StorageClass) (map[string]LVMVolumeGroups, error) {
+func GetSortedLVGsFromStorageClasses(scs map[string]*v1.StorageClass) (map[string]LVMVolumeGroups, error) {
 	result := make(map[string]LVMVolumeGroups, len(scs))
 
 	for _, sc := range scs {
@@ -445,7 +500,7 @@ type LVMVolumeGroup struct {
 }
 type LVMVolumeGroups []LVMVolumeGroup
 
-func ExtractLVGsFromSC(sc v1.StorageClass) (LVMVolumeGroups, error) {
+func ExtractLVGsFromSC(sc *v1.StorageClass) (LVMVolumeGroups, error) {
 	var lvmVolumeGroups LVMVolumeGroups
 	err := yaml.Unmarshal([]byte(sc.Parameters[lvmVolumeGroupsParamKey]), &lvmVolumeGroups)
 	if err != nil {
@@ -454,8 +509,8 @@ func ExtractLVGsFromSC(sc v1.StorageClass) (LVMVolumeGroups, error) {
 	return lvmVolumeGroups, nil
 }
 
-func SortLVGsByNodeName(lvgs map[string]v1alpha1.LvmVolumeGroup) map[string][]v1alpha1.LvmVolumeGroup {
-	sorted := make(map[string][]v1alpha1.LvmVolumeGroup, len(lvgs))
+func SortLVGsByNodeName(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string][]*v1alpha1.LvmVolumeGroup {
+	sorted := make(map[string][]*v1alpha1.LvmVolumeGroup, len(lvgs))
 	for _, lvg := range lvgs {
 		for _, node := range lvg.Status.Nodes {
 			sorted[node.Name] = append(sorted[node.Name], lvg)
@@ -465,6 +520,7 @@ func SortLVGsByNodeName(lvgs map[string]v1alpha1.LvmVolumeGroup) map[string][]v1
 	return sorted
 }
 
+// TODO: remove it if no need
 func GetLVMVolumeGroups(ctx context.Context, cl client.Client) (map[string]v1alpha1.LvmVolumeGroup, error) {
 	lvgl := &v1alpha1.LvmVolumeGroupList{}
 	err := cl.List(ctx, lvgl)
@@ -521,7 +577,7 @@ func getPersistentVolumes(ctx context.Context, cl client.Client) (map[string]cor
 	return pvMap, nil
 }
 
-func getStorageClassesUsedByPVCs(ctx context.Context, cl client.Client, pvcs map[string]corev1.PersistentVolumeClaim) (map[string]v1.StorageClass, error) {
+func getStorageClassesUsedByPVCs(ctx context.Context, cl client.Client, pvcs map[string]*corev1.PersistentVolumeClaim) (map[string]*v1.StorageClass, error) {
 	scs := &v1.StorageClassList{}
 	err := cl.List(ctx, scs)
 	if err != nil {
@@ -533,7 +589,7 @@ func getStorageClassesUsedByPVCs(ctx context.Context, cl client.Client, pvcs map
 		scMap[sc.Name] = sc
 	}
 
-	result := make(map[string]v1.StorageClass, len(pvcs))
+	result := make(map[string]*v1.StorageClass, len(pvcs))
 	for _, pvc := range pvcs {
 		if pvc.Spec.StorageClassName == nil {
 			err = errors.New(fmt.Sprintf("not StorageClass specified for PVC %s", pvc.Name))
@@ -542,32 +598,55 @@ func getStorageClassesUsedByPVCs(ctx context.Context, cl client.Client, pvcs map
 
 		scName := *pvc.Spec.StorageClassName
 		if sc, match := scMap[scName]; match {
-			result[sc.Name] = sc
+			result[sc.Name] = &sc
 		}
 	}
 
 	return result, nil
 }
 
-func getUsedPVC(ctx context.Context, cl client.Client, pod *corev1.Pod) (map[string]corev1.PersistentVolumeClaim, error) {
-	usedPvc := make(map[string]corev1.PersistentVolumeClaim, len(pod.Spec.Volumes))
+func getUsedPVC(log logger.Logger, schedulerCache *cache.Cache, pod *corev1.Pod) map[string]*corev1.PersistentVolumeClaim {
+	usedPvc := make(map[string]*corev1.PersistentVolumeClaim, len(pod.Spec.Volumes))
+	//TODO: может сделать так, чтобы в случае, если мы не можем получить из кеша, идти в куб? или будем честно "падать"?
 
-	pvcs := &corev1.PersistentVolumeClaimList{}
-	err := cl.List(ctx, pvcs)
-	if err != nil {
-		return nil, err
-	}
-
-	pvcMap := make(map[string]corev1.PersistentVolumeClaim, len(pvcs.Items))
-	for _, pvc := range pvcs.Items {
-		pvcMap[pvc.Name] = pvc
-	}
-
-	for _, volume := range pod.Spec.Volumes {
-		if volume.PersistentVolumeClaim != nil {
-			usedPvc[volume.PersistentVolumeClaim.ClaimName] = pvcMap[volume.PersistentVolumeClaim.ClaimName]
+	for {
+		pvcMap := schedulerCache.GetPVCsFromQueue(pod.Namespace)
+		for _, volume := range pod.Spec.Volumes {
+			if volume.PersistentVolumeClaim != nil {
+				usedPvc[volume.PersistentVolumeClaim.ClaimName] = pvcMap[volume.PersistentVolumeClaim.ClaimName]
+			}
 		}
+
+		filled := false
+		if len(pvcMap) > 0 {
+			filled = true
+			for _, pvc := range pvcMap {
+				log.Trace(fmt.Sprintf("[getUsedPVC] PVC %s from the cache of namespace %s", pvc.Name, pod.Namespace))
+			}
+
+			for _, volume := range pod.Spec.Volumes {
+				if volume.PersistentVolumeClaim != nil {
+					if _, added := usedPvc[volume.PersistentVolumeClaim.ClaimName]; !added {
+						filled = false
+						log.Warning(fmt.Sprintf("[getUsedPVC] ClaimName %s was not found in the cache for Pod %s", volume.PersistentVolumeClaim.ClaimName, pod.Name))
+						break
+					}
+				}
+			}
+		}
+
+		if !filled {
+			log.Warning(fmt.Sprintf("[getUsedPVC] some PVCs were not found in the cache for Pod %s. Retry to find them again.", pod.Name))
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		if filled {
+			log.Debug(fmt.Sprintf("[getUsedPVC] Every claim of Pod %s was found in the cache", pod.Name))
+			break
+		}
+
 	}
 
-	return usedPvc, nil
+	return usedPvc
 }

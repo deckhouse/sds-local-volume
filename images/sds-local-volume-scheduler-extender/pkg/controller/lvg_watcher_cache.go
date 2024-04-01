@@ -33,7 +33,8 @@ func RunLVGWatcherCacheController(
 	c, err := controller.New(LVGWatcherCacheCtrlName, mgr, controller.Options{
 		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 			return reconcile.Result{}, nil
-		})})
+		}),
+	})
 	if err != nil {
 		log.Error(err, "[RunCacheWatcherController] unable to create a controller")
 		return nil, err
@@ -77,37 +78,16 @@ func RunLVGWatcherCacheController(
 				log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] cache was added for the LVMVolumeGroup %s", lvg.Name))
 			}
 
-			//pvcs := &v1.PersistentVolumeClaimList{}
-			//err := cl.List(ctx, pvcs)
-			//if err != nil {
-			//	log.Error(err, "[RunLVGWatcherCacheController] unable to list all PVCs")
-			//	// TODO: requeue
-			//	return
-			//}
-			//
-			//scsList := &v12.StorageClassList{}
-			//err = cl.List(ctx, scsList)
-			//if err != nil {
-			//	log.Error(err, "[RunLVGWatcherCacheController] unable to list all StorageClasses")
-			//	// TODO: requeue
-			//	return
-			//}
-			//scs := make(map[string]v12.StorageClass, len(scsList.Items))
-			//for _, sc := range scsList.Items {
-			//	scs[sc.Name] = sc
-			//}
-			//
-			//lvgsBySC, err := scheduler.GetSortedLVGsFromStorageClasses(scs)
-			//if err != nil {
-			//	log.Error(err, "[RunLVGWatcherCacheController] unable to sort LVGs by StorageClasses")
-			//	// TODO: requeue
-			//	return
-			//}
-
 			pvcs := cache.GetAllPVCByLVG(lvg.Name)
 			for _, pvc := range pvcs {
 				if pvc.Status.Phase == v1.ClaimBound {
-					cache.RemovePVCSpaceReservation(pvc.Name)
+					err = cache.RemoveBoundedPVCSpaceReservation(lvg.Name, pvc)
+					if err != nil {
+						log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to remove PVC %s from the cache for the LVG %s", pvc.Name, lvg.Name))
+						continue
+					}
+
+					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s was removed from the LVG %s in the cache", pvc.Name, lvg.Name))
 				}
 			}
 
@@ -150,16 +130,26 @@ func RunLVGWatcherCacheController(
 			err = cache.UpdateLVG(newLvg)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to update the LVMVolumeGroup %s cache", newLvg.Name))
+				return
 			}
 
-			pvcs := cache.GetAllPVCByLVG(newLvg.Name)
-			for _, pvc := range pvcs {
+			cachedPvcs := cache.GetAllPVCByLVG(newLvg.Name)
+			for _, pvc := range cachedPvcs {
+				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s from the cache belongs to LVG %s", pvc.Name, newLvg.Name))
+				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s has status phase %s", pvc.Name, pvc.Status.Phase))
 				if pvc.Status.Phase == v1.ClaimBound {
-					cache.RemovePVCSpaceReservation(pvc.Name)
+					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s from the cache has status phase Bound. It will be removed from the reserved space of LVG %s", pvc.Name, newLvg.Name))
+					err = cache.RemoveBoundedPVCSpaceReservation(newLvg.Name, pvc)
+					if err != nil {
+						log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to remove PVC %s from the cache for the LVG %s", pvc.Name, newLvg.Name))
+						continue
+					}
+
+					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s was removed from the LVG %s in the cache", pvc.Name, newLvg.Name))
 				}
 			}
 
-			log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] updated LVMVolumeGroup %s cache size", newLvg.Name))
+			log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] reconciled LVMVolumeGroup %s cache", newLvg.Name))
 		},
 		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[RunCacheWatcherController] DeleteFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.Object.GetName()))
@@ -170,7 +160,7 @@ func RunLVGWatcherCacheController(
 				return
 			}
 			cache.DeleteLVG(lvg.Name)
-			log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] LVMVolumeGroup %s was deleted from the cache", lvg.Name))
+			log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] LVMVolumeGroup %s was deleted from the cache", lvg.Name))
 		},
 	})
 	if err != nil {

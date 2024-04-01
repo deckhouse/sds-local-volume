@@ -17,19 +17,18 @@ limitations under the License.
 package scheduler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"net/http"
+	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +42,7 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pvcs, err := getUsedPVC(s.ctx, s.client, input.Pod)
+	pvcs := getUsedPVC(s.log, s.cache, input.Pod)
 	if err != nil {
 		s.log.Error(err, "[prioritize] unable to get PVC from the Pod")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -72,7 +71,7 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug("[filter] successfully extracted the pvcRequests size")
 
 	s.log.Debug("[prioritize] starts to score the nodes")
-	result, err := scoreNodes(s.ctx, s.client, s.log, input.Nodes, pvcs, scs, pvcRequests, s.defaultDivisor)
+	result, err := scoreNodes(s.log, s.cache, input.Nodes, pvcs, scs, pvcRequests, s.defaultDivisor)
 	if err != nil {
 		s.log.Error(err, "[prioritize] unable to score nodes")
 		http.Error(w, "Bad Request.", http.StatusBadRequest)
@@ -90,20 +89,15 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 }
 
 func scoreNodes(
-	ctx context.Context,
-	cl client.Client,
 	log logger.Logger,
+	schedulerCache *cache.Cache,
 	nodes *corev1.NodeList,
-	pvcs map[string]corev1.PersistentVolumeClaim,
-	scs map[string]v1.StorageClass,
+	pvcs map[string]*corev1.PersistentVolumeClaim,
+	scs map[string]*v1.StorageClass,
 	pvcRequests map[string]PVCRequest,
 	divisor float64,
 ) ([]HostPriority, error) {
-	lvgs, err := GetLVMVolumeGroups(ctx, cl)
-	if err != nil {
-		return nil, err
-	}
-
+	lvgs := schedulerCache.GetAllLVG()
 	scLVGs, err := GetSortedLVGsFromStorageClasses(scs)
 	if err != nil {
 		return nil, err
@@ -152,13 +146,17 @@ func scoreNodes(
 				lvg := lvgs[commonLVG.Name]
 				switch pvcReq.DeviceType {
 				case thick:
-					freeSpace, err = getVGFreeSpace(&lvg)
+					freeSpace, err = getVGFreeSpace(lvg)
 					if err != nil {
 						errs <- err
 						return
 					}
-					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space %s", lvg.Name, freeSpace.String()))
-
+					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space before PVC reservation: %s", lvg.Name, freeSpace.String()))
+					reserved := schedulerCache.GetLVGReservedSpace(lvg.Name)
+					log.Trace(fmt.Sprintf("[scoreNodes] LVG %s PVC Space reservation: %s", lvg.Name, resource.NewQuantity(reserved, resource.BinarySI)))
+					spaceWithReserved := freeSpace.Value() - reserved
+					freeSpace = *resource.NewQuantity(spaceWithReserved, resource.BinarySI)
+					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space after PVC reservation: %s", lvg.Name, freeSpace.String()))
 				case thin:
 					thinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 					if thinPool == nil {
@@ -173,8 +171,8 @@ func scoreNodes(
 						errs <- err
 						return
 					}
-
 				}
+
 				lvgTotalSize, err := resource.ParseQuantity(lvg.Status.VGSize)
 				if err != nil {
 					errs <- err
