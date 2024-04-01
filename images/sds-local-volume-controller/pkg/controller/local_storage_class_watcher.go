@@ -20,6 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	v1alpha1 "sds-local-volume-controller/api/v1alpha1"
+	"sds-local-volume-controller/pkg/config"
+	"sds-local-volume-controller/pkg/logger"
+	"sds-local-volume-controller/pkg/monitoring"
+	"strings"
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	errors2 "k8s.io/apimachinery/pkg/api/errors"
@@ -27,11 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/strings/slices"
-	"reflect"
-	v1alpha1 "sds-local-volume-controller/api/v1alpha1"
-	"sds-local-volume-controller/pkg/config"
-	"sds-local-volume-controller/pkg/logger"
-	"sds-local-volume-controller/pkg/monitoring"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -39,8 +42,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/yaml"
-	"strings"
-	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -443,12 +444,18 @@ func reconcileLSCUpdateFunc(
 }
 
 func patchSCByLSC(sc *v1.StorageClass, lsc *v1alpha1.LocalStorageClass) *v1.StorageClass {
-	lscDefault := "false"
-	if lsc.Spec.IsDefault {
-		lscDefault = "true"
-	}
 
-	sc.Annotations[DefaultStorageClassAnnotationKey] = lscDefault
+	if lsc.Spec.IsDefault {
+		if sc.Annotations == nil {
+			sc.Annotations = make(map[string]string)
+		}
+		sc.Annotations[DefaultStorageClassAnnotationKey] = "true"
+	} else {
+		_, isDefault := sc.Annotations[DefaultStorageClassAnnotationKey]
+		if isDefault {
+			delete(sc.Annotations, DefaultStorageClassAnnotationKey)
+		}
+	}
 
 	return sc
 }
