@@ -100,7 +100,7 @@ func (c *Cache) DeleteLVG(lvgName string) {
 	delete(c.lvgs, lvgName)
 }
 
-func (c *Cache) AddPVCToFilterQueue(pvc *v1.PersistentVolumeClaim) {
+func (c *Cache) AddPVCToCacheQueue(pvc *v1.PersistentVolumeClaim) {
 	pvcKey := configurePVCKey(pvc)
 	c.pvcQueue[pvcKey] = pvc
 }
@@ -131,16 +131,6 @@ func (c *Cache) UpdatePVC(lvgName string, pvc *v1.PersistentVolumeClaim) error {
 	c.lvgs[lvgName].pvcs[pvcKey].nodeName = pvc.Annotations[SelectedNodeAnnotation]
 
 	return nil
-}
-
-func (c *Cache) TryGetPVC(lvgName string, pvc *v1.PersistentVolumeClaim) *v1.PersistentVolumeClaim {
-	pvcKey := configurePVCKey(pvc)
-
-	if c.lvgs[lvgName] == nil {
-		return nil
-	}
-
-	return c.lvgs[lvgName].pvcs[pvcKey].pvc
 }
 
 func (c *Cache) CheckPVCInQueue(pvc *v1.PersistentVolumeClaim) bool {

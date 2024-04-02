@@ -22,7 +22,7 @@ func RunPVCWatcherCacheController(
 	log logger.Logger,
 	schedulerCache *cache.Cache,
 ) error {
-	log.Info("[RunPVCWatcherCacheController] starts the work WITH EVENTS")
+	log.Info("[RunPVCWatcherCacheController] starts the work")
 
 	inf, err := mgr.GetCache().GetInformer(ctx, &v1.PersistentVolumeClaim{})
 	if err != nil {
@@ -43,45 +43,53 @@ func RunPVCWatcherCacheController(
 			switch shouldAddPVCToCache(schedulerCache, pvc) {
 			case true:
 				// Добавляем в queue, иначе фильтр не сможет получить ее из кеша
-				schedulerCache.AddPVCToFilterQueue(pvc)
-				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s was added to the cache", pvc.Name))
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s should be added to the cache", pvc.Name))
+				schedulerCache.AddPVCToCacheQueue(pvc)
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s was added to the cache queue", pvc.Name))
 			case false:
-				// Update Func (если рухнули на апдейте)
-				selectedNode, wasSelected := pvc.Annotations[cache.SelectedNodeAnnotation]
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s was found in the cache queue", pvc.Name))
+				selectedNodeName, wasSelected := pvc.Annotations[cache.SelectedNodeAnnotation]
 				if !wasSelected {
 					log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s should not be reconciled by Add Func due it has not selected node annotation", pvc.Name))
 					return
 				}
-				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s has node annotation, it will be reconciled in Add func", pvc.Name))
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s has selected node annotation, it will be reconciled in Add func", pvc.Name))
 
-				//cachedPvc := schedulerCache.TryGetPVC(pvc)
-				//if cachedPvc == nil {
-				//	log.Error(fmt.Errorf("PVC %s was not found in the cache", pvc.Name), fmt.Sprintf("[RunPVCWatcherCacheController] unable to get PVC %s from the cache", pvc.Name))
-				//	return
-				//}
-
-				lvgsOnTheNode := schedulerCache.GetLVGNamesByNodeName(selectedNode)
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to find common LVMVolumeGroup for the selected node %s and PVC %s", selectedNodeName, pvc.Name))
+				log.Trace(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s has been selected to the node %s", pvc.Name, selectedNodeName))
+				lvgsOnTheNode := schedulerCache.GetLVGNamesByNodeName(selectedNodeName)
+				for _, lvgName := range lvgsOnTheNode {
+					log.Trace(fmt.Sprintf("[RunPVCWatcherCacheController] LVMVolumeGroup %s belongs to the node %s", lvgName, selectedNodeName))
+				}
 				lvgsForPVC := schedulerCache.GetLVGNamesForPVC(pvc)
-
-				var lvgName string
-				for _, pvcLvg := range lvgsForPVC {
-					if slices.Contains(lvgsOnTheNode, pvcLvg) {
-						lvgName = pvcLvg
-					}
+				for _, lvgName := range lvgsForPVC {
+					log.Trace(fmt.Sprintf("[RunPVCWatcherCacheController] LVMVolumeGroup %s belongs to PVC %s", lvgName, pvc.Name))
 				}
 
-				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s has status phase: %s", pvc.Name, pvc.Status.Phase))
-				err = schedulerCache.UpdatePVC(lvgName, pvc)
+				var commonLVGName string
+				for _, pvcLvg := range lvgsForPVC {
+					if slices.Contains(lvgsOnTheNode, pvcLvg) {
+						commonLVGName = pvcLvg
+					}
+				}
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully found common LVMVolumeGroup %s for the selected node %s and PVC %s", commonLVGName, selectedNodeName, pvc.Name))
+
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to update PVC %s in the cache", pvc.Name))
+				log.Trace(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s has status phase: %s", pvc.Name, pvc.Status.Phase))
+				err = schedulerCache.UpdatePVC(commonLVGName, pvc)
 				if err != nil {
 					log.Error(err, fmt.Sprintf("[RunPVCWatcherCacheController] unable to update PVC %s in the cache", pvc.Name))
 					return
 				}
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully updated PVC %s in the cache", pvc.Name))
 
 				// У PVC выбралась нода, но она еще не в баунд (в кеше PVC без ноды на лвгхах)
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to remove unbound PVC %s space reservation from the cache", pvc.Name))
 				err = schedulerCache.RemoveUnboundedPVCSpaceReservation(log, pvc)
 				if err != nil {
 					log.Error(err, fmt.Sprintf("[RunPVCWatcherCacheController] unable to remove space reservation in the cache for unbounded PVC %s", pvc.Name))
 				}
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] succefully ended the unbound PVC %s space reservation from the cache", pvc.Name))
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
@@ -93,37 +101,48 @@ func RunPVCWatcherCacheController(
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] UpdateFunc starts the reconciliation for the PVC %s", pvc.Name))
 
-			selectedNode, wasSelected := pvc.Annotations[cache.SelectedNodeAnnotation]
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s was found in the cache queue", pvc.Name))
+			selectedNodeName, wasSelected := pvc.Annotations[cache.SelectedNodeAnnotation]
 			if !wasSelected {
 				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s should not be reconciled by Add Func due it has not selected node annotation", pvc.Name))
 				return
 			}
-			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s has node annotation, it will be reconciled in Update func", pvc.Name))
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s has selected node annotation, it will be reconciled in Add func", pvc.Name))
 
-			lvgsOnTheNode := schedulerCache.GetLVGNamesByNodeName(selectedNode)
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to find common LVMVolumeGroup for the selected node %s and PVC %s", selectedNodeName, pvc.Name))
+			log.Trace(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s has been selected to the node %s", pvc.Name, selectedNodeName))
+			lvgsOnTheNode := schedulerCache.GetLVGNamesByNodeName(selectedNodeName)
+			for _, lvgName := range lvgsOnTheNode {
+				log.Trace(fmt.Sprintf("[RunPVCWatcherCacheController] LVMVolumeGroup %s belongs to the node %s", lvgName, selectedNodeName))
+			}
 			lvgsForPVC := schedulerCache.GetLVGNamesForPVC(pvc)
+			for _, lvgName := range lvgsForPVC {
+				log.Trace(fmt.Sprintf("[RunPVCWatcherCacheController] LVMVolumeGroup %s belongs to PVC %s", lvgName, pvc.Name))
+			}
 
-			var lvgName string
+			var commonLVGName string
 			for _, pvcLvg := range lvgsForPVC {
 				if slices.Contains(lvgsOnTheNode, pvcLvg) {
-					lvgName = pvcLvg
+					commonLVGName = pvcLvg
 				}
 			}
-			log.Trace(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s uses LVG %s on node %s", pvc.Name, lvgName, selectedNode))
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully found common LVMVolumeGroup %s for the selected node %s and PVC %s", commonLVGName, selectedNodeName, pvc.Name))
+
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to update PVC %s in the cache", pvc.Name))
 			log.Trace(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s has status phase: %s", pvc.Name, pvc.Status.Phase))
-			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] updates cache PVC %s in LVG %s", pvc.Name, lvgName))
-			err = schedulerCache.UpdatePVC(lvgName, pvc)
+			err = schedulerCache.UpdatePVC(commonLVGName, pvc)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[RunPVCWatcherCacheController] unable to update PVC %s in the cache", pvc.Name))
 				return
 			}
-			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully updated cache PVC %s in LVG %s", pvc.Name, lvgName))
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully updated PVC %s in the cache", pvc.Name))
 
-			// У PVC выбралась нода, но она еще не в баунд (в кеше PVC без ноды на лвгхах)
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to remove unbound PVC %s space reservation from the cache", pvc.Name))
 			err = schedulerCache.RemoveUnboundedPVCSpaceReservation(log, pvc)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[RunPVCWatcherCacheController] unable to remove space reservation in the cache for unbounded PVC %s", pvc.Name))
 			}
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] succefully ended the unbound PVC %s space reservation from the cache", pvc.Name))
 		},
 		DeleteFunc: func(obj interface{}) {
 			log.Info("[RunPVCWatcherCacheController] Delete Func reconciliation starts")
@@ -134,8 +153,9 @@ func RunPVCWatcherCacheController(
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] DeleteFunc starts the reconciliation for the PVC %s", pvc.Name))
 
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s was removed from the cluster. It will be force deleted from the cache", pvc.Name))
 			schedulerCache.RemovePVCSpaceReservationForced(pvc)
-			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s was force removed from the cache", pvc.Name))
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully force removed PVC %s from the cache", pvc.Name))
 		},
 	})
 	if err != nil {
@@ -146,17 +166,16 @@ func RunPVCWatcherCacheController(
 }
 
 func shouldAddPVCToCache(schedulerCache *cache.Cache, pvc *v1.PersistentVolumeClaim) bool {
-	//_, selected := pvc.Annotations[cache.SelectedNodeAnnotation]
-	if pvc.Status.Phase != v1.ClaimBound {
-		return true
+	if pvc.Status.Phase == v1.ClaimBound {
+		return false
 	}
 
 	exist := schedulerCache.CheckPVCInQueue(pvc)
-	if !exist {
-		return true
+	if exist {
+		return false
 	}
 
-	return false
+	return true
 }
 
 //

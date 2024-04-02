@@ -137,11 +137,6 @@ func subMain(parentCtx context.Context) error {
 		return err
 	}
 
-	//cl, err := client.New(kConfig, client.Options{
-	//	Scheme:         scheme,
-	//	WarningHandler: client.WarningHandlerOptions{},
-	//})
-
 	schedulerCache := cache.NewCache(config.CacheSize)
 	log.Info("[subMain] scheduler cache was initialized")
 	log.Debug(fmt.Sprintf("[subMain] scheduler cache struct: %+v", schedulerCache))
