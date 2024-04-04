@@ -11,6 +11,7 @@ import (
 
 const (
 	pvcPerLVGCount         = 150
+	lvgsPerPVCCount        = 5
 	SelectedNodeAnnotation = "volume.kubernetes.io/selected-node"
 )
 
@@ -137,7 +138,6 @@ func (c *Cache) AddPVCToLVG(lvgName string, pvc *v1.PersistentVolumeClaim) error
 		c.log.Debug(fmt.Sprintf("PVC %s/%s has selected node anotation, selected node: %s", pvc.Namespace, pvc.Name, pvc.Annotations[SelectedNodeAnnotation]))
 		pvcKey := configurePVCKey(pvc)
 
-		// если уже выбрана нода, то нам нужно проверить, что переданная лвг принадлежит этой ноде и если так, то мы просто обновим ее в ней, если не принаджелит, то скипаем с варнингом
 		lvgsOnTheNode, found := c.nodeLVGs.Load(pvc.Annotations[SelectedNodeAnnotation])
 		if !found {
 			err := fmt.Errorf("no LVMVolumeGroups found for the node %s", pvc.Annotations[SelectedNodeAnnotation])
@@ -145,64 +145,34 @@ func (c *Cache) AddPVCToLVG(lvgName string, pvc *v1.PersistentVolumeClaim) error
 			return err
 		}
 
-		if slices2.Contains(lvgsOnTheNode.([]string), lvgName) {
-			c.log.Debug(fmt.Sprintf("[AddPVCToLVG] LVMVolumeGroup %s belongs to PVC %s/%s selected node %s", lvgName, pvc.Namespace, pvc.Name, pvc.Annotations[SelectedNodeAnnotation]))
-			lvgCh, found := c.lvgs.Load(lvgName)
-			if !found {
-				err := fmt.Errorf("the LVMVolumeGroup %s was not found in the cache", lvgName)
-				c.log.Error(err, fmt.Sprintf("[AddPVCToLVG] an error occured while trying to add PVC %s to the cache", pvcKey))
-				return err
-			}
-
-			pvcCh, found := lvgCh.(*lvgCache).pvcs[pvcKey]
-			if found {
-				c.log.Debug(fmt.Sprintf("[AddPVCToLVG] PVC %s cache has been already added to the LVMVolumeGroup %s. It will be updated", pvcKey, lvgName))
-				pvcCh.pvc = pvc
-			} else {
-				c.log.Debug(fmt.Sprintf("[AddPVCToLVG] PVC %s cache was not found in LVMVolumeGroup %s. It will be added", pvcKey, lvgName))
-				c.addNewPVC(lvgCh.(*lvgCache), pvc, lvgName)
-			}
-		} else {
+		if !slices2.Contains(lvgsOnTheNode.([]string), lvgName) {
 			c.log.Debug(fmt.Sprintf("[AddPVCToLVG] LVMVolumeGroup %s does not belong to PVC %s/%s selected node %s. It will be skipped", lvgName, pvc.Namespace, pvc.Name, pvc.Annotations[SelectedNodeAnnotation]))
+			return nil
 		}
 
-		//lvgsForPVC, found := c.pvcLVGs.Load(pvcKey)
-		//if !found {
-		//	c.log.Warning(fmt.Sprintf("LVMVolumeGroups were not found in the cache for PVC %s. The selected node check will be skipped, and ", pvcKey))
-		//	return err
-		//}
-		//
-		//c.log.Trace(fmt.Sprintf("[AddPVCToLVG] PVC %s has %d LVMVolumeGroups in the cache: %s", pvcKey, len(lvgsForPVC.([]string)), strings.Join(lvgsForPVC.([]string), ",")))
-		//for _, pvcLvgName := range lvgsForPVC.([]string) {
-		//	lvgCh, found := c.lvgs.Load(pvcLvgName)
-		//	if !found {
-		//		err := fmt.Errorf("LVMVolumeGroup %s was not found in the cache", pvcLvgName)
-		//		c.log.Error(err, fmt.Sprintf("[AddPVCToLVG] an error occured while trying to add PVC %s to the cache", pvcKey))
-		//		return err
-		//	}
-		//
-		//	if pvcCh, exist := lvgCh.(*lvgCache).pvcs[pvcKey]; exist {
-		//		if pvcCh == nil {
-		//			err := fmt.Errorf("cache struct is not initialized for PVC %s", pvcKey)
-		//			c.log.Error(err, fmt.Sprintf("[AddPVCToLVG] an error occured while trying to add PVC %s to the cache", pvcKey))
-		//			return err
-		//		}
-		//
-		//		if pvcCh.selectedNode != "" &&
-		//			pvcCh.selectedNode != pvc.Annotations[SelectedNodeAnnotation] {
-		//			c.log.Warning(fmt.Sprintf("[AddPVCToLVG] PVC %s in the cache has selected node %s, but selected node in the annotations is %s. Cached PVC selected nodename will be updated", pvcKey, pvcCh.selectedNode, pvc.Annotations[SelectedNodeAnnotation]))
-		//			targetLVGName := c.FindLVGForPVCBySelectedNode(pvc, pvc.Annotations[SelectedNodeAnnotation])
-		//			if targetLVGName != "" {
-		//				c.UpdatePVC(targetLVGName, pvc)
-		//			}
-		//		}
-		//	}
-		//}
+		c.log.Debug(fmt.Sprintf("[AddPVCToLVG] LVMVolumeGroup %s belongs to PVC %s/%s selected node %s", lvgName, pvc.Namespace, pvc.Name, pvc.Annotations[SelectedNodeAnnotation]))
+		lvgCh, found := c.lvgs.Load(lvgName)
+		if !found {
+			err := fmt.Errorf("the LVMVolumeGroup %s was not found in the cache", lvgName)
+			c.log.Error(err, fmt.Sprintf("[AddPVCToLVG] an error occured while trying to add PVC %s to the cache", pvcKey))
+			return err
+		}
+
+		pvcCh, found := lvgCh.(*lvgCache).pvcs[pvcKey]
+		if found {
+			c.log.Debug(fmt.Sprintf("[AddPVCToLVG] PVC %s cache has been already added to the LVMVolumeGroup %s. It will be updated", pvcKey, lvgName))
+			pvcCh.pvc = pvc
+		} else {
+			c.log.Debug(fmt.Sprintf("[AddPVCToLVG] PVC %s cache was not found in LVMVolumeGroup %s. It will be added", pvcKey, lvgName))
+			c.addNewPVC(lvgCh.(*lvgCache), pvc, lvgName)
+		}
 
 		return nil
 	}
 
 	pvcKey := configurePVCKey(pvc)
+
+	c.log.Debug(fmt.Sprintf("[AddPVCToLVG] add new PVC %s cache to the LVMVolumeGroup %s", pvcKey, lvgName))
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		return fmt.Errorf("the LVMVolumeGroup %s was not found in the cache", lvgName)
@@ -223,14 +193,6 @@ func (c *Cache) AddPVCToLVG(lvgName string, pvc *v1.PersistentVolumeClaim) error
 
 	c.log.Debug(fmt.Sprintf("new cache will be initialized for PVC %s in LVMVolumeGroup %s", pvcKey, lvgName))
 	c.addNewPVC(lvgCh.(*lvgCache), pvc, lvgName)
-	//lvgCh.(*lvgCache).pvcs[pvcKey] = &pvcCache{pvc: pvc, selectedNode: ""}
-	//
-	//lvgsForPVC, _ := c.pvcLVGs.Load(pvcKey)
-	//if lvgsForPVC == nil {
-	//	lvgsForPVC = make([]string, 0, 5)
-	//}
-	//lvgsForPVC = append(lvgsForPVC.([]string), lvgName)
-	//c.pvcLVGs.Store(pvcKey, lvgsForPVC)
 
 	return nil
 }
@@ -241,8 +203,9 @@ func (c *Cache) addNewPVC(lvgCh *lvgCache, pvc *v1.PersistentVolumeClaim, lvgNam
 
 	lvgsForPVC, found := c.pvcLVGs.Load(pvcKey)
 	if !found || lvgsForPVC == nil {
-		lvgsForPVC = make([]string, 0)
+		lvgsForPVC = make([]string, 0, lvgsPerPVCCount)
 	}
+
 	c.log.Trace(fmt.Sprintf("[addNewPVC] LVMVolumeGroups from the cache for PVC %s before append: %v", pvcKey, lvgsForPVC))
 	lvgsForPVC = append(lvgsForPVC.([]string), lvgName)
 	c.log.Trace(fmt.Sprintf("[addNewPVC] LVMVolumeGroups from the cache for PVC %s after append: %v", pvcKey, lvgsForPVC))
@@ -349,11 +312,6 @@ func (c *Cache) RemoveSpaceReservationForPVCWithSelectedNode(pvc *v1.PersistentV
 	}
 
 	for _, lvgName := range lvgArray.([]string) {
-		//// this check is needed in case some LVMVolumeGroup was removed from PVC lvgArray due to wipe PVC reservation space
-		//if lvgName == "" {
-		//	continue
-		//}
-
 		lvgCh, found := c.lvgs.Load(lvgName)
 		if !found || lvgCh == nil {
 			err := fmt.Errorf("no cache found for the LVMVolumeGroup %s", lvgName)
@@ -444,9 +402,9 @@ func (c *Cache) FindLVGForPVCBySelectedNode(pvc *v1.PersistentVolumeClaim, nodeN
 
 func (c *Cache) PrintTheCacheTraceLog() {
 	c.log.Trace("*******************CACHE BEGIN*******************")
-	c.log.Trace("[LVMVolumeGroups]")
+	c.log.Trace("[LVMVolumeGroups BEGIN]")
 	c.lvgs.Range(func(lvgName, lvgCh any) bool {
-		c.log.Trace(fmt.Sprintf("[LVMVolumeGroup: %s]", lvgName))
+		c.log.Trace(fmt.Sprintf("[%s]", lvgName))
 
 		for pvcName, pvcCh := range lvgCh.(*lvgCache).pvcs {
 			c.log.Trace(fmt.Sprintf("      PVC %s, selected node: %s", pvcName, pvcCh.selectedNode))
@@ -455,8 +413,8 @@ func (c *Cache) PrintTheCacheTraceLog() {
 		return true
 	})
 
-	c.log.Trace("")
-	c.log.Trace("[PVC and LVG]")
+	c.log.Trace("[LVMVolumeGroups ENDS]")
+	c.log.Trace("[PVC and LVG BEGINS]")
 	c.pvcLVGs.Range(func(pvcName, lvgs any) bool {
 		c.log.Trace(fmt.Sprintf("[PVC: %s]", pvcName))
 
@@ -467,8 +425,8 @@ func (c *Cache) PrintTheCacheTraceLog() {
 		return true
 	})
 
-	c.log.Trace("")
-	c.log.Trace("[Node and LVG]")
+	c.log.Trace("[PVC and LVG ENDS]")
+	c.log.Trace("[Node and LVG BEGINS]")
 	c.nodeLVGs.Range(func(nodeName, lvgs any) bool {
 		c.log.Trace(fmt.Sprintf("[Node: %s]", nodeName))
 
@@ -478,6 +436,7 @@ func (c *Cache) PrintTheCacheTraceLog() {
 
 		return true
 	})
+	c.log.Trace("[Node and LVG ENDS]")
 	c.log.Trace("*******************CACHE END*******************")
 }
 

@@ -77,16 +77,16 @@ func RunLVGWatcherCacheController(
 				log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to get all PVC for the LVMVolumeGroup %s", lvg.Name))
 			}
 			for _, pvc := range pvcs {
-				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] cached PVC %s belongs to LVMVolumeGroup %s", pvc.Name, lvg.Name))
+				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] cached PVC %s/%s belongs to LVMVolumeGroup %s", pvc.Namespace, pvc.Name, lvg.Name))
 				if pvc.Status.Phase == v1.ClaimBound {
-					log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] cached PVC %s has Status.Phase Bound. It will be removed from the cache for LVMVolumeGroup %s", pvc.Name, lvg.Name))
+					log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] cached PVC %s/%s has Status.Phase Bound. It will be removed from the cache for LVMVolumeGroup %s", pvc.Namespace, pvc.Name, lvg.Name))
 					err = cache.RemoveBoundedPVCSpaceReservation(lvg.Name, pvc)
 					if err != nil {
-						log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to remove PVC %s from the cache for the LVMVolumeGroup %s", pvc.Name, lvg.Name))
+						log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to remove PVC %s/%s from the cache for the LVMVolumeGroup %s", pvc.Namespace, pvc.Name, lvg.Name))
 						continue
 					}
 
-					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s was removed from the cache for LVMVolumeGroup %s", pvc.Name, lvg.Name))
+					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s was removed from the cache for LVMVolumeGroup %s", pvc.Namespace, pvc.Name, lvg.Name))
 				}
 			}
 
@@ -149,11 +149,11 @@ func RunLVGWatcherCacheController(
 					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s from the cache has Status.Phase Bound. It will be removed from the reserved space in the LVMVolumeGroup %s", pvc.Namespace, pvc.Name, newLvg.Name))
 					err = cache.RemoveBoundedPVCSpaceReservation(newLvg.Name, pvc)
 					if err != nil {
-						log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to remove PVC %s from the cache in the LVMVolumeGroup %s", pvc.Name, newLvg.Name))
+						log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to remove PVC %s/%s from the cache in the LVMVolumeGroup %s", pvc.Namespace, pvc.Name, newLvg.Name))
 						continue
 					}
 
-					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s was removed from the LVMVolumeGroup %s in the cache", pvc.Name, newLvg.Name))
+					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s was removed from the LVMVolumeGroup %s in the cache", pvc.Namespace, pvc.Name, newLvg.Name))
 				}
 			}
 
