@@ -132,7 +132,8 @@ func (c *Cache) AddPVCToLVG(lvgName string, pvc *v1.PersistentVolumeClaim) error
 		return nil
 	}
 
-	// this case will be triggered if the controller recovers after fail and finds some pending pvcs with selected nodes
+	// basically this case will be triggered if the controller recovers after fail and finds some pending pvcs with selected nodes,
+	// but also it might be true if kube scheduler will retry the request for the same PVC
 	c.log.Trace(fmt.Sprintf("[AddPVCToLVG] PVC %s/%s annotations: %v", pvc.Namespace, pvc.Name, pvc.Annotations))
 	if pvc.Annotations[SelectedNodeAnnotation] != "" {
 		c.log.Debug(fmt.Sprintf("PVC %s/%s has selected node anotation, selected node: %s", pvc.Namespace, pvc.Name, pvc.Annotations[SelectedNodeAnnotation]))
@@ -180,14 +181,13 @@ func (c *Cache) AddPVCToLVG(lvgName string, pvc *v1.PersistentVolumeClaim) error
 
 	if pvcCh, found := lvgCh.(*lvgCache).pvcs[pvcKey]; found {
 		c.log.Debug(fmt.Sprintf("[AddPVCToLVG] PVC %s has been already added to the cache for the LVMVolumeGroup %s. It will be updated", pvcKey, lvgName))
-
 		if pvcCh == nil {
 			err := fmt.Errorf("cache is not initialized for PVC %s", pvcKey)
 			c.log.Error(err, fmt.Sprintf("[AddPVCToLVG] an error occured while trying to add PVC %s to the cache", pvcKey))
 			return err
 		}
 
-		pvcCh.pvc = pvc
+		c.UpdatePVC(lvgName, pvc)
 		return nil
 	}
 
@@ -229,6 +229,15 @@ func (c *Cache) UpdatePVC(lvgName string, pvc *v1.PersistentVolumeClaim) error {
 	lvgCh.(*lvgCache).pvcs[pvcKey].pvc = pvc
 	lvgCh.(*lvgCache).pvcs[pvcKey].selectedNode = pvc.Annotations[SelectedNodeAnnotation]
 	c.log.Debug(fmt.Sprintf("[UpdatePVC] successfully updated PVC %s with selected node %s in the cache for LVMVolumeGroup %s", pvcKey, pvc.Annotations[SelectedNodeAnnotation], lvgName))
+
+	lvgsForPVC, found := c.pvcLVGs.Load(pvcKey)
+	if lvgsForPVC == nil || !found {
+		lvgsForPVC = make([]string, 0, lvgsPerPVCCount)
+	}
+
+	if !slices2.Contains(lvgsForPVC.([]string), lvgName) {
+		lvgsForPVC = append(lvgsForPVC.([]string), lvgName)
+	}
 
 	return nil
 }

@@ -204,8 +204,6 @@ func RunPVCWatcherCacheController(
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully removed space reservation for PVC %s/%s with selected node", pvc.Namespace, pvc.Name))
 			schedulerCache.PrintTheCacheTraceLog()
 
-			//TODO: перенос удаления PVC в статусе Bound из кэша в данный контроллер вместо текущего в LVGWatcher
-
 			log.Info("[RunPVCWatcherCacheController] Update Func reconciliation ends")
 		},
 		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {

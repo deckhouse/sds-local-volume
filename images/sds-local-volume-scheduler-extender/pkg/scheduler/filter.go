@@ -141,11 +141,11 @@ func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, sche
 						return err
 					}
 
-					log.Trace(fmt.Sprintf("[populateCache] LVMVolumeGroups from Storage Class %s for PVC %s: %+v", sc.Name, volume.PersistentVolumeClaim.ClaimName, lvgsForPVC))
+					log.Trace(fmt.Sprintf("[populateCache] LVMVolumeGroups from Storage Class %s for PVC %s/%s: %+v", sc.Name, pvc.Namespace, pvc.Name, lvgsForPVC))
 					for _, lvg := range lvgsForPVC {
 						if slices.Contains(lvgNamesForTheNode, lvg.Name) {
-							log.Trace(fmt.Sprintf("[populateCache] PVC %s will reserve space in LVMVolumeGroup %s cache", volume.PersistentVolumeClaim.ClaimName, lvg.Name))
-							err = schedulerCache.AddPVCToLVG(lvg.Name, pvcs[volume.PersistentVolumeClaim.ClaimName])
+							log.Trace(fmt.Sprintf("[populateCache] PVC %s/%s will reserve space in LVMVolumeGroup %s cache", pvc.Namespace, pvc.Name, lvg.Name))
+							err = schedulerCache.AddPVCToLVG(lvg.Name, pvc)
 							if err != nil {
 								return err
 							}
@@ -254,9 +254,10 @@ func filterNodes(
 
 	usedLVGs := RemoveUnusedLVGs(lvgs, scLVGs)
 	for _, lvg := range usedLVGs {
-		log.Trace(fmt.Sprintf("[filterNodes] the LVMVolumeGroup %s is actually used", lvg.Name))
+		log.Trace(fmt.Sprintf("[filterNodes] the LVMVolumeGroup %s is actually used. VG size: %s, allocatedSize: %s", lvg.Name, lvg.Status.VGSize, lvg.Status.AllocatedSize))
 	}
-	lvgsThickFree, err := getLVGThickFreeSpaces(usedLVGs)
+
+	lvgsThickFree, err := getLVGThickFreeSpaces(log, usedLVGs)
 	if err != nil {
 		return nil, err
 	}
@@ -404,14 +405,16 @@ func filterNodes(
 	return result, nil
 }
 
-func getLVGThickFreeSpaces(lvgs map[string]*v1alpha1.LvmVolumeGroup) (map[string]int64, error) {
+func getLVGThickFreeSpaces(log logger.Logger, lvgs map[string]*v1alpha1.LvmVolumeGroup) (map[string]int64, error) {
 	result := make(map[string]int64, len(lvgs))
 
 	for _, lvg := range lvgs {
+		log.Debug(fmt.Sprintf("[getLVGThickFreeSpaces] tries to count free VG space for LVMVolumeGroup %s", lvg.Name))
 		free, err := getVGFreeSpace(lvg)
 		if err != nil {
 			return nil, err
 		}
+		log.Debug(fmt.Sprintf("[getLVGThickFreeSpaces] successfully counted free VG space for LVMVolumeGroup %s", lvg.Name))
 
 		result[lvg.Name] = free.Value()
 	}
