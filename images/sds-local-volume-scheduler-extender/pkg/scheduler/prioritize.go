@@ -42,9 +42,14 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pvcs := getUsedPVC(s.log, s.cache, input.Pod)
+	pvcs, err := getUsedPVC(s.ctx, s.client, s.log, input.Pod)
 	if err != nil {
 		s.log.Error(err, "[prioritize] unable to get PVC from the Pod")
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if len(pvcs) == 0 {
+		s.log.Error(fmt.Errorf("no PVC was found for pod %s in namespace %s", input.Pod.Name, input.Pod.Namespace), fmt.Sprintf("[filter] unable to get used PVC for Pod %s", input.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -130,7 +135,6 @@ func scoreNodes(
 
 			lvgsFromNode := nodeLVGs[node.Name]
 			var totalFreeSpaceLeft int64
-			// TODO: change pvs to vgs
 			for _, pvc := range pvcs {
 				pvcReq := pvcRequests[pvc.Name]
 				lvgsFromSC := scLVGs[*pvc.Spec.StorageClassName]
@@ -152,8 +156,12 @@ func scoreNodes(
 						return
 					}
 					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space before PVC reservation: %s", lvg.Name, freeSpace.String()))
-					reserved := schedulerCache.GetLVGReservedSpace(lvg.Name)
-					log.Trace(fmt.Sprintf("[scoreNodes] LVG %s PVC Space reservation: %s", lvg.Name, resource.NewQuantity(reserved, resource.BinarySI)))
+					reserved, err := schedulerCache.GetLVGReservedSpace(lvg.Name)
+					if err != nil {
+						log.Error(err, fmt.Sprintf("[scoreNodes] unable to count reserved space for the LVMVolumeGroup %s", lvg.Name))
+						continue
+					}
+					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s PVC Space reservation: %s", lvg.Name, resource.NewQuantity(reserved, resource.BinarySI)))
 					spaceWithReserved := freeSpace.Value() - reserved
 					freeSpace = *resource.NewQuantity(spaceWithReserved, resource.BinarySI)
 					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space after PVC reservation: %s", lvg.Name, freeSpace.String()))

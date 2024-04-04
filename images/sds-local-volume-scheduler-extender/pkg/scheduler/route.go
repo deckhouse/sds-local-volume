@@ -78,6 +78,8 @@ func status(w http.ResponseWriter, r *http.Request) {
 func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
+	s.cache.PrintTheCacheTraceLog()
+
 	result := make(map[string][]struct {
 		pvcName  string
 		nodeName string
@@ -86,7 +88,10 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 	lvgs := s.cache.GetAllLVG()
 	//s.log.Info(fmt.Sprintf("LVG from cache: %v", lvgs))
 	for _, lvg := range lvgs {
-		pvcs := s.cache.GetAllPVCByLVG(lvg.Name)
+		pvcs, err := s.cache.GetAllPVCForLVG(lvg.Name)
+		if err != nil {
+			s.log.Error(err, "something bad")
+		}
 		//for _, pvc := range pvcs {
 		//	s.log.Trace(fmt.Sprintf("LVG %s has PVC from cache: %v", lvg, pvc.Name))
 		//}
@@ -97,10 +102,14 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 		}, 0)
 
 		for _, pvc := range pvcs {
+			selectedNode, err := s.cache.GetPVCSelectedNodeName(lvg.Name, pvc)
+			if err != nil {
+				s.log.Error(err, "something bad")
+			}
 			result[lvg.Name] = append(result[lvg.Name], struct {
 				pvcName  string
 				nodeName string
-			}{pvcName: pvc.Name, nodeName: s.cache.GetPVCNodeName(lvg.Name, pvc)})
+			}{pvcName: pvc.Name, nodeName: selectedNode})
 		}
 	}
 	//s.log.Info(fmt.Sprintf("Result len: %d", len(result)))

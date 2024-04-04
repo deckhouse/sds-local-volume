@@ -67,16 +67,15 @@ func RunLVGWatcherCacheController(
 				log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] cache was updated for the LVMVolumeGroup %s", lvg.Name))
 			} else {
 				log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] the LVMVolumeGroup %s was not found. It will be added to the cache", lvg.Name))
-				err = cache.AddLVG(lvg)
-				if err != nil {
-					log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to add the LVMVolumeGroup %s to the cache", lvg.Name))
-				}
-
+				cache.AddLVG(lvg)
 				log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] cache was added for the LVMVolumeGroup %s", lvg.Name))
 			}
 
 			log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] starts to clear the cache for the LVMVolumeGroup %s", lvg.Name))
-			pvcs := cache.GetAllPVCByLVG(lvg.Name)
+			pvcs, err := cache.GetAllPVCForLVG(lvg.Name)
+			if err != nil {
+				log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to get all PVC for the LVMVolumeGroup %s", lvg.Name))
+			}
 			for _, pvc := range pvcs {
 				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] cached PVC %s belongs to LVMVolumeGroup %s", pvc.Name, lvg.Name))
 				if pvc.Status.Phase == v1.ClaimBound {
@@ -139,12 +138,15 @@ func RunLVGWatcherCacheController(
 			}
 			log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] successfully updated the LVMVolumeGroup %s in the cache", newLvg.Name))
 
-			cachedPvcs := cache.GetAllPVCByLVG(newLvg.Name)
-			for _, pvc := range cachedPvcs {
-				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s from the cache belongs to LVMVolumeGroup %s", pvc.Name, newLvg.Name))
-				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s has status phase %s", pvc.Name, pvc.Status.Phase))
+			cachedPVCs, err := cache.GetAllPVCForLVG(newLvg.Name)
+			if err != nil {
+				log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to get all PVC for the LVMVolumeGroup %s", newLvg.Name))
+			}
+			for _, pvc := range cachedPVCs {
+				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s from the cache belongs to LVMVolumeGroup %s", pvc.Namespace, pvc.Name, newLvg.Name))
+				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s has status phase %s", pvc.Namespace, pvc.Name, pvc.Status.Phase))
 				if pvc.Status.Phase == v1.ClaimBound {
-					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s from the cache has Status.Phase Bound. It will be removed from the reserved space in the LVMVolumeGroup %s", pvc.Name, newLvg.Name))
+					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s from the cache has Status.Phase Bound. It will be removed from the reserved space in the LVMVolumeGroup %s", pvc.Namespace, pvc.Name, newLvg.Name))
 					err = cache.RemoveBoundedPVCSpaceReservation(newLvg.Name, pvc)
 					if err != nil {
 						log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to remove PVC %s from the cache in the LVMVolumeGroup %s", pvc.Name, newLvg.Name))

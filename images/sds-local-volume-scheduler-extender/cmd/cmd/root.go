@@ -137,9 +137,8 @@ func subMain(parentCtx context.Context) error {
 		return err
 	}
 
-	schedulerCache := cache.NewCache(config.CacheSize)
+	schedulerCache := cache.NewCache(*log)
 	log.Info("[subMain] scheduler cache was initialized")
-	log.Debug(fmt.Sprintf("[subMain] scheduler cache struct: %+v", schedulerCache))
 
 	h, err := scheduler.NewHandler(ctx, mgr.GetClient(), *log, schedulerCache, config.DefaultDivisor)
 	if err != nil {
@@ -153,7 +152,7 @@ func subMain(parentCtx context.Context) error {
 	}
 	log.Info(fmt.Sprintf("[subMain] successfully ran %s controller", controller.LVGWatcherCacheCtrlName))
 
-	err = controller.RunPVCWatcherCacheController(ctx, mgr, *log, schedulerCache)
+	err = controller.RunPVCWatcherCacheController(mgr, *log, schedulerCache)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[subMain] unable to run %s controller", controller.PVCWatcherCacheCtrlName))
 	}
