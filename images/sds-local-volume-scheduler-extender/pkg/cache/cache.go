@@ -159,10 +159,14 @@ func (c *Cache) AddPVCToLVG(lvgName string, pvc *v1.PersistentVolumeClaim) error
 			return err
 		}
 
-		pvcCh, found := lvgCh.(*lvgCache).pvcs[pvcKey]
+		_, found = lvgCh.(*lvgCache).pvcs[pvcKey]
 		if found {
 			c.log.Debug(fmt.Sprintf("[AddPVCToLVG] PVC %s cache has been already added to the LVMVolumeGroup %s. It will be updated", pvcKey, lvgName))
-			pvcCh.pvc = pvc
+			err := c.UpdatePVC(lvgName, pvc)
+			if err != nil {
+				c.log.Error(err, fmt.Sprintf("[AddPVCToLVG] an error occured while trying to add PVC %s to the cache", pvcKey))
+				return err
+			}
 		} else {
 			c.log.Debug(fmt.Sprintf("[AddPVCToLVG] PVC %s cache was not found in LVMVolumeGroup %s. It will be added", pvcKey, lvgName))
 			c.addNewPVC(lvgCh.(*lvgCache), pvc, lvgName)
@@ -187,7 +191,11 @@ func (c *Cache) AddPVCToLVG(lvgName string, pvc *v1.PersistentVolumeClaim) error
 			return err
 		}
 
-		c.UpdatePVC(lvgName, pvc)
+		err := c.UpdatePVC(lvgName, pvc)
+		if err != nil {
+			c.log.Error(err, fmt.Sprintf("[AddPVCToLVG] an error occured while trying to add PVC %s to the cache", pvcKey))
+			return err
+		}
 		return nil
 	}
 
@@ -222,7 +230,11 @@ func (c *Cache) UpdatePVC(lvgName string, pvc *v1.PersistentVolumeClaim) error {
 
 	if lvgCh.(*lvgCache).pvcs[pvcKey] == nil {
 		c.log.Warning(fmt.Sprintf("[UpdatePVC] PVC %s was not found in the cache for the LVMVolumeGroup %s. It will be added", pvcKey, lvgName))
-		c.AddPVCToLVG(lvgName, pvc)
+		err := c.AddPVCToLVG(lvgName, pvc)
+		if err != nil {
+			c.log.Error(err, fmt.Sprintf("[UpdatePVC] an error occurred while trying to update the PVC %s", pvcKey))
+			return err
+		}
 		return nil
 	}
 

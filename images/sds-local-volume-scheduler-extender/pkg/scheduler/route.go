@@ -31,6 +31,7 @@ type scheduler struct {
 	client         client.Client
 	ctx            context.Context
 	cache          *cache.Cache
+	requestCount   int
 }
 
 func (s *scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +52,10 @@ func (s *scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.log.Debug("[ServeHTTP] cache route starts handling the request")
 		s.getCache(w, r)
 		s.log.Debug("[ServeHTTP] cache route ends handling the request")
+	case "/stat":
+		s.log.Debug("[ServeHTTP] stat route starts handling the request")
+		s.getCacheStat(w, r)
+		s.log.Debug("[ServeHTTP] stat route ends handling the request")
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}
@@ -115,6 +120,27 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 	//s.log.Info(fmt.Sprintf("Result len: %d", len(result)))
 
 	_, err := w.Write([]byte(fmt.Sprintf("%+v", result)))
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("unable to write the cache"))
+	}
+}
+
+func (s *scheduler) getCacheStat(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+
+	pvcTotalCount := 0
+	lvgs := s.cache.GetAllLVG()
+	for _, lvg := range lvgs {
+		pvcs, err := s.cache.GetAllPVCForLVG(lvg.Name)
+		if err != nil {
+			s.log.Error(err, "something bad")
+		}
+
+		pvcTotalCount += len(pvcs)
+	}
+
+	_, err := w.Write([]byte(fmt.Sprintf("Filter request count: %d , PVC Count from ALL LVG: %d", s.requestCount, pvcTotalCount)))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("unable to write the cache"))
