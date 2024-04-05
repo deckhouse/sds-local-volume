@@ -186,6 +186,8 @@ func filterNodes(
 		return nil, err
 	}
 	log.Trace(fmt.Sprintf("[filterNodes] LVGs Thick FreeSpace: %+v", lvgsThickFree))
+	lvgsThickFreeMutex := &sync.RWMutex{}
+
 	scLVGs, err := getSortedLVGsFromStorageClasses(scs)
 	if err != nil {
 		return nil, err
@@ -201,13 +203,16 @@ func filterNodes(
 	}
 
 	commonNodes, err := getCommonNodesByStorageClasses(scs, nodeLVGs)
+	for nodeName := range commonNodes {
+		log.Trace(fmt.Sprintf("[filterNodes] common node %s", nodeName))
+	}
 
 	result := &ExtenderFilterResult{
 		Nodes:       &corev1.NodeList{},
 		FailedNodes: FailedNodesMap{},
 	}
+	failedNodesMapMutex := &sync.Mutex{}
 
-	mutex := &sync.RWMutex{}
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodes.Items))
 	errs := make(chan error, len(nodes.Items)*len(pvcs))
@@ -222,7 +227,9 @@ func filterNodes(
 
 			if _, common := commonNodes[node.Name]; !common {
 				log.Debug(fmt.Sprintf("[filterNodes] node %s is not common for used Storage Classes", node.Name))
+				failedNodesMapMutex.Lock()
 				result.FailedNodes[node.Name] = "node is not common for used Storage Classes"
+				failedNodesMapMutex.Unlock()
 				return
 			}
 
@@ -232,34 +239,35 @@ func filterNodes(
 			for _, pvc := range pvcs {
 				pvcReq := pvcRequests[pvc.Name]
 				lvgsFromSC := scLVGs[*pvc.Spec.StorageClassName]
-				matchedLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
-				if matchedLVG == nil {
+				commonLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
+				if commonLVG == nil {
 					err = errors.New(fmt.Sprintf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
 					errs <- err
 					return
 				}
+				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s is common for storage class %s and node %s", commonLVG.Name, *pvc.Spec.StorageClassName, node.Name))
 
 				switch pvcReq.DeviceType {
 				case thick:
-					lvg := lvgs[matchedLVG.Name]
-					mutex.RLock()
+					lvg := lvgs[commonLVG.Name]
+					lvgsThickFreeMutex.RLock()
 					freeSpace := lvgsThickFree[lvg.Name]
-					mutex.RUnlock()
+					lvgsThickFreeMutex.RUnlock()
 
-					log.Trace(fmt.Sprintf("[filterNodes] Thick free space: %d, PVC requested space: %d", freeSpace, pvcReq.RequestedSize))
+					log.Trace(fmt.Sprintf("[filterNodes] LVMVolumeGroup %s Thick free space: %s, PVC requested space: %s", lvg.Name, resource.NewQuantity(freeSpace, resource.BinarySI), resource.NewQuantity(pvcReq.RequestedSize, resource.BinarySI)))
 					if freeSpace < pvcReq.RequestedSize {
 						hasEnoughSpace = false
 						break
 					}
 
-					mutex.Lock()
+					lvgsThickFreeMutex.Lock()
 					lvgsThickFree[lvg.Name] -= pvcReq.RequestedSize
-					mutex.Unlock()
+					lvgsThickFreeMutex.Unlock()
 				case thin:
-					lvg := lvgs[matchedLVG.Name]
-					targetThinPool := findMatchedThinPool(lvg.Status.ThinPools, matchedLVG.Thin.PoolName)
+					lvg := lvgs[commonLVG.Name]
+					targetThinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 					if targetThinPool == nil {
-						err = fmt.Errorf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s; node: %s; lvg thin pools: %+v; thin.poolName from StorageClass: %s", *pvc.Spec.StorageClassName, node.Name, lvg.Status.ThinPools, matchedLVG.Thin.PoolName)
+						err = fmt.Errorf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s; node: %s; lvg thin pools: %+v; thin.poolName from StorageClass: %s", *pvc.Spec.StorageClassName, node.Name, lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 						errs <- err
 						return
 					}
@@ -283,7 +291,9 @@ func filterNodes(
 			}
 
 			if !hasEnoughSpace {
+				failedNodesMapMutex.Lock()
 				result.FailedNodes[node.Name] = "not enough space"
+				failedNodesMapMutex.Unlock()
 				return
 			}
 
