@@ -5,8 +5,8 @@ description: "The sds-local-volume module: FAQ"
 
 ## What is difference between LVM and LVMThin?
 
-- LVM is simpler and has high performance that is similar to that of native disk drives, but it does not support snapshots;
-- LVMThin allows for snapshots and overprovisioning; however, it is slower than LVM.
+- LVM is simpler and has high performance that is similar to that of native disk drives;
+- LVMThin allows overprovisioning; however, it is slower than LVM.
 
 ## How do I set the default StorageClass?
 

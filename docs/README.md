@@ -4,7 +4,7 @@ description: "The sds-local-volume module: General Concepts and Principles."
 moduleStatus: experimental
 ---
 
-This module manages local block storage based on `LVM`. The module allows you to create a `StorageClass` in `Kubernetes` by creating [Kubernetes custom resources](./cr.html). 
+This module manages local block storage based on `LVM`. The module allows you to create a `StorageClass` in `Kubernetes` by creating [Kubernetes custom resources](./cr.html) `LocalStorageClass` (see example below). 
 To create a `Storage Class`, you will need the `LVMVolumeGroup` configured on the cluster nodes. The `LVM` configuration is done by the [sds-node-configurator](../../sds-node-configurator/) module.
 > **Caution!** Before enabling the `sds-local-volume` module, you must enable the `sds-node-configurator` module.
 >

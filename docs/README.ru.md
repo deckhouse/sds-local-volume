@@ -4,7 +4,7 @@ description: "Модуль sds-local-volume: общие концепции и п
 moduleStatus: experimental
 ---
 
-Модуль управляет локальным блочным хранилищем на базе `LVM`. Модуль позволяет создавать `StorageClass` в `Kubernetes` через создание [пользовательских ресурсов Kubernetes](./cr.html).
+Модуль управляет локальным блочным хранилищем на базе `LVM`. Модуль позволяет создавать `StorageClass` в `Kubernetes` через создание [пользовательских ресурсов Kubernetes](./cr.html) `LocalStorageClass` (пример создания ниже).
 Для создания `Storage Class` потребуются настроенные на узлах кластера `LVMVolumeGroup`. Настройка `LVM` осуществляется модулем [sds-node-configurator](../../sds-node-configurator/).
 > **Внимание!** Перед включением модуля `sds-local-volume` необходимо включить модуль `sds-node-configurator`.
 >
