@@ -19,6 +19,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"net/http"
 	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/logger"
@@ -56,6 +57,10 @@ func (s *scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.log.Debug("[ServeHTTP] stat route starts handling the request")
 		s.getCacheStat(w, r)
 		s.log.Debug("[ServeHTTP] stat route ends handling the request")
+	case "/reserved":
+		s.log.Debug("[ServeHTTP] reserved route starts handling the request")
+		s.getReservedSpace(w, r)
+		s.log.Debug("[ServeHTTP] reserved route ends handling the request")
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}
@@ -145,4 +150,30 @@ func (s *scheduler) getCacheStat(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("unable to write the cache"))
 	}
+}
+
+func (s *scheduler) getReservedSpace(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+
+	lvgs := s.cache.GetAllLVG()
+
+	result := make(map[string]int64, len(lvgs))
+	for _, lvg := range lvgs {
+		space, err := s.cache.GetLVGReservedSpace(lvg.Name)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("unable to get the space"))
+		}
+
+		result[lvg.Name] = space
+	}
+
+	for lvgName, space := range result {
+		_, err := w.Write([]byte(fmt.Sprintf("LVMVolumeGroup: %s, Reserved space: %s\n", lvgName, resource.NewQuantity(space, resource.BinarySI))))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("unable to write the cache"))
+		}
+	}
+
 }

@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 	"sync"
-	"time"
 )
 
 const (
@@ -79,7 +78,7 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 			s.log.Debug(fmt.Sprintf("[filter] PVC %s/%s has been already stored in the cache. It will be removed due the conflicts", pvc.Namespace, pvc.Name))
 			s.cache.RemovePVCSpaceReservationForced(pvc)
 		} else {
-			s.log.Debug(fmt.Sprintf("[filter] PVC %s/%s was not found in the cache", pvc.Namespace, pvc.Name))
+			s.log.Debug(fmt.Sprintf("[filter] PVC %s/%s was not found in the scheduler cache", pvc.Namespace, pvc.Name))
 		}
 	}
 
@@ -136,10 +135,9 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 
 func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, schedulerCache *cache.Cache, pvcs map[string]*corev1.PersistentVolumeClaim, scs map[string]*v1.StorageClass) error {
 	for _, node := range nodes {
-		log.Debug(fmt.Sprintf("[populateCache] starts the work for node %s", node.Name))
 		for _, volume := range pod.Spec.Volumes {
 			if volume.PersistentVolumeClaim != nil {
-				log.Debug(fmt.Sprintf("[populateCache] reconcile the PVC %s for Pod %s/%s", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, pod.Name))
+				log.Debug(fmt.Sprintf("[populateCache] reconcile the PVC %s for Pod %s/%s on node %s", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, pod.Name, node.Name))
 				lvgNamesForTheNode := schedulerCache.GetLVGNamesByNodeName(node.Name)
 				log.Trace(fmt.Sprintf("[populateCache] LVMVolumeGroups from cache for the node %s: %v", node.Name, lvgNamesForTheNode))
 				pvc := pvcs[volume.PersistentVolumeClaim.ClaimName]
@@ -192,6 +190,7 @@ func extractRequestedSize(
 	pvcRequests := make(map[string]PVCRequest, len(pvcs))
 	for _, pvc := range pvcs {
 		sc := scs[*pvc.Spec.StorageClassName]
+		log.Debug(fmt.Sprintf("[extractRequestedSize] PVC %s/%s has status phase: %s", pvc.Namespace, pvc.Name, pvc.Status.Phase))
 		switch pvc.Status.Phase {
 		case corev1.ClaimPending:
 			switch sc.Parameters[lvmTypeParamKey] {
@@ -652,30 +651,30 @@ func getUsedPVC(ctx context.Context, cl client.Client, log logger.Logger, pod *c
 			}
 		}
 
-		filled := false
-		if len(pvcMap) > 0 {
-			filled = true
-			for _, volume := range pod.Spec.Volumes {
-				if volume.PersistentVolumeClaim != nil {
-					if _, added := usedPvc[volume.PersistentVolumeClaim.ClaimName]; !added {
-						filled = false
-						log.Warning(fmt.Sprintf("[getUsedPVC] PVC %s was not found in the cache for Pod %s/%s", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, pod.Name))
-						break
-					}
-				}
-			}
-		}
-
-		if !filled {
-			log.Warning(fmt.Sprintf("[getUsedPVC] some PVCs were not found in the cache for Pod %s/%s. Retry to find them again.", pod.Namespace, pod.Name))
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-
-		if filled {
-			log.Debug(fmt.Sprintf("[getUsedPVC] Every PVC for Pod %s/%s was found in the cache", pod.Namespace, pod.Name))
-			break
-		}
+		//filled := false
+		//if len(pvcMap) > 0 {
+		//	filled = true
+		//	for _, volume := range pod.Spec.Volumes {
+		//		if volume.PersistentVolumeClaim != nil {
+		//			if _, added := usedPvc[volume.PersistentVolumeClaim.ClaimName]; !added {
+		//				filled = false
+		//				log.Warning(fmt.Sprintf("[getUsedPVC] PVC %s was not found in the cache for Pod %s/%s", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, pod.Name))
+		//				break
+		//			}
+		//		}
+		//	}
+		//}
+		//
+		//if !filled {
+		//	log.Warning(fmt.Sprintf("[getUsedPVC] some PVCs were not found in the cache for Pod %s/%s. Retry to find them again.", pod.Namespace, pod.Name))
+		//	time.Sleep(100 * time.Millisecond)
+		//	continue
+		//}
+		//
+		//if filled {
+		//	log.Debug(fmt.Sprintf("[getUsedPVC] Every PVC for Pod %s/%s was found in the cache", pod.Namespace, pod.Name))
+		//	break
+		//}
 	}
 
 	return usedPvc, err

@@ -42,6 +42,8 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.log.Debug(fmt.Sprintf("[prioritize] starts the prioritizing for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+
 	pvcs, err := getUsedPVC(s.ctx, s.client, s.log, input.Pod)
 	if err != nil {
 		s.log.Error(err, "[prioritize] unable to get PVC from the Pod")
@@ -54,7 +56,7 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, pvc := range pvcs {
-		s.log.Trace(fmt.Sprintf("[prioritize] used PVC: %s", pvc.Name))
+		s.log.Trace(fmt.Sprintf("[prioritize] Pod %s/%s uses PVC: %s", input.Pod.Namespace, input.Pod.Name, pvc.Name))
 	}
 
 	scs, err := getStorageClassesUsedByPVCs(s.ctx, s.client, pvcs)
@@ -64,30 +66,30 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, sc := range scs {
-		s.log.Trace(fmt.Sprintf("[prioritize] used StorageClasses: %s", sc.Name))
+		s.log.Trace(fmt.Sprintf("[prioritize] Pod %s/%s uses Storage Class: %s", input.Pod.Namespace, input.Pod.Name, sc.Name))
 	}
 
-	s.log.Debug("[prioritize] starts to extract pvcRequests size")
+	s.log.Debug(fmt.Sprintf("[prioritize] starts to extract pvcRequests size for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, pvcs, scs)
 	if err != nil {
 		s.log.Error(err, fmt.Sprintf("[filter] unable to extract request size for a pod %s", input.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
 	}
-	s.log.Debug("[filter] successfully extracted the pvcRequests size")
+	s.log.Debug(fmt.Sprintf("[filter] successfully extracted the pvcRequests size for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 
-	s.log.Debug("[prioritize] starts to score the nodes")
+	s.log.Debug(fmt.Sprintf("[prioritize] starts to score the nodes for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 	result, err := scoreNodes(s.log, s.cache, input.Nodes, pvcs, scs, pvcRequests, s.defaultDivisor)
 	if err != nil {
-		s.log.Error(err, "[prioritize] unable to score nodes")
-		http.Error(w, "Bad Request.", http.StatusBadRequest)
+		s.log.Error(err, fmt.Sprintf("[prioritize] unable to score nodes for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	s.log.Debug("[prioritize] successfully scored the nodes")
+	s.log.Debug(fmt.Sprintf("[prioritize] successfully scored the nodes for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 
 	w.Header().Set("content-type", "application/json")
 	err = json.NewEncoder(w).Encode(result)
 	if err != nil {
-		s.log.Error(err, "[prioritize] unable to encode a response")
+		s.log.Error(err, fmt.Sprintf("[prioritize] unable to encode a response for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
 	s.log.Debug("[prioritize] ends serving")
