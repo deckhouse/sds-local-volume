@@ -111,7 +111,7 @@ func (c *Cache) GetLVGReservedSpace(lvgName string) (int64, error) {
 
 	var space int64
 	lvg.(*lvgCache).pvcs.Range(func(pvcName, pvcCh any) bool {
-		space = pvcCh.(*pvcCache).pvc.Spec.Resources.Requests.Storage().Value()
+		space += pvcCh.(*pvcCache).pvc.Spec.Resources.Requests.Storage().Value()
 		return true
 	})
 
@@ -361,10 +361,10 @@ func (c *Cache) RemoveSpaceReservationForPVCWithSelectedNode(pvc *v1.PersistentV
 		selectedNode := pvcCh.(*pvcCache).selectedNode
 		if selectedNode == "" {
 			lvgCh.(*lvgCache).pvcs.Delete(pvcKey)
-			c.log.Debug(fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] removed space reservation for PVC %s in the LVMVolumeGroup %s due the PVC got selected to the node %s", pvcKey, lvgName, selectedNode))
+			c.log.Debug(fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] removed space reservation for PVC %s in the LVMVolumeGroup %s due the PVC got selected to the node %s", pvcKey, lvgName, pvc.Annotations[SelectedNodeAnnotation]))
 		} else {
 			selectedLVGName = lvgName
-			c.log.Debug(fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] PVC %s got selected to the node %s. It should not be revomed from the LVMVolumeGroup %s", pvcKey, selectedNode, lvgName))
+			c.log.Debug(fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] PVC %s got selected to the node %s. It should not be revomed from the LVMVolumeGroup %s", pvcKey, pvc.Annotations[SelectedNodeAnnotation], lvgName))
 		}
 	}
 	c.log.Debug(fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] PVC %s space reservation has been removed from LVMVolumeGroup cache", pvcKey))
@@ -434,45 +434,45 @@ func (c *Cache) FindLVGForPVCBySelectedNode(pvc *v1.PersistentVolumeClaim, nodeN
 	return targetLVG
 }
 
-func (c *Cache) PrintTheCacheTraceLog() {
-	c.log.Trace("*******************CACHE BEGIN*******************")
-	c.log.Trace("[LVMVolumeGroups BEGIN]")
+func (c *Cache) PrintTheCacheLog() {
+	c.log.Cache("*******************CACHE BEGIN*******************")
+	c.log.Cache("[LVMVolumeGroups BEGIN]")
 	c.lvgs.Range(func(lvgName, lvgCh any) bool {
-		c.log.Trace(fmt.Sprintf("[%s]", lvgName))
+		c.log.Cache(fmt.Sprintf("[%s]", lvgName))
 
 		lvgCh.(*lvgCache).pvcs.Range(func(pvcName, pvcCh any) bool {
-			c.log.Trace(fmt.Sprintf("      PVC %s, selected node: %s", pvcName, pvcCh.(*pvcCache).selectedNode))
+			c.log.Cache(fmt.Sprintf("      PVC %s, selected node: %s", pvcName, pvcCh.(*pvcCache).selectedNode))
 			return true
 		})
 
 		return true
 	})
 
-	c.log.Trace("[LVMVolumeGroups ENDS]")
-	c.log.Trace("[PVC and LVG BEGINS]")
+	c.log.Cache("[LVMVolumeGroups ENDS]")
+	c.log.Cache("[PVC and LVG BEGINS]")
 	c.pvcLVGs.Range(func(pvcName, lvgs any) bool {
-		c.log.Trace(fmt.Sprintf("[PVC: %s]", pvcName))
+		c.log.Cache(fmt.Sprintf("[PVC: %s]", pvcName))
 
 		for _, lvgName := range lvgs.([]string) {
-			c.log.Trace(fmt.Sprintf("      LVMVolumeGroup: %s", lvgName))
+			c.log.Cache(fmt.Sprintf("      LVMVolumeGroup: %s", lvgName))
 		}
 
 		return true
 	})
 
-	c.log.Trace("[PVC and LVG ENDS]")
-	c.log.Trace("[Node and LVG BEGINS]")
+	c.log.Cache("[PVC and LVG ENDS]")
+	c.log.Cache("[Node and LVG BEGINS]")
 	c.nodeLVGs.Range(func(nodeName, lvgs any) bool {
-		c.log.Trace(fmt.Sprintf("[Node: %s]", nodeName))
+		c.log.Cache(fmt.Sprintf("[Node: %s]", nodeName))
 
 		for _, lvgName := range lvgs.([]string) {
-			c.log.Trace(fmt.Sprintf("      LVMVolumeGroup name: %s", lvgName))
+			c.log.Cache(fmt.Sprintf("      LVMVolumeGroup name: %s", lvgName))
 		}
 
 		return true
 	})
-	c.log.Trace("[Node and LVG ENDS]")
-	c.log.Trace("*******************CACHE END*******************")
+	c.log.Cache("[Node and LVG ENDS]")
+	c.log.Cache("*******************CACHE END*******************")
 }
 
 func configurePVCKey(pvc *v1.PersistentVolumeClaim) string {

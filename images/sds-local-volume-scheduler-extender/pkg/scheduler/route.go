@@ -57,10 +57,6 @@ func (s *scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.log.Debug("[ServeHTTP] stat route starts handling the request")
 		s.getCacheStat(w, r)
 		s.log.Debug("[ServeHTTP] stat route ends handling the request")
-	case "/reserved":
-		s.log.Debug("[ServeHTTP] reserved route starts handling the request")
-		s.getReservedSpace(w, r)
-		s.log.Debug("[ServeHTTP] reserved route ends handling the request")
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}
@@ -88,27 +84,27 @@ func status(w http.ResponseWriter, r *http.Request) {
 func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
-	s.cache.PrintTheCacheTraceLog()
+	s.cache.PrintTheCacheLog()
 
 	result := make(map[string][]struct {
-		pvcName  string
-		nodeName string
+		pvcName      string
+		selectedNode string
+		status       string
+		size         string
 	})
 
 	lvgs := s.cache.GetAllLVG()
-	//s.log.Info(fmt.Sprintf("LVG from cache: %v", lvgs))
 	for _, lvg := range lvgs {
 		pvcs, err := s.cache.GetAllPVCForLVG(lvg.Name)
 		if err != nil {
 			s.log.Error(err, "something bad")
 		}
-		//for _, pvc := range pvcs {
-		//	s.log.Trace(fmt.Sprintf("LVG %s has PVC from cache: %v", lvg, pvc.Name))
-		//}
 
 		result[lvg.Name] = make([]struct {
-			pvcName  string
-			nodeName string
+			pvcName      string
+			selectedNode string
+			status       string
+			size         string
 		}, 0)
 
 		for _, pvc := range pvcs {
@@ -117,17 +113,37 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 				s.log.Error(err, "something bad")
 			}
 			result[lvg.Name] = append(result[lvg.Name], struct {
-				pvcName  string
-				nodeName string
-			}{pvcName: pvc.Name, nodeName: selectedNode})
+				pvcName      string
+				selectedNode string
+				status       string
+				size         string
+			}{pvcName: pvc.Name, selectedNode: selectedNode, status: string(pvc.Status.Phase), size: pvc.Spec.Resources.Requests.Storage().String()})
 		}
 	}
-	//s.log.Info(fmt.Sprintf("Result len: %d", len(result)))
 
-	_, err := w.Write([]byte(fmt.Sprintf("%+v", result)))
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("unable to write the cache"))
+	for lvgName, pvcs := range result {
+		reserved, err := s.cache.GetLVGReservedSpace(lvgName)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("unable to write the cache"))
+		}
+
+		_, err = w.Write([]byte(fmt.Sprintf("LVMVolumeGroup: %s Reserved: %s\n", lvgName, resource.NewQuantity(reserved, resource.BinarySI))))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("unable to write the cache"))
+		}
+
+		for _, pvc := range pvcs {
+			_, err = w.Write([]byte(fmt.Sprintf("\tPVC: %s\n", pvc.pvcName)))
+			_, err = w.Write([]byte(fmt.Sprintf("\t\tNodeName: %s\n", pvc.selectedNode)))
+			_, err = w.Write([]byte(fmt.Sprintf("\t\tStatus: %s\n", pvc.status)))
+			_, err = w.Write([]byte(fmt.Sprintf("\t\tSize: %s\n", pvc.size)))
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("unable to write the cache"))
+			}
+		}
 	}
 }
 
@@ -150,30 +166,4 @@ func (s *scheduler) getCacheStat(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("unable to write the cache"))
 	}
-}
-
-func (s *scheduler) getReservedSpace(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-
-	lvgs := s.cache.GetAllLVG()
-
-	result := make(map[string]int64, len(lvgs))
-	for _, lvg := range lvgs {
-		space, err := s.cache.GetLVGReservedSpace(lvg.Name)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("unable to get the space"))
-		}
-
-		result[lvg.Name] = space
-	}
-
-	for lvgName, space := range result {
-		_, err := w.Write([]byte(fmt.Sprintf("LVMVolumeGroup: %s, Reserved space: %s\n", lvgName, resource.NewQuantity(space, resource.BinarySI))))
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("unable to write the cache"))
-		}
-	}
-
 }

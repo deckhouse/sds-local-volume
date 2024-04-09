@@ -46,7 +46,7 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 
 	pvcs, err := getUsedPVC(s.ctx, s.client, s.log, input.Pod)
 	if err != nil {
-		s.log.Error(err, "[prioritize] unable to get PVC from the Pod")
+		s.log.Error(err, fmt.Sprintf("[prioritize] unable to get PVC from the Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -61,7 +61,7 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 
 	scs, err := getStorageClassesUsedByPVCs(s.ctx, s.client, pvcs)
 	if err != nil {
-		s.log.Error(err, "[prioritize] unable to get StorageClasses from the PVC")
+		s.log.Error(err, fmt.Sprintf("[prioritize] unable to get StorageClasses from the PVC for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
@@ -72,7 +72,7 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug(fmt.Sprintf("[prioritize] starts to extract pvcRequests size for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, pvcs, scs)
 	if err != nil {
-		s.log.Error(err, fmt.Sprintf("[filter] unable to extract request size for a pod %s", input.Pod.Name))
+		s.log.Error(err, fmt.Sprintf("[filter] unable to extract request size for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
 	}
 	s.log.Debug(fmt.Sprintf("[filter] successfully extracted the pvcRequests size for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
@@ -188,10 +188,12 @@ func scoreNodes(
 					errs <- err
 					return
 				}
+				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s total size: %s", lvg.Name, lvgTotalSize.String()))
 				totalFreeSpaceLeft += getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize, lvgTotalSize.Value())
 			}
 
 			averageFreeSpace := totalFreeSpaceLeft / int64(len(pvcs))
+			log.Trace(fmt.Sprintf("[scoreNodes] average free space left for the node: %s", node.Name))
 			score := getNodeScore(averageFreeSpace, divisor)
 			log.Trace(fmt.Sprintf("[scoreNodes] node %s has score %d with average free space left (after all PVC bounded), percent %d", node.Name, score, averageFreeSpace))
 

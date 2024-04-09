@@ -113,7 +113,7 @@ func RunPVCWatcherCacheController(
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully updated PVC %s/%s in the cache", pvc.Namespace, pvc.Name))
 
-			schedulerCache.PrintTheCacheTraceLog()
+			schedulerCache.PrintTheCacheLog()
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to remove space reservation for PVC %s/%s with selected node from the cache", pvc.Namespace, pvc.Name))
 			err = schedulerCache.RemoveSpaceReservationForPVCWithSelectedNode(pvc)
 			if err != nil {
@@ -121,7 +121,7 @@ func RunPVCWatcherCacheController(
 				return
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully removed space reservation for PVC %s/%s with selected node", pvc.Namespace, pvc.Name))
-			schedulerCache.PrintTheCacheTraceLog()
+			schedulerCache.PrintTheCacheLog()
 
 			log.Info("[RunPVCWatcherCacheController] CreateFunc reconciliation ends")
 		},
@@ -194,15 +194,15 @@ func RunPVCWatcherCacheController(
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully updated PVC %s/%s in the cache", pvc.Namespace, pvc.Name))
 
-			schedulerCache.PrintTheCacheTraceLog()
-			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to remove space reservation for PVC %s/%s with selected node from the cache", pvc.Namespace, pvc.Name))
+			schedulerCache.PrintTheCacheLog()
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to remove space reservation for PVC %s/%s with selected node %s from the cache", pvc.Namespace, pvc.Name, pvc.Annotations[cache.SelectedNodeAnnotation]))
 			err = schedulerCache.RemoveSpaceReservationForPVCWithSelectedNode(pvc)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[RunPVCWatcherCacheController] unable to remove PVC %s/%s space reservation in the cache", pvc.Namespace, pvc.Name))
 				return
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully removed space reservation for PVC %s/%s with selected node", pvc.Namespace, pvc.Name))
-			schedulerCache.PrintTheCacheTraceLog()
+			schedulerCache.PrintTheCacheLog()
 
 			log.Info("[RunPVCWatcherCacheController] Update Func reconciliation ends")
 		},

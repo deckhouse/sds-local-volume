@@ -112,7 +112,7 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 
 	s.log.Debug(fmt.Sprintf("[filter] starts to populate the cache for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 	s.log.Trace(fmt.Sprintf("[filter] cache before the PVC reservation for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
-	s.cache.PrintTheCacheTraceLog()
+	s.cache.PrintTheCacheLog()
 	err = populateCache(s.log, filteredNodes.Nodes.Items, input.Pod, s.cache, pvcs, scs)
 	if err != nil {
 		s.log.Error(err, "[filter] unable to populate cache")
@@ -121,7 +121,7 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Debug(fmt.Sprintf("[filter] successfully populated the cache for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 	s.log.Trace(fmt.Sprintf("[filter] cache after the PVC reservation for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
-	s.cache.PrintTheCacheTraceLog()
+	s.cache.PrintTheCacheLog()
 
 	w.Header().Set("content-type", "application/json")
 	err = json.NewEncoder(w).Encode(filteredNodes)
@@ -636,7 +636,8 @@ func getUsedPVC(ctx context.Context, cl client.Client, log logger.Logger, pod *c
 		return nil, err
 	}
 
-	for pvcName := range pvcMap {
+	for pvcName, pvc := range pvcMap {
+		log.Trace(fmt.Sprintf("KEY NAME: %s, VALUE NAME: %s", pvcName, pvc.Name))
 		log.Trace(fmt.Sprintf("[getUsedPVC] PVC %s is in namespace %s", pod.Namespace, pvcName))
 	}
 
@@ -644,48 +645,26 @@ func getUsedPVC(ctx context.Context, cl client.Client, log logger.Logger, pod *c
 	for _, volume := range pod.Spec.Volumes {
 		if volume.PersistentVolumeClaim != nil {
 			log.Trace(fmt.Sprintf("[getUsedPVC] Pod %s/%s uses PVC %s", pod.Namespace, pod.Name, volume.PersistentVolumeClaim.ClaimName))
-			usedPvc[volume.PersistentVolumeClaim.ClaimName] = pvcMap[volume.PersistentVolumeClaim.ClaimName]
+			pvc := pvcMap[volume.PersistentVolumeClaim.ClaimName]
+			usedPvc[volume.PersistentVolumeClaim.ClaimName] = &pvc
 		}
 	}
 
-	//filled := false
-	//if len(pvcMap) > 0 {
-	//	filled = true
-	//	for _, volume := range pod.Spec.Volumes {
-	//		if volume.PersistentVolumeClaim != nil {
-	//			if _, added := usedPvc[volume.PersistentVolumeClaim.ClaimName]; !added {
-	//				filled = false
-	//				log.Warning(fmt.Sprintf("[getUsedPVC] PVC %s was not found in the cache for Pod %s/%s", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, pod.Name))
-	//				break
-	//			}
-	//		}
-	//	}
-	//}
-	//
-	//if !filled {
-	//	log.Warning(fmt.Sprintf("[getUsedPVC] some PVCs were not found in the cache for Pod %s/%s. Retry to find them again.", pod.Namespace, pod.Name))
-	//	time.Sleep(100 * time.Millisecond)
-	//	continue
-	//}
-	//
-	//if filled {
-	//	log.Debug(fmt.Sprintf("[getUsedPVC] Every PVC for Pod %s/%s was found in the cache", pod.Namespace, pod.Name))
-	//	break
-	//}
+	log.Trace(fmt.Sprintf("[getUsedPVC] HERE Pod %s/%s uses PVC: %v", pod.Namespace, pod.Name, usedPvc))
 
 	return usedPvc, err
 }
 
-func getAllPVCsFromNamespace(ctx context.Context, cl client.Client, namespace string) (map[string]*corev1.PersistentVolumeClaim, error) {
+func getAllPVCsFromNamespace(ctx context.Context, cl client.Client, namespace string) (map[string]corev1.PersistentVolumeClaim, error) {
 	list := &corev1.PersistentVolumeClaimList{}
 	err := cl.List(ctx, list, &client.ListOptions{Namespace: namespace})
 	if err != nil {
 		return nil, err
 	}
 
-	pvcs := make(map[string]*corev1.PersistentVolumeClaim, len(list.Items))
+	pvcs := make(map[string]corev1.PersistentVolumeClaim, len(list.Items))
 	for _, pvc := range list.Items {
-		pvcs[pvc.Name] = &pvc
+		pvcs[pvc.Name] = pvc
 	}
 
 	return pvcs, nil
