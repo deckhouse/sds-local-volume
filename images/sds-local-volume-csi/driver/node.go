@@ -37,12 +37,15 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstage
 }
 
 func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	d.log.Info("method NodePublishVolume")
+	d.log.Info("Start method NodePublishVolume")
 	d.log.Trace("------------- NodePublishVolume --------------")
 	d.log.Trace(request.String())
 	d.log.Trace("------------- NodePublishVolume --------------")
 
 	dev := fmt.Sprintf("/dev/%s/%s", request.GetVolumeContext()[internal.VGNameKey], request.VolumeId)
+	lvmType := request.GetVolumeContext()[internal.LvmTypeKey]
+	lvmThinPoolName := request.GetVolumeContext()[internal.ThinPoolNameKey]
+	d.log.Info(fmt.Sprintf("dev = %s", dev))
 
 	var mountOptions []string
 	if request.GetReadonly() {
@@ -61,11 +64,19 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		mountOptions = append(mountOptions, mnt.GetMountFlags()...)
 	}
 
-	err := d.storeManager.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions)
+	d.log.Info(fmt.Sprintf("mountOptions = %s", mountOptions))
+	d.log.Info(fmt.Sprintf("lvmType = %s", lvmType))
+	d.log.Info(fmt.Sprintf("lvmThinPoolName = %s", lvmThinPoolName))
+	d.log.Info(fmt.Sprintf("fsType = %s", fsType))
+	d.log.Info(fmt.Sprintf("IsBlock = %t", IsBlock))
+
+	err := d.storeManager.Mount(dev, request.GetTargetPath(), IsBlock, fsType, false, mountOptions, lvmType, lvmThinPoolName)
 	if err != nil {
 		d.log.Error(err, "d.mounter.Mount :")
 		return nil, err
 	}
+
+	d.log.Info("Success method NodePublishVolume")
 
 	return &csi.NodePublishVolumeResponse{}, nil
 }
@@ -139,7 +150,7 @@ func (d *Driver) NodeGetCapabilities(ctx context.Context, request *csi.NodeGetCa
 
 func (d *Driver) NodeGetInfo(ctx context.Context, request *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	d.log.Info("method NodeGetInfo")
-	d.log.Info("hostID = ", d.hostID)
+	d.log.Info(fmt.Sprintf("hostID = %s", d.hostID))
 
 	return &csi.NodeGetInfoResponse{
 		NodeId: d.hostID,
