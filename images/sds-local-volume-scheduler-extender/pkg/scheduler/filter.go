@@ -630,52 +630,48 @@ func getStorageClassesUsedByPVCs(ctx context.Context, cl client.Client, pvcs map
 }
 
 func getUsedPVC(ctx context.Context, cl client.Client, log logger.Logger, pod *corev1.Pod) (map[string]*corev1.PersistentVolumeClaim, error) {
-	usedPvc := make(map[string]*corev1.PersistentVolumeClaim, len(pod.Spec.Volumes))
-
-	var err error
-	for {
-		pvcMap, err := getAllPVCsFromNamespace(ctx, cl, pod.Namespace)
-		if err != nil {
-			log.Error(err, fmt.Sprintf("[getUsedPVC] unable to get all PVC for Pod %s in the namespace %s", pod.Name, pod.Namespace))
-			return nil, err
-		}
-
-		for pvcName := range pvcMap {
-			log.Trace(fmt.Sprintf("[getUsedPVC] PVC %s is in namespace %s", pod.Namespace, pvcName))
-		}
-
-		for _, volume := range pod.Spec.Volumes {
-			if volume.PersistentVolumeClaim != nil {
-				log.Trace(fmt.Sprintf("[getUsedPVC] Pod %s/%s uses PVC %s", pod.Namespace, pod.Name, volume.PersistentVolumeClaim.ClaimName))
-				usedPvc[volume.PersistentVolumeClaim.ClaimName] = pvcMap[volume.PersistentVolumeClaim.ClaimName]
-			}
-		}
-
-		//filled := false
-		//if len(pvcMap) > 0 {
-		//	filled = true
-		//	for _, volume := range pod.Spec.Volumes {
-		//		if volume.PersistentVolumeClaim != nil {
-		//			if _, added := usedPvc[volume.PersistentVolumeClaim.ClaimName]; !added {
-		//				filled = false
-		//				log.Warning(fmt.Sprintf("[getUsedPVC] PVC %s was not found in the cache for Pod %s/%s", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, pod.Name))
-		//				break
-		//			}
-		//		}
-		//	}
-		//}
-		//
-		//if !filled {
-		//	log.Warning(fmt.Sprintf("[getUsedPVC] some PVCs were not found in the cache for Pod %s/%s. Retry to find them again.", pod.Namespace, pod.Name))
-		//	time.Sleep(100 * time.Millisecond)
-		//	continue
-		//}
-		//
-		//if filled {
-		//	log.Debug(fmt.Sprintf("[getUsedPVC] Every PVC for Pod %s/%s was found in the cache", pod.Namespace, pod.Name))
-		//	break
-		//}
+	pvcMap, err := getAllPVCsFromNamespace(ctx, cl, pod.Namespace)
+	if err != nil {
+		log.Error(err, fmt.Sprintf("[getUsedPVC] unable to get all PVC for Pod %s in the namespace %s", pod.Name, pod.Namespace))
+		return nil, err
 	}
+
+	for pvcName := range pvcMap {
+		log.Trace(fmt.Sprintf("[getUsedPVC] PVC %s is in namespace %s", pod.Namespace, pvcName))
+	}
+
+	usedPvc := make(map[string]*corev1.PersistentVolumeClaim, len(pod.Spec.Volumes))
+	for _, volume := range pod.Spec.Volumes {
+		if volume.PersistentVolumeClaim != nil {
+			log.Trace(fmt.Sprintf("[getUsedPVC] Pod %s/%s uses PVC %s", pod.Namespace, pod.Name, volume.PersistentVolumeClaim.ClaimName))
+			usedPvc[volume.PersistentVolumeClaim.ClaimName] = pvcMap[volume.PersistentVolumeClaim.ClaimName]
+		}
+	}
+
+	//filled := false
+	//if len(pvcMap) > 0 {
+	//	filled = true
+	//	for _, volume := range pod.Spec.Volumes {
+	//		if volume.PersistentVolumeClaim != nil {
+	//			if _, added := usedPvc[volume.PersistentVolumeClaim.ClaimName]; !added {
+	//				filled = false
+	//				log.Warning(fmt.Sprintf("[getUsedPVC] PVC %s was not found in the cache for Pod %s/%s", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, pod.Name))
+	//				break
+	//			}
+	//		}
+	//	}
+	//}
+	//
+	//if !filled {
+	//	log.Warning(fmt.Sprintf("[getUsedPVC] some PVCs were not found in the cache for Pod %s/%s. Retry to find them again.", pod.Namespace, pod.Name))
+	//	time.Sleep(100 * time.Millisecond)
+	//	continue
+	//}
+	//
+	//if filled {
+	//	log.Debug(fmt.Sprintf("[getUsedPVC] Every PVC for Pod %s/%s was found in the cache", pod.Namespace, pod.Name))
+	//	break
+	//}
 
 	return usedPvc, err
 }
