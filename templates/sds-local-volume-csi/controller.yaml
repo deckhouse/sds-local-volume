@@ -370,7 +370,7 @@ spec:
           - --timeout=1m
           - --leader-election=true
           - --leader-election-namespace=$(NAMESPACE)
-          - --worker-threads=1
+          - --worker-threads=10
         env:
           - name: ADDRESS
             value: /csi/csi.sock
@@ -424,7 +424,7 @@ spec:
           - --enable-capacity
           - --extra-create-metadata
           - --capacity-ownerref-level=2
-          - --worker-threads=1
+          - --worker-threads=10
         env:
           - name: ADDRESS
             value: /csi/csi.sock
@@ -458,7 +458,7 @@ spec:
           - --csi-address=$(ADDRESS)
           - --leader-election=true
           - --leader-election-namespace=$(NAMESPACE)
-          - --worker-threads=1
+          - --worker-threads=10
         env:
           - name: ADDRESS
             value: /csi/csi.sock
@@ -489,7 +489,7 @@ spec:
           - --handle-volume-inuse-error=false
           - --leader-election=true
           - --leader-election-namespace=$(NAMESPACE)
-          - --workers=1
+          - --workers=10
         env:
           - name: ADDRESS
             value: /csi/csi.sock
