@@ -81,10 +81,6 @@ func RunLVGWatcherCacheController(
 				if pvc.Status.Phase == v1.ClaimBound {
 					log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] cached PVC %s/%s has Status.Phase Bound. It will be removed from the cache for LVMVolumeGroup %s", pvc.Namespace, pvc.Name, lvg.Name))
 					cache.RemovePVCSpaceReservationForced(pvc)
-					//if err != nil {
-					//	log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to remove PVC %s/%s from the cache for the LVMVolumeGroup %s", pvc.Namespace, pvc.Name, lvg.Name))
-					//	continue
-					//}
 
 					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s was removed from the cache for LVMVolumeGroup %s", pvc.Namespace, pvc.Name, lvg.Name))
 				}

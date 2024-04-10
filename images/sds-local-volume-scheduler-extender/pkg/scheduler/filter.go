@@ -111,7 +111,7 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug(fmt.Sprintf("[filter] successfully filtered the nodes from the request for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 
 	s.log.Debug(fmt.Sprintf("[filter] starts to populate the cache for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
-	s.log.Trace(fmt.Sprintf("[filter] cache before the PVC reservation for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+	s.log.Cache(fmt.Sprintf("[filter] cache before the PVC reservation for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 	s.cache.PrintTheCacheLog()
 	err = populateCache(s.log, filteredNodes.Nodes.Items, input.Pod, s.cache, pvcs, scs)
 	if err != nil {
@@ -120,7 +120,7 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Debug(fmt.Sprintf("[filter] successfully populated the cache for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
-	s.log.Trace(fmt.Sprintf("[filter] cache after the PVC reservation for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+	s.log.Cache(fmt.Sprintf("[filter] cache after the PVC reservation for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 	s.cache.PrintTheCacheLog()
 
 	w.Header().Set("content-type", "application/json")
@@ -154,7 +154,7 @@ func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, sche
 					for _, lvg := range lvgsForPVC {
 						if slices.Contains(lvgNamesForTheNode, lvg.Name) {
 							log.Trace(fmt.Sprintf("[populateCache] PVC %s/%s will reserve space in LVMVolumeGroup %s cache", pvc.Namespace, pvc.Name, lvg.Name))
-							err = schedulerCache.AddPVCToLVG(lvg.Name, pvc)
+							err = schedulerCache.AddPVC(lvg.Name, pvc)
 							if err != nil {
 								return err
 							}

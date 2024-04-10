@@ -113,6 +113,7 @@ func RunPVCWatcherCacheController(
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully updated PVC %s/%s in the cache", pvc.Namespace, pvc.Name))
 
+			log.Cache(fmt.Sprintf("[RunPVCWatcherCacheController] cache state BEFORE the removal space reservation for PVC %s/%s", pvc.Namespace, pvc.Name))
 			schedulerCache.PrintTheCacheLog()
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to remove space reservation for PVC %s/%s with selected node from the cache", pvc.Namespace, pvc.Name))
 			err = schedulerCache.RemoveSpaceReservationForPVCWithSelectedNode(pvc)
@@ -121,6 +122,8 @@ func RunPVCWatcherCacheController(
 				return
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully removed space reservation for PVC %s/%s with selected node", pvc.Namespace, pvc.Name))
+
+			log.Cache(fmt.Sprintf("[RunPVCWatcherCacheController] cache state AFTER the removal space reservation for PVC %s/%s", pvc.Namespace, pvc.Name))
 			schedulerCache.PrintTheCacheLog()
 
 			log.Info("[RunPVCWatcherCacheController] CreateFunc reconciliation ends")
@@ -194,6 +197,7 @@ func RunPVCWatcherCacheController(
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully updated PVC %s/%s in the cache", pvc.Namespace, pvc.Name))
 
+			log.Cache(fmt.Sprintf("[RunPVCWatcherCacheController] cache state BEFORE the removal space reservation for PVC %s/%s", pvc.Namespace, pvc.Name))
 			schedulerCache.PrintTheCacheLog()
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] starts to remove space reservation for PVC %s/%s with selected node %s from the cache", pvc.Namespace, pvc.Name, pvc.Annotations[cache.SelectedNodeAnnotation]))
 			err = schedulerCache.RemoveSpaceReservationForPVCWithSelectedNode(pvc)
@@ -202,6 +206,7 @@ func RunPVCWatcherCacheController(
 				return
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully removed space reservation for PVC %s/%s with selected node", pvc.Namespace, pvc.Name))
+			log.Cache(fmt.Sprintf("[RunPVCWatcherCacheController] cache state AFTER the removal space reservation for PVC %s/%s", pvc.Namespace, pvc.Name))
 			schedulerCache.PrintTheCacheLog()
 
 			log.Info("[RunPVCWatcherCacheController] Update Func reconciliation ends")
@@ -213,11 +218,11 @@ func RunPVCWatcherCacheController(
 				err = errors.New("unable to cast event object to a given type")
 				log.Error(err, "[RunPVCWatcherCacheController] an error occurred while handling create event")
 			}
-			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] DeleteFunc starts the reconciliation for the PVC %s", pvc.Name))
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] DeleteFunc starts the reconciliation for the PVC %s/%s", pvc.Namespace, pvc.Name))
 
-			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s was removed from the cluster. It will be force deleted from the cache", pvc.Name))
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s/%s was removed from the cluster. It will be force deleted from the cache", pvc.Namespace, pvc.Name))
 			schedulerCache.RemovePVCSpaceReservationForced(pvc)
-			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully force removed PVC %s from the cache", pvc.Name))
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully force removed PVC %s/%s from the cache", pvc.Namespace, pvc.Name))
 		},
 	})
 	if err != nil {
