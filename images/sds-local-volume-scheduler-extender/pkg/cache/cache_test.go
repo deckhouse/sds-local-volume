@@ -80,7 +80,10 @@ func BenchmarkCache_GetLVGReservedSpace(b *testing.B) {
 	}
 
 	for _, pvc := range pvcs {
-		cache.AddPVC(lvg.Name, &pvc)
+		err := cache.AddPVC(lvg.Name, &pvc)
+		if err != nil {
+			b.Error(err)
+		}
 	}
 
 	b.RunParallel(func(pb *testing.PB) {
@@ -143,7 +146,13 @@ func BenchmarkCache_AddPVC(b *testing.B) {
 			}
 
 			err := cache.AddPVC(lvg1.Name, pvc)
+			if err != nil {
+				b.Error(err)
+			}
 			err = cache.AddPVC(lvg2.Name, pvc)
+			if err != nil {
+				b.Error(err)
+			}
 			err = cache.AddPVC(lvg3.Name, pvc)
 			if err != nil {
 				b.Error(err)
@@ -347,7 +356,10 @@ func BenchmarkCache_UpdateLVG(b *testing.B) {
 				},
 			}
 			b.Logf("updates the LVG with allocated size: %s", updated.Status.AllocatedSize)
-			cache.UpdateLVG(updated)
+			err := cache.UpdateLVG(updated)
+			if err != nil {
+				b.Error(err)
+			}
 		}
 	})
 }
@@ -484,10 +496,6 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 					}
 
 					cache.GetLVGNamesForPVC(pvc)
-					_, err = cache.GetPVCSelectedNodeName(lvg.Name, pvc)
-					if err != nil {
-						b.Error(err)
-					}
 				}
 			}
 
@@ -560,9 +568,6 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 					}
 
 					cache.GetLVGNamesForPVC(pvc)
-					for err != nil {
-						_, err = cache.GetPVCSelectedNodeName(lvg.Name, pvc)
-					}
 				}
 			}
 

@@ -61,7 +61,7 @@ func RunLVGWatcherCacheController(
 				log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] the LVMVolumeGroup %s was found in the cache. It will be updated", lvg.Name))
 				err = cache.UpdateLVG(lvg)
 				if err != nil {
-					log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to update the LVMVolumeGroup %s cache", lvg.Name))
+					log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to update the LVMVolumeGroup %s in the cache", lvg.Name))
 				}
 
 				log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] cache was updated for the LVMVolumeGroup %s", lvg.Name))
