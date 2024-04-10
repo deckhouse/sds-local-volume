@@ -74,6 +74,8 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	for _, pvc := range pvcs {
 		s.log.Trace(fmt.Sprintf("[filter] Pod %s/%s uses PVC: %s", input.Pod.Namespace, input.Pod.Name, pvc.Name))
 
+		// this might happen when the extender-scheduler recovers after failure, populates the cache with PVC-watcher controller and then
+		// the kube scheduler post a request to schedule the pod with the PVC.
 		if s.cache.CheckIsPVCCached(pvc) {
 			s.log.Debug(fmt.Sprintf("[filter] PVC %s/%s has been already stored in the cache. It will be removed due the conflicts", pvc.Namespace, pvc.Name))
 			s.cache.RemovePVCSpaceReservationForced(pvc)
@@ -636,8 +638,7 @@ func getUsedPVC(ctx context.Context, cl client.Client, log logger.Logger, pod *c
 		return nil, err
 	}
 
-	for pvcName, pvc := range pvcMap {
-		log.Trace(fmt.Sprintf("KEY NAME: %s, VALUE NAME: %s", pvcName, pvc.Name))
+	for pvcName := range pvcMap {
 		log.Trace(fmt.Sprintf("[getUsedPVC] PVC %s is in namespace %s", pod.Namespace, pvcName))
 	}
 
@@ -649,8 +650,6 @@ func getUsedPVC(ctx context.Context, cl client.Client, log logger.Logger, pod *c
 			usedPvc[volume.PersistentVolumeClaim.ClaimName] = &pvc
 		}
 	}
-
-	log.Trace(fmt.Sprintf("[getUsedPVC] HERE Pod %s/%s uses PVC: %v", pod.Namespace, pod.Name, usedPvc))
 
 	return usedPvc, err
 }

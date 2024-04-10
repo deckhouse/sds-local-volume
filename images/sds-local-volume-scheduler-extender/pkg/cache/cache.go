@@ -138,7 +138,7 @@ func (c *Cache) AddPVC(lvgName string, pvc *v1.PersistentVolumeClaim) error {
 		return err
 	}
 
-	// this case might be triggered if the controller recovers after fail and finds some pending pvcs with selected nodes
+	// this case might be triggered if the extender recovers after fail and finds some pending pvcs with selected nodes
 	c.log.Trace(fmt.Sprintf("[AddPVC] PVC %s/%s annotations: %v", pvc.Namespace, pvc.Name, pvc.Annotations))
 	if pvc.Annotations[SelectedNodeAnnotation] != "" {
 		c.log.Debug(fmt.Sprintf("[AddPVC] PVC %s/%s has selected node anotation, selected node: %s", pvc.Namespace, pvc.Name, pvc.Annotations[SelectedNodeAnnotation]))
