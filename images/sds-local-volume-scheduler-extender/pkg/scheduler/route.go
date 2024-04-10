@@ -108,16 +108,12 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 		}, 0)
 
 		for _, pvc := range pvcs {
-			selectedNode, err := s.cache.GetPVCSelectedNodeName(lvg.Name, pvc)
-			if err != nil {
-				s.log.Error(err, "something bad")
-			}
 			result[lvg.Name] = append(result[lvg.Name], struct {
 				pvcName      string
 				selectedNode string
 				status       string
 				size         string
-			}{pvcName: pvc.Name, selectedNode: selectedNode, status: string(pvc.Status.Phase), size: pvc.Spec.Resources.Requests.Storage().String()})
+			}{pvcName: pvc.Name, selectedNode: pvc.Annotations[cache.SelectedNodeAnnotation], status: string(pvc.Status.Phase), size: pvc.Spec.Resources.Requests.Storage().String()})
 		}
 	}
 
