@@ -97,6 +97,7 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 	for _, lvg := range lvgs {
 		pvcs, err := s.cache.GetAllPVCForLVG(lvg.Name)
 		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			s.log.Error(err, "something bad")
 		}
 
@@ -121,23 +122,41 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 		reserved, err := s.cache.GetLVGReservedSpace(lvgName)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("unable to write the cache"))
+			_, err = w.Write([]byte("unable to write the cache"))
+			if err != nil {
+				s.log.Error(err, "error write response")
+			}
 		}
 
 		_, err = w.Write([]byte(fmt.Sprintf("LVMVolumeGroup: %s Reserved: %s\n", lvgName, resource.NewQuantity(reserved, resource.BinarySI))))
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("unable to write the cache"))
+			_, err = w.Write([]byte("unable to write the cache"))
+			if err != nil {
+				s.log.Error(err, "error write response")
+			}
 		}
 
 		for _, pvc := range pvcs {
 			_, err = w.Write([]byte(fmt.Sprintf("\tPVC: %s\n", pvc.pvcName)))
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				s.log.Error(err, "error write response")
+			}
 			_, err = w.Write([]byte(fmt.Sprintf("\t\tNodeName: %s\n", pvc.selectedNode)))
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				s.log.Error(err, "error write response")
+			}
 			_, err = w.Write([]byte(fmt.Sprintf("\t\tStatus: %s\n", pvc.status)))
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				s.log.Error(err, "error write response")
+			}
 			_, err = w.Write([]byte(fmt.Sprintf("\t\tSize: %s\n", pvc.size)))
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("unable to write the cache"))
+				s.log.Error(err, "error write response")
 			}
 		}
 	}
@@ -160,6 +179,9 @@ func (s *scheduler) getCacheStat(w http.ResponseWriter, r *http.Request) {
 	_, err := w.Write([]byte(fmt.Sprintf("Filter request count: %d , PVC Count from ALL LVG: %d", s.requestCount, pvcTotalCount)))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("unable to write the cache"))
+		_, err = w.Write([]byte("unable to write the cache"))
+		if err != nil {
+			s.log.Error(err, "error write response")
+		}
 	}
 }

@@ -76,11 +76,13 @@ func RunLVGWatcherCacheController(
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to get all PVC for the LVMVolumeGroup %s", lvg.Name))
 			}
+
 			for _, pvc := range pvcs {
 				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] cached PVC %s/%s belongs to LVMVolumeGroup %s", pvc.Namespace, pvc.Name, lvg.Name))
+				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s has status phase %s", pvc.Namespace, pvc.Name, pvc.Status.Phase))
 				if pvc.Status.Phase == v1.ClaimBound {
 					log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] cached PVC %s/%s has Status.Phase Bound. It will be removed from the cache for LVMVolumeGroup %s", pvc.Namespace, pvc.Name, lvg.Name))
-					cache.RemovePVCSpaceReservationForced(pvc)
+					cache.RemovePVCFromTheCache(pvc)
 
 					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s was removed from the cache for LVMVolumeGroup %s", pvc.Namespace, pvc.Name, lvg.Name))
 				}

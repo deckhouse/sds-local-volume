@@ -35,6 +35,8 @@ import (
 )
 
 const (
+	sdsLocalVolumeProvisioner = "local.csi.storage.deckhouse.io"
+
 	lvmTypeParamKey         = "local.csi.storage.deckhouse.io/lvm-type"
 	lvmVolumeGroupsParamKey = "local.csi.storage.deckhouse.io/lvm-volume-groups"
 
@@ -76,9 +78,9 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 
 		// this might happen when the extender-scheduler recovers after failure, populates the cache with PVC-watcher controller and then
 		// the kube scheduler post a request to schedule the pod with the PVC.
-		if s.cache.CheckIsPVCCached(pvc) {
-			s.log.Debug(fmt.Sprintf("[filter] PVC %s/%s has been already stored in the cache. It will be removed due the conflicts", pvc.Namespace, pvc.Name))
-			s.cache.RemovePVCSpaceReservationForced(pvc)
+		if s.cache.CheckIsPVCStored(pvc) {
+			s.log.Debug(fmt.Sprintf("[filter] PVC %s/%s has been already stored in the cache. Old state will be removed from the cache", pvc.Namespace, pvc.Name))
+			s.cache.RemovePVCFromTheCache(pvc)
 		} else {
 			s.log.Debug(fmt.Sprintf("[filter] PVC %s/%s was not found in the scheduler cache", pvc.Namespace, pvc.Name))
 		}
@@ -94,8 +96,13 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 		s.log.Trace(fmt.Sprintf("[filter] Pod %s/%s uses StorageClass: %s", input.Pod.Namespace, input.Pod.Name, sc.Name))
 	}
 
+	managedPVCs := filterNotManagedPVC(s.log, pvcs, scs)
+	for _, pvc := range managedPVCs {
+		s.log.Trace(fmt.Sprintf("[filter] filtered managed PVC %s/%s", pvc.Namespace, pvc.Name))
+	}
+
 	s.log.Debug(fmt.Sprintf("[filter] starts to extract PVC requested sizes for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
-	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, pvcs, scs)
+	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, managedPVCs, scs)
 	if err != nil {
 		s.log.Error(err, fmt.Sprintf("[filter] unable to extract request size for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -104,7 +111,7 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug(fmt.Sprintf("[filter] successfully extracted the PVC requested sizes of a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 
 	s.log.Debug(fmt.Sprintf("[filter] starts to filter the nodes from the request for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
-	filteredNodes, err := filterNodes(s.log, s.cache, input.Nodes, input.Pod, pvcs, scs, pvcRequests)
+	filteredNodes, err := filterNodes(s.log, s.cache, input.Nodes, input.Pod, managedPVCs, scs, pvcRequests)
 	if err != nil {
 		s.log.Error(err, "[filter] unable to filter the nodes")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -115,7 +122,7 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug(fmt.Sprintf("[filter] starts to populate the cache for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 	s.log.Cache(fmt.Sprintf("[filter] cache before the PVC reservation for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 	s.cache.PrintTheCacheLog()
-	err = populateCache(s.log, filteredNodes.Nodes.Items, input.Pod, s.cache, pvcs, scs)
+	err = populateCache(s.log, filteredNodes.Nodes.Items, input.Pod, s.cache, managedPVCs, scs)
 	if err != nil {
 		s.log.Error(err, "[filter] unable to populate cache")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -133,6 +140,21 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Debug(fmt.Sprintf("[filter] ends the serving the request for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+}
+
+func filterNotManagedPVC(log logger.Logger, pvcs map[string]*corev1.PersistentVolumeClaim, scs map[string]*v1.StorageClass) map[string]*corev1.PersistentVolumeClaim {
+	filteredPVCs := make(map[string]*corev1.PersistentVolumeClaim, len(pvcs))
+	for _, pvc := range pvcs {
+		sc := scs[*pvc.Spec.StorageClassName]
+		if sc.Provisioner != sdsLocalVolumeProvisioner {
+			log.Debug(fmt.Sprintf("[filterNotManagedPVC] filter out PVC %s/%s due to used Storage class %s is not managed by sds-local-volume-provisioner", pvc.Name, pvc.Namespace, sc.Name))
+			continue
+		}
+
+		filteredPVCs[pvc.Name] = pvc
+	}
+
+	return filteredPVCs
 }
 
 func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, schedulerCache *cache.Cache, pvcs map[string]*corev1.PersistentVolumeClaim, scs map[string]*v1.StorageClass) error {
@@ -565,12 +587,12 @@ func SortLVGsByNodeName(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string][]*
 func getVGFreeSpace(lvg *v1alpha1.LvmVolumeGroup) (resource.Quantity, error) {
 	free, err := resource.ParseQuantity(lvg.Status.VGSize)
 	if err != nil {
-		return resource.Quantity{}, err
+		return resource.Quantity{}, fmt.Errorf("unable to parse Status.VGSize quantity for LVMVolumeGroup %s, err: %w", lvg.Name, err)
 	}
 
 	used, err := resource.ParseQuantity(lvg.Status.AllocatedSize)
 	if err != nil {
-		return resource.Quantity{}, err
+		return resource.Quantity{}, fmt.Errorf("unable to parse Status.AllocatedSize quantity for LVMVolumeGroup %s, err: %w", lvg.Name, err)
 	}
 
 	free.Sub(used)

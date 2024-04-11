@@ -110,7 +110,7 @@ func (c *Cache) GetAllLVG() map[string]*v1alpha1.LvmVolumeGroup {
 	return lvgs
 }
 
-// GetLVGReservedSpace returns reserved space by every PVC in the selected LVMVolumeGroup resource. If such LVMVolumeGroup resource is not stored, returns an error.
+// GetLVGReservedSpace returns a sum of reserved space by every PVC in the selected LVMVolumeGroup resource. If such LVMVolumeGroup resource is not stored, returns an error.
 func (c *Cache) GetLVGReservedSpace(lvgName string) (int64, error) {
 	lvg, found := c.lvgs.Load(lvgName)
 	if !found {
@@ -216,7 +216,7 @@ func (c *Cache) addNewPVC(lvgCh *lvgCache, pvc *v1.PersistentVolumeClaim) {
 	c.pvcLVGs.Store(pvcKey, lvgsForPVC)
 }
 
-// UpdatePVC updates selected PVC in selected LVMVolumeGroup resource.
+// UpdatePVC updates selected PVC in selected LVMVolumeGroup resource. If no such PVC is stored in the cache, adds it.
 func (c *Cache) UpdatePVC(lvgName string, pvc *v1.PersistentVolumeClaim) error {
 	pvcKey := configurePVCKey(pvc)
 
@@ -273,7 +273,7 @@ func (c *Cache) GetLVGNamesForPVC(pvc *v1.PersistentVolumeClaim) []string {
 	return lvgNames.([]string)
 }
 
-// RemoveBoundedPVCSpaceReservation removes selected PVC space reservation from a target LVMVolumeGroup resource. If no such LVMVolumeGroup found or PVC
+// RemoveBoundedPVCSpaceReservation removes selected bounded PVC space reservation from a target LVMVolumeGroup resource. If no such LVMVolumeGroup found or PVC
 // is not in a Status Bound, returns an error.
 func (c *Cache) RemoveBoundedPVCSpaceReservation(lvgName string, pvc *v1.PersistentVolumeClaim) error {
 	if pvc.Status.Phase != v1.ClaimBound {
@@ -301,8 +301,8 @@ func (c *Cache) RemoveBoundedPVCSpaceReservation(lvgName string, pvc *v1.Persist
 	return nil
 }
 
-// CheckIsPVCCached checks if selected PVC has been already stored in the cache.
-func (c *Cache) CheckIsPVCCached(pvc *v1.PersistentVolumeClaim) bool {
+// CheckIsPVCStored checks if selected PVC has been already stored in the cache.
+func (c *Cache) CheckIsPVCStored(pvc *v1.PersistentVolumeClaim) bool {
 	pvcKey := configurePVCKey(pvc)
 	if _, found := c.pvcLVGs.Load(pvcKey); found {
 		return true
@@ -316,13 +316,13 @@ func (c *Cache) RemoveSpaceReservationForPVCWithSelectedNode(pvc *v1.PersistentV
 	pvcKey := configurePVCKey(pvc)
 	selectedLVGName := ""
 
-	lvgArray, found := c.pvcLVGs.Load(pvcKey)
+	lvgNamesForPVC, found := c.pvcLVGs.Load(pvcKey)
 	if !found {
 		c.log.Debug(fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] cache for PVC %s has been already removed", pvcKey))
 		return nil
 	}
 
-	for _, lvgName := range lvgArray.([]string) {
+	for _, lvgName := range lvgNamesForPVC.([]string) {
 		lvgCh, found := c.lvgs.Load(lvgName)
 		if !found || lvgCh == nil {
 			err := fmt.Errorf("no cache found for the LVMVolumeGroup %s", lvgName)
@@ -348,8 +348,8 @@ func (c *Cache) RemoveSpaceReservationForPVCWithSelectedNode(pvc *v1.PersistentV
 	c.log.Debug(fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] PVC %s space reservation has been removed from LVMVolumeGroup cache", pvcKey))
 
 	c.log.Debug(fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] cache for PVC %s will be wiped from unused LVMVolumeGroups", pvcKey))
-	cleared := make([]string, 0, len(lvgArray.([]string)))
-	for _, lvgName := range lvgArray.([]string) {
+	cleared := make([]string, 0, len(lvgNamesForPVC.([]string)))
+	for _, lvgName := range lvgNamesForPVC.([]string) {
 		if lvgName == selectedLVGName {
 			c.log.Debug(fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] the LVMVolumeGroup %s will be saved for PVC %s cache as used", lvgName, pvcKey))
 			cleared = append(cleared, lvgName)
@@ -363,11 +363,11 @@ func (c *Cache) RemoveSpaceReservationForPVCWithSelectedNode(pvc *v1.PersistentV
 	return nil
 }
 
-// RemovePVCSpaceReservationForced completely removes selected PVC space reservation in the cache.
-func (c *Cache) RemovePVCSpaceReservationForced(pvc *v1.PersistentVolumeClaim) {
+// RemovePVCFromTheCache completely removes selected PVC in the cache.
+func (c *Cache) RemovePVCFromTheCache(pvc *v1.PersistentVolumeClaim) {
 	targetPvcKey := configurePVCKey(pvc)
 
-	c.log.Debug(fmt.Sprintf("[RemovePVCSpaceReservationForced] run full cache wipe for PVC %s", targetPvcKey))
+	c.log.Debug(fmt.Sprintf("[RemovePVCFromTheCache] run full cache wipe for PVC %s", targetPvcKey))
 	c.pvcLVGs.Range(func(pvcKey, lvgArray any) bool {
 		if pvcKey == targetPvcKey {
 			for _, lvgName := range lvgArray.([]string) {
@@ -384,7 +384,7 @@ func (c *Cache) RemovePVCSpaceReservationForced(pvc *v1.PersistentVolumeClaim) {
 	c.pvcLVGs.Delete(targetPvcKey)
 }
 
-// FindLVGForPVCBySelectedNode finds a suitable LVMVolumeGroup resource for selected PVC based on selected node. If no such LVMVolumeGroup found, returns empty string.
+// FindLVGForPVCBySelectedNode finds a suitable LVMVolumeGroup resource's name for selected PVC based on selected node. If no such LVMVolumeGroup found, returns empty string.
 func (c *Cache) FindLVGForPVCBySelectedNode(pvc *v1.PersistentVolumeClaim, nodeName string) string {
 	pvcKey := configurePVCKey(pvc)
 
