@@ -118,6 +118,4 @@ func main() {
 		log.Error(err, "[main] unable to mgr.Start")
 		os.Exit(1)
 	}
-
-	log.Info("[main] successfully starts the manager")
 }
