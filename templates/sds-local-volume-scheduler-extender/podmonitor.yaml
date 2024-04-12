@@ -27,7 +27,7 @@ spec:
           action: keep
   selector:
     matchLabels:
-      app: sds-local-volume-scheduler
+      app: sds-local-volume
   namespaceSelector:
     matchNames:
       - d8-{{ .Chart.Name }}
