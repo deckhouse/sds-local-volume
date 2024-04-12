@@ -16,7 +16,9 @@ limitations under the License.
 
 package main
 
-import "sds-local-volume-scheduler-extender/cmd/cmd"
+import (
+	"sds-local-volume-scheduler-extender/cmd/cmd"
+)
 
 func main() {
 	cmd.Execute()
