@@ -18,8 +18,11 @@ package handlers
 
 import (
 	"context"
+	"k8s.io/klog/v2"
+	"webhooks/funcs"
 	"webhooks/v1alpha1"
 
+	dhctl "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,6 +42,33 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 			thickExists = true
 		} else {
 			thinExists = true
+		}
+	}
+
+	if thinExists {
+		ctx := context.Background()
+		cl, err := funcs.NewKubeClient()
+
+		if err != nil {
+			klog.Fatal(err.Error())
+		}
+
+		objs := dhctl.ModuleConfigList{}
+
+		err = cl.List(ctx, &objs)
+
+		for _, obj := range objs.Items {
+			if obj.Name == "sds-local-volume" {
+				if obj.Spec.Settings == nil {
+					return &kwhvalidating.ValidatorResult{Valid: false, Message: "thin pools must be enabled in sds-local-volume volume"},
+						nil
+				} else {
+					if obj.Spec.Settings["enableThinProvisioning"] == false {
+						return &kwhvalidating.ValidatorResult{Valid: false, Message: "thin pools must be enabled in sds-local-volume volume"},
+							nil
+					}
+				}
+			}
 		}
 	}
 
