@@ -49,7 +49,7 @@ var (
 )
 
 func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	d.log.Debug("[NodeStageVolume] method called with request: %v", request)
+	d.log.Debug(fmt.Sprintf("[NodeStageVolume] method called with request: %v", request))
 
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
@@ -95,18 +95,18 @@ func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolu
 
 	mountOptions := collectMountOptions(fsType, mountVolume.GetMountFlags())
 
-	d.log.Debug("[NodeStageVolume] Volume %s operation started", volumeID)
+	d.log.Debug(fmt.Sprintf("[NodeStageVolume] Volume %s operation started", volumeID))
 	ok = d.inFlight.Insert(volumeID)
 	if !ok {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
 	}
 	defer func() {
-		d.log.Debug("[NodeStageVolume] Volume %s operation completed", volumeID)
+		d.log.Debug(fmt.Sprintf("[NodeStageVolume] Volume %s operation completed", volumeID))
 		d.inFlight.Delete(volumeID)
 	}()
 
 	devPath := fmt.Sprintf("/dev/%s/%s", vgName, request.VolumeId)
-	d.log.Debug("[NodeStageVolume] Checking if device exists: %s", devPath)
+	d.log.Debug(fmt.Sprintf("[NodeStageVolume] Checking if device exists: %s", devPath))
 	exists, err := d.storeManager.PathExists(devPath)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error checking if device exists: %v", err)
@@ -136,20 +136,20 @@ func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolu
 	}
 
 	if needResize {
-		d.log.Info("[NodeStageVolume] Resizing volume %q (%q) mounted at %q", volumeID, devPath, target)
+		d.log.Info(fmt.Sprintf("[NodeStageVolume] Resizing volume %q (%q) mounted at %q", volumeID, devPath, target))
 		err = d.storeManager.ResizeFS(target)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error resizing volume %q (%q) mounted at %q: %v", volumeID, devPath, target, err)
 		}
 	}
 
-	d.log.Info("[NodeStageVolume] Volume %q (%q) successfully staged at %s. FsType: %s", volumeID, devPath, target, fsType)
+	d.log.Info(fmt.Sprintf("[NodeStageVolume] Volume %q (%q) successfully staged at %s. FsType: %s", volumeID, devPath, target, fsType))
 
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
 func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	d.log.Debug("[NodeUnstageVolume] method called with request: %v", request)
+	d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] method called with request: %v", request))
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "[NodeUnstageVolume] Volume id cannot be empty")
@@ -160,13 +160,13 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstage
 		return nil, status.Error(codes.InvalidArgument, "[NodeUnstageVolume] Staging target path cannot be empty")
 	}
 
-	d.log.Debug("[NodeUnstageVolume] Volume %s operation started", volumeID)
+	d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] Volume %s operation started", volumeID))
 	ok := d.inFlight.Insert(volumeID)
 	if !ok {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
 	}
 	defer func() {
-		d.log.Debug("[NodeUnstageVolume] Volume %s operation completed", volumeID)
+		d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] Volume %s operation completed", volumeID))
 		d.inFlight.Delete(volumeID)
 	}()
 	err := d.storeManager.Unstage(target)
@@ -213,13 +213,13 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		mountOptions = append(mountOptions, "ro")
 	}
 
-	d.log.Debug("[NodePublishVolume] Volume %s operation started", volumeID)
+	d.log.Debug(fmt.Sprintf("[NodePublishVolume] Volume %s operation started", volumeID))
 	ok := d.inFlight.Insert(volumeID)
 	if !ok {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
 	}
 	defer func() {
-		d.log.Debug("[NodePublishVolume] Volume %s operation completed", volumeID)
+		d.log.Debug(fmt.Sprintf("[NodePublishVolume] Volume %s operation completed", volumeID))
 		d.inFlight.Delete(volumeID)
 	}()
 
@@ -262,7 +262,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 }
 
 func (d *Driver) NodeUnpublishVolume(ctx context.Context, request *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
-	d.log.Debug("[NodeUnpublishVolume] method called with request: %v", request)
+	d.log.Debug(fmt.Sprintf("[NodeUnpublishVolume] method called with request: %v", request))
 	d.log.Trace("------------- NodeUnpublishVolume --------------")
 	d.log.Trace(request.String())
 	d.log.Trace("------------- NodeUnpublishVolume --------------")
@@ -277,13 +277,13 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, request *csi.NodeUnpub
 		return nil, status.Error(codes.InvalidArgument, "[NodeUnpublishVolume] Staging target path cannot be empty")
 	}
 
-	d.log.Debug("[NodeUnpublishVolume] Volume %s operation started", volumeID)
+	d.log.Debug(fmt.Sprintf("[NodeUnpublishVolume] Volume %s operation started", volumeID))
 	ok := d.inFlight.Insert(volumeID)
 	if !ok {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
 	}
 	defer func() {
-		d.log.Debug("[NodeUnpublishVolume] Volume %s operation completed", volumeID)
+		d.log.Debug(fmt.Sprintf("[NodeUnpublishVolume] Volume %s operation completed", volumeID))
 		d.inFlight.Delete(volumeID)
 	}()
 
@@ -326,7 +326,7 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, request *csi.NodeExpandVo
 }
 
 func (d *Driver) NodeGetCapabilities(ctx context.Context, request *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	d.log.Debug("[NodeGetCapabilities] method called with request: %v", request)
+	d.log.Debug(fmt.Sprintf("[NodeGetCapabilities] method called with request: %v", request))
 
 	caps := make([]*csi.NodeServiceCapability, len(nodeCaps))
 	for i, capability := range nodeCaps {
