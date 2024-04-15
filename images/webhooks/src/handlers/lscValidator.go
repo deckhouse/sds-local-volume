@@ -18,15 +18,23 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"slices"
 
+	dh "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+const (
+	sdsLocalVolumeModuleName = "sds-local-volume"
 )
 
 func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhvalidating.ValidatorResult, error) {
@@ -41,14 +49,7 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 		klog.Fatal(err)
 	}
 
-	listDevice := &snc.LvmVolumeGroupList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       snc.BlockDeviceKind,
-			APIVersion: snc.TypeMediaAPIVersion,
-		},
-		ListMeta: metav1.ListMeta{},
-		Items:    []snc.LvmVolumeGroup{},
-	}
+	listDevice := &snc.LvmVolumeGroupList{}
 
 	err = cl.List(ctx, listDevice)
 	if err != nil {
@@ -90,6 +91,43 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 			thickExists = true
 		} else {
 			thinExists = true
+		}
+	}
+
+	if thinExists {
+		ctx := context.Background()
+		cl, err := NewKubeClient("")
+		if err != nil {
+			klog.Fatal(err.Error())
+		}
+
+		slvModuleConfig := &dh.ModuleConfig{}
+
+		err = cl.Get(ctx, types.NamespacedName{Name: sdsLocalVolumeModuleName, Namespace: ""}, slvModuleConfig)
+		if err != nil {
+			klog.Fatal(err)
+		}
+
+		if value, exists := slvModuleConfig.Spec.Settings["enableThinProvisioning"]; exists && value == true {
+			klog.Info("Thin pools support is enabled")
+		} else {
+			klog.Info("Enabling thin pools support")
+			patchBytes, err := json.Marshal(map[string]interface{}{
+				"spec": map[string]interface{}{
+					"settings": map[string]interface{}{
+						"enableThinProvisioning": true,
+					},
+				},
+			})
+
+			if err != nil {
+				klog.Fatalf("Error marshalling patch: %s", err.Error())
+			}
+
+			err = cl.Patch(context.TODO(), slvModuleConfig, client.RawPatch(types.MergePatchType, patchBytes))
+			if err != nil {
+				klog.Fatalf("Error patching object: %s", err.Error())
+			}
 		}
 	}
 

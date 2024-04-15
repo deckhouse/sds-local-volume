@@ -18,6 +18,7 @@ package handlers
 
 import (
 	"context"
+	dh "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/resource/v1alpha2"
@@ -57,6 +58,7 @@ func NewKubeClient(kubeconfigPath string) (client.Client, error) {
 	var (
 		resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
 			v1alpha2.AddToScheme,
+			dh.AddToScheme,
 			snc.AddToScheme,
 			clientgoscheme.AddToScheme,
 			extv1.AddToScheme,
