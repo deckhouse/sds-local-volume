@@ -120,6 +120,9 @@ spec:
               port: 10259
               scheme: HTTPS
           {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
+          ports:
+            - containerPort: 8080
+              name: http
           volumeMounts:
           - mountPath: /etc/kubernetes
             name: scheduler-config
