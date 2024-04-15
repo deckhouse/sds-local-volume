@@ -23,27 +23,30 @@ import (
 	"sds-local-volume-csi/pkg/logger"
 	"strings"
 
-	mu "k8s.io/mount-utils"
+	mountutils "k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
 )
 
 type NodeStoreManager interface {
 	Mount(source, target string, isBlock bool, fsType string, readonly bool, mntOpts []string, lvmType, lvmThinPoolName string) error
-	Unmount(target string) error
+	Unstage(target string) error
+	Unpublish(target string) error
 	IsNotMountPoint(target string) (bool, error)
 	ResizeFS(target string) error
+	PathExists(path string) (bool, error)
+	NeedResize(devicePath string, deviceMountPath string) (bool, error)
 }
 
 type Store struct {
 	Log         *logger.Logger
-	NodeStorage mu.SafeFormatAndMount
+	NodeStorage mountutils.SafeFormatAndMount
 }
 
 func NewStore(logger *logger.Logger) *Store {
 	return &Store{
 		Log: logger,
-		NodeStorage: mu.SafeFormatAndMount{
-			Interface: mu.New("/bin/mount"),
+		NodeStorage: mountutils.SafeFormatAndMount{
+			Interface: mountutils.New("/bin/mount"),
 			Exec:      utilexec.New(),
 		},
 	}
@@ -77,8 +80,15 @@ func (s *Store) Mount(devSourcePath, target string, isBlock bool, fsType string,
 		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ FS MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 		s.Log.Trace("-----------------== start MkdirAll ==-----------------")
 		s.Log.Trace("mkdir create dir =" + target)
-		if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
-			return fmt.Errorf("[MkdirAll] could not create target directory %s: %w", target, err)
+		exists, err := s.PathExists(target)
+		if err != nil {
+			return fmt.Errorf("[PathExists] could not check if target directory %s exists: %w", target, err)
+		}
+		if !exists {
+			s.Log.Debug(fmt.Sprintf("Creating target directory %s", target))
+			if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
+				return fmt.Errorf("[MkdirAll] could not create target directory %s: %w", target, err)
+			}
 		}
 		s.Log.Trace("-----------------== stop MkdirAll ==-----------------")
 
@@ -95,7 +105,7 @@ func (s *Store) Mount(devSourcePath, target string, isBlock bool, fsType string,
 			mapperSourcePath := toMapperPath(devSourcePath)
 			s.Log.Trace(fmt.Sprintf("Target %s is a mount point. Checking if it is already mounted to source %s or %s", target, devSourcePath, mapperSourcePath))
 
-			mountedDevicePath, _, err := mu.GetDeviceNameFromMount(s.NodeStorage.Interface, target)
+			mountedDevicePath, _, err := mountutils.GetDeviceNameFromMount(s.NodeStorage.Interface, target)
 			if err != nil {
 				return fmt.Errorf("failed to find the device mounted at %s: %w", target, err)
 			}
@@ -112,7 +122,7 @@ func (s *Store) Mount(devSourcePath, target string, isBlock bool, fsType string,
 		s.Log.Trace("-----------------== start FormatAndMount ==---------------")
 
 		if lvmType == internal.LVMTypeThin {
-			s.Log.Trace(fmt.Sprintf("LVM type is Thin. Ckecking free space in thin pool %s", lvmThinPoolName))
+			s.Log.Trace(fmt.Sprintf("LVM type is Thin. Thin pool name: %s", lvmThinPoolName))
 		}
 		err = s.NodeStorage.FormatAndMount(devSourcePath, target, fsType, mntOpts)
 		if err != nil {
@@ -148,15 +158,23 @@ func (s *Store) Mount(devSourcePath, target string, isBlock bool, fsType string,
 	return nil
 }
 
-func (s *Store) Unmount(target string) error {
-	s.Log.Info(fmt.Sprintf("[unmount volume] target=%s", target))
+func (s *Store) Unpublish(target string) error {
+	return s.Unstage(target)
+}
 
-	err := s.NodeStorage.Unmount(target)
-	if err != nil {
-		s.Log.Error(err, "[s.NodeStorage.Unmount]: ")
+func (s *Store) Unstage(target string) error {
+	s.Log.Info(fmt.Sprintf("[unmount volume] target=%s", target))
+	err := mountutils.CleanupMountPoint(target, s.NodeStorage.Interface, false)
+	// Ignore the error when it contains "not mounted", because that indicates the
+	// world is already in the desired state
+	//
+	// mount-utils attempts to detect this on its own but fails when running on
+	// a read-only root filesystem
+	if err == nil || strings.Contains(fmt.Sprint(err), "not mounted") {
+		return nil
+	} else {
 		return err
 	}
-	return nil
 }
 
 func (s *Store) IsNotMountPoint(target string) (bool, error) {
@@ -172,7 +190,7 @@ func (s *Store) IsNotMountPoint(target string) (bool, error) {
 
 func (s *Store) ResizeFS(mountTarget string) error {
 	s.Log.Info(" ----== Resize FS ==---- ")
-	devicePath, _, err := mu.GetDeviceNameFromMount(s.NodeStorage.Interface, mountTarget)
+	devicePath, _, err := mountutils.GetDeviceNameFromMount(s.NodeStorage.Interface, mountTarget)
 	if err != nil {
 		s.Log.Error(err, "Failed to find the device mounted at mountTarget", "mountTarget", mountTarget)
 		return fmt.Errorf("failed to find the device mounted at %s: %w", mountTarget, err)
@@ -180,7 +198,7 @@ func (s *Store) ResizeFS(mountTarget string) error {
 
 	s.Log.Info("Found device for resizing", "devicePath", devicePath, "mountTarget", mountTarget)
 
-	_, err = mu.NewResizeFs(s.NodeStorage.Exec).Resize(devicePath, mountTarget)
+	_, err = mountutils.NewResizeFs(s.NodeStorage.Exec).Resize(devicePath, mountTarget)
 	if err != nil {
 		s.Log.Error(err, "Failed to resize filesystem", "devicePath", devicePath, "mountTarget", mountTarget)
 		return fmt.Errorf("failed to resize filesystem %s on device %s: %w", mountTarget, devicePath, err)
@@ -188,6 +206,14 @@ func (s *Store) ResizeFS(mountTarget string) error {
 
 	s.Log.Info("Filesystem resized successfully", "devicePath", devicePath)
 	return nil
+}
+
+func (s *Store) PathExists(path string) (bool, error) {
+	return mountutils.PathExists(path)
+}
+
+func (s *Store) NeedResize(devicePath string, deviceMountPath string) (bool, error) {
+	return mountutils.NewResizeFs(s.NodeStorage.Exec).NeedResize(devicePath, deviceMountPath)
 }
 
 func toMapperPath(devPath string) string {
