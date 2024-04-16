@@ -21,6 +21,7 @@ import (
 	"os"
 	"sds-local-volume-csi/internal"
 	"sds-local-volume-csi/pkg/logger"
+	"slices"
 	"strings"
 
 	mountutils "k8s.io/mount-utils"
@@ -28,13 +29,14 @@ import (
 )
 
 type NodeStoreManager interface {
-	Mount(source, target string, isBlock bool, fsType string, readonly bool, mntOpts []string, lvmType, lvmThinPoolName string) error
+	FormatAndMount(source, target string, isBlock bool, fsType string, readonly bool, mountOpts []string, lvmType, lvmThinPoolName string) error
 	Unstage(target string) error
 	Unpublish(target string) error
 	IsNotMountPoint(target string) (bool, error)
 	ResizeFS(target string) error
 	PathExists(path string) (bool, error)
 	NeedResize(devicePath string, deviceMountPath string) (bool, error)
+	BindMount(source, target, fsType string, mountOpts []string) error
 }
 
 type Store struct {
@@ -52,7 +54,7 @@ func NewStore(logger *logger.Logger) *Store {
 	}
 }
 
-func (s *Store) Mount(devSourcePath, target string, isBlock bool, fsType string, readonly bool, mntOpts []string, lvmType, lvmThinPoolName string) error {
+func (s *Store) FormatAndMount(devSourcePath, target string, isBlock bool, fsType string, readonly bool, mntOpts []string, lvmType, lvmThinPoolName string) error {
 	s.Log.Info(" ----== Node Mount ==---- ")
 
 	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
@@ -216,6 +218,47 @@ func (s *Store) NeedResize(devicePath string, deviceMountPath string) (bool, err
 	return mountutils.NewResizeFs(s.NodeStorage.Exec).NeedResize(devicePath, deviceMountPath)
 }
 
+func (s *Store) BindMount(source, target, fsType string, mountOpts []string) error {
+	s.Log.Info(" ----== Bind Mount ==---- ")
+	s.Log.Trace(fmt.Sprintf("[BindMount] params source=%q target=%q mountOptions=%v", source, target, mountOpts))
+	isMountPoint := false
+	exists, err := s.PathExists(target)
+	if err != nil {
+		return fmt.Errorf("[BindMount] could not check if target directory %s exists: %w", target, err)
+	}
+
+	if exists {
+		s.Log.Trace(fmt.Sprintf("[BindMount] target directory %s already exists", target))
+		isMountPoint, err = s.NodeStorage.IsMountPoint(target)
+		if err != nil {
+			return fmt.Errorf("[BindMount] could not check if target directory %s is a mount point: %w", target, err)
+		}
+	} else {
+		s.Log.Trace(fmt.Sprintf("[BindMount] creating target directory %q", target))
+		if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
+			return fmt.Errorf("[BindMount] could not create target directory %q: %w", target, err)
+		}
+	}
+
+	if isMountPoint {
+		s.Log.Trace(fmt.Sprintf("[BindMount] target directory %q is a mount point. Check mount", target))
+		err := checkMount(s, source, target, mountOpts)
+		if err != nil {
+			return fmt.Errorf("[BindMount] failed to check mount info for %q: %w", target, err)
+		}
+		s.Log.Trace(fmt.Sprintf("[BindMount] target directory %q is a mount point and already mounted to source %q", target, source))
+		return nil
+	}
+	// if err != nil {
+
+	err = s.NodeStorage.Interface.Mount(source, target, fsType, mountOpts)
+	if err != nil {
+		return fmt.Errorf("[BindMount] failed to bind mount %q to %q with mount options %v: %w", source, target, mountOpts, err)
+	}
+
+	return nil
+}
+
 func toMapperPath(devPath string) string {
 	if !strings.HasPrefix(devPath, "/dev/") {
 		return ""
@@ -225,4 +268,33 @@ func toMapperPath(devPath string) string {
 	mapperPath := strings.Replace(shortPath, "-", "--", -1)
 	mapperPath = strings.Replace(mapperPath, "/", "-", -1)
 	return "/dev/mapper/" + mapperPath
+}
+
+func checkMount(s *Store, source, target string, mountOpts []string) error {
+	mntInfo, err := s.NodeStorage.Interface.List()
+	if err != nil {
+		return fmt.Errorf("[checkMount] failed to list mounts: %w", err)
+	}
+
+	for _, m := range mntInfo {
+		if m.Path == target {
+			if m.Device != source {
+				return fmt.Errorf("[checkMount] device from mount point %q does not match expected source %q", m.Device, source)
+			}
+
+			if slices.Contains(mountOpts, "ro") {
+				if !slices.Contains(m.Opts, "ro") {
+					return fmt.Errorf("[checkMount] passed mount options contain 'ro' but mount options from mount point %q do not", target)
+				}
+
+				if slices.Equal(m.Opts, mountOpts) {
+					return fmt.Errorf("mount options %v do not match expected mount options %v", m.Opts, mountOpts)
+				}
+			}
+
+			return nil
+		}
+	}
+
+	return fmt.Errorf("[checkMount] mount point %q not found in mount info", target)
 }
