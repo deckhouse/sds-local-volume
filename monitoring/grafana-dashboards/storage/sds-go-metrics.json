@@ -16,14 +16,13 @@
           "matchAny": false,
           "tags": [],
           "type": "dashboard"
-        },
+        }
       }
     ]
   },
   "description": "Process status published by Go Prometheus client library, e.g. memory used, fds open, GC details",
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "gnetId": 6671,
   "graphTooltip": 0,
   "id": null,
   "iteration": 1713177795347,
