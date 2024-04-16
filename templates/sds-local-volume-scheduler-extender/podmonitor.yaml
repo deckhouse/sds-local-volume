@@ -15,7 +15,7 @@ spec:
         - regex: endpoint|namespace|pod|container
           action: labeldrop
         - targetLabel: job
-          replacement: sds-local-volume-
+          replacement: sds-local-volume
         - sourceLabels: [__meta_kubernetes_pod_node_name]
           targetLabel: node
         - targetLabel: tier
