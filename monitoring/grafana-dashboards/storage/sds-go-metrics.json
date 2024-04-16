@@ -38,7 +38,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "P0D6E4079E36703EB"
+        "uid": "${ds_prometheus}"
       },
       "editable": true,
       "error": false,
@@ -90,7 +90,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P0D6E4079E36703EB"
+            "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
           "expr": "sum(rate(process_resident_memory_bytes{job=~\"linstor.*|sds.*\"}[5m])) by (job, node)",
@@ -105,7 +105,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P0D6E4079E36703EB"
+            "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
           "expr": "sum(rate(process_virtual_memory_bytes{job=~\"linstor.*|sds.*\"}[5m])) by (job, node)",
@@ -156,7 +156,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "P0D6E4079E36703EB"
+        "uid": "${ds_prometheus}"
       },
       "editable": true,
       "error": false,
@@ -207,7 +207,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P0D6E4079E36703EB"
+            "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
           "exemplar": false,
@@ -260,7 +260,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "P0D6E4079E36703EB"
+        "uid": "${ds_prometheus}"
       },
       "editable": true,
       "error": false,
@@ -311,7 +311,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P0D6E4079E36703EB"
+            "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
           "expr": "rate(go_memstats_alloc_bytes_total{job=~\"linstor.*|sds.*\"}[5m])",
@@ -326,7 +326,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P0D6E4079E36703EB"
+            "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
           "expr": "rate(go_memstats_heap_alloc_bytes{job=~\"linstor.*|sds.*\"}[5m])",
@@ -378,7 +378,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "P0D6E4079E36703EB"
+        "uid": "${ds_prometheus}"
       },
       "editable": true,
       "error": false,
@@ -424,7 +424,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P0D6E4079E36703EB"
+            "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
           "expr": "rate(go_gc_duration_seconds_count{job=~\"linstor.*|sds.*\"}[5m])",
@@ -475,7 +475,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        "uid": "P0D6E4079E36703EB"
+        "uid": "${ds_prometheus}"
       },
       "editable": true,
       "error": false,
@@ -521,7 +521,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P0D6E4079E36703EB"
+            "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
           "expr": "rate(go_goroutines{job=~\"linstor.*|sds.*\"}[5m])",
