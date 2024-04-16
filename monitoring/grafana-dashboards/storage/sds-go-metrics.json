@@ -16,7 +16,8 @@
           "matchAny": false,
           "tags": [],
           "type": "dashboard"
-        }
+        },
+        "type": "dashboard"
       }
     ]
   },
