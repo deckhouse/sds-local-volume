@@ -219,13 +219,11 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		d.inFlight.Delete(volumeID)
 	}()
 
+	fsType := ""
+
 	switch volCap.GetAccessType().(type) {
 	case *csi.VolumeCapability_Block:
 		d.log.Trace("[NodePublishVolume] Block volume detected.")
-		err := d.storeManager.BindMount(source, target, "", mountOptions)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error bind mounting block volume %q. Source: %q. Target: %q: %v", volumeID, source, target, err)
-		}
 	case *csi.VolumeCapability_Mount:
 		d.log.Trace("[NodePublishVolume] Mount volume detected.")
 		mountVolume := volCap.GetMount()
@@ -243,13 +241,11 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		}
 
 		mountOptions = collectMountOptions(fsType, mountVolume.GetMountFlags(), mountOptions)
+	}
 
-		err := d.storeManager.BindMount(source, target, fsType, mountOptions)
-
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error bind mounting volume %q. Source: %q. Target: %q: %v", volumeID, source, target, err)
-		}
-
+	err := d.storeManager.BindMount(source, target, fsType, mountOptions)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error bind mounting volume %q. Source: %q. Target: %q. Mount options:%v. Err: %v", volumeID, source, target, mountOptions, err)
 	}
 
 	return &csi.NodePublishVolumeResponse{}, nil
