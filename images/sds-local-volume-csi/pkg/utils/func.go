@@ -178,10 +178,7 @@ func GetNodeWithMaxFreeSpace(log *logger.Logger, lvgs []v1alpha1.LvmVolumeGroup,
 
 		switch lvmType {
 		case internal.LLMTypeThick:
-			freeSpace, err = GetLVMVolumeGroupFreeSpace(lvg)
-			if err != nil {
-				return "", freeSpace, fmt.Errorf("get free space for lvg %+v: %w", lvg, err)
-			}
+			freeSpace = GetLVMVolumeGroupFreeSpace(lvg)
 		case internal.LLMTypeThin:
 			thinPoolName, ok := storageClassLVGParametersMap[lvg.Name]
 			if !ok {
@@ -269,20 +266,10 @@ func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace
 	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroup %s in namespace %s, last error: %w", KubernetesApiRequestLimit, lvgName, namespace, err)
 }
 
-func GetLVMVolumeGroupFreeSpace(lvg v1alpha1.LvmVolumeGroup) (vgFreeSpace resource.Quantity, err error) {
-	vgSize, err := resource.ParseQuantity(lvg.Status.VGSize)
-	if err != nil {
-		return vgFreeSpace, fmt.Errorf("parse size vgSize (%s): %w", lvg.Status.VGSize, err)
-	}
-
-	allocatedSize, err := resource.ParseQuantity(lvg.Status.AllocatedSize)
-	if err != nil {
-		return vgFreeSpace, fmt.Errorf("parse size vgSize (%s): %w", lvg.Status.AllocatedSize, err)
-	}
-
-	vgFreeSpace = vgSize
-	vgFreeSpace.Sub(allocatedSize)
-	return vgFreeSpace, nil
+func GetLVMVolumeGroupFreeSpace(lvg v1alpha1.LvmVolumeGroup) (vgFreeSpace resource.Quantity) {
+	vgFreeSpace = lvg.Status.VGSize
+	vgFreeSpace.Sub(lvg.Status.AllocatedSize)
+	return vgFreeSpace
 }
 
 func GetLVMThinPoolFreeSpace(lvg v1alpha1.LvmVolumeGroup, thinPoolName string) (thinPoolFreeSpace resource.Quantity, err error) {
@@ -297,15 +284,10 @@ func GetLVMThinPoolFreeSpace(lvg v1alpha1.LvmVolumeGroup, thinPoolName string) (
 		return thinPoolFreeSpace, fmt.Errorf("[GetLVMThinPoolFreeSpace] thin pool %s not found in lvg %+v", thinPoolName, lvg)
 	}
 
-	thinPoolUsedSize, err := resource.ParseQuantity(storagePoolThinPool.UsedSize)
-	if err != nil {
-		return thinPoolFreeSpace, fmt.Errorf("[GetLVMThinPoolFreeSpace] parse size thinPool.UsedSize (%s): %w", storagePoolThinPool.UsedSize, err)
-	}
-
 	thinPoolActualSize := storagePoolThinPool.ActualSize
 
 	thinPoolFreeSpace = thinPoolActualSize.DeepCopy()
-	thinPoolFreeSpace.Sub(thinPoolUsedSize)
+	thinPoolFreeSpace.Sub(storagePoolThinPool.UsedSize)
 	return thinPoolFreeSpace, nil
 }
 

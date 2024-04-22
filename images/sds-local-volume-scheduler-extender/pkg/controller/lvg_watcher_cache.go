@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/util/workqueue"
 	"sds-local-volume-scheduler-extender/api/v1alpha1"
 	"sds-local-volume-scheduler-extender/pkg/cache"
@@ -107,23 +106,31 @@ func RunLVGWatcherCacheController(
 			}
 
 			log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] starts to calculate the size difference for LVMVolumeGroup %s", newLvg.Name))
-			oldSize, err := resource.ParseQuantity(oldLvg.Status.AllocatedSize)
-			if err != nil {
-				log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to parse the allocated size for the LVMVolumeGroup %s", oldLvg.Name))
-				return
-			}
-			log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] old state LVMVolumeGroup %s has size %s", oldLvg.Name, oldSize.String()))
+			log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] old state LVMVolumeGroup %s has size %s", oldLvg.Name, oldLvg.Status.AllocatedSize))
 
-			newSize, err := resource.ParseQuantity(newLvg.Status.AllocatedSize)
-			if err != nil {
-				log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to parse the allocated size for the LVMVolumeGroup %s", oldLvg.Name))
-				return
-			}
-			log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] new state LVMVolumeGroup %s has size %s", newLvg.Name, newSize.String()))
+			//var oldSize resource.Quantity
+			//if oldLvg.Status.AllocatedSize != "" {
+			//	oldSize, err = resource.ParseQuantity(oldLvg.Status.AllocatedSize)
+			//	if err != nil {
+			//		log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to parse the allocated size for the LVMVolumeGroup %s", oldLvg.Name))
+			//		return
+			//	}
+			//}
+			//
+			//log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] new state LVMVolumeGroup %s has size %s", newLvg.Name, newLvg.Status.AllocatedSize))
+			//if newLvg.Status.AllocatedSize == "" {
+			//	log.Warning(fmt.Sprintf("LVMVolumeGroup %s new state has uninitialized allocated size field. Reconciliation will be skipped", newLvg.Name))
+			//	return
+			//}
+			////newSize, err := resource.ParseQuantity(newLvg.Status.AllocatedSize)
+			//if err != nil {
+			//	log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to parse the allocated size for the LVMVolumeGroup %s", oldLvg.Name))
+			//	return
+			//}
 			log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] successfully calculated the size difference for LVMVolumeGroup %s", newLvg.Name))
 
 			if newLvg.DeletionTimestamp != nil ||
-				oldSize.Value() == newSize.Value() {
+				oldLvg.Status.AllocatedSize.Value() == newLvg.Status.AllocatedSize.Value() {
 				log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] the LVMVolumeGroup %s should not be reconciled", newLvg.Name))
 				return
 			}
