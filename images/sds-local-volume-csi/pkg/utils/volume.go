@@ -137,7 +137,7 @@ func (s *Store) FormatAndMount(devSourcePath, target string, isBlock bool, fsTyp
 	if isBlock {
 		s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ BLOCK MOUNT ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 		s.Log.Trace("-----------------== start Create File ==---------------")
-		f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0666))
+		f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0644))
 		if err != nil {
 			if !os.IsExist(err) {
 				return fmt.Errorf("could not create bind target for block volume %s, %w", target, err)
@@ -224,19 +224,19 @@ func (s *Store) BindMount(source, target, fsType string, mountOpts []string) err
 	isMountPoint := false
 	exists, err := s.PathExists(target)
 	if err != nil {
-		return fmt.Errorf("[BindMount] could not check if target directory %s exists: %w", target, err)
+		return fmt.Errorf("[BindMount] could not check if target file %s exists: %w", target, err)
 	}
 
 	if exists {
-		s.Log.Trace(fmt.Sprintf("[BindMount] target directory %s already exists", target))
+		s.Log.Trace(fmt.Sprintf("[BindMount] target file %s already exists", target))
 		isMountPoint, err = s.NodeStorage.IsMountPoint(target)
 		if err != nil {
-			return fmt.Errorf("[BindMount] could not check if target directory %s is a mount point: %w", target, err)
+			return fmt.Errorf("[BindMount] could not check if target file %s is a mount point: %w", target, err)
 		}
 	} else {
-		s.Log.Trace(fmt.Sprintf("[BindMount] creating target directory %q", target))
+		s.Log.Trace(fmt.Sprintf("[BindMount] creating target file %q", target))
 		if err := os.MkdirAll(target, os.FileMode(0755)); err != nil {
-			return fmt.Errorf("[BindMount] could not create target directory %q: %w", target, err)
+			return fmt.Errorf("[BindMount] could not create target file %q: %w", target, err)
 		}
 	}
 

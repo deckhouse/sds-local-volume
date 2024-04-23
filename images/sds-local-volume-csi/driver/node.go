@@ -224,6 +224,25 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 	switch volCap.GetAccessType().(type) {
 	case *csi.VolumeCapability_Block:
 		d.log.Trace("[NodePublishVolume] Block volume detected.")
+		vgName, ok := request.GetVolumeContext()[internal.VGNameKey]
+		if !ok {
+			return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume group name cannot be empty")
+		}
+
+		devPath := fmt.Sprintf("/dev/%s/%s", vgName, request.VolumeId)
+		d.log.Debug(fmt.Sprintf("[NodePublishVolume] Checking if device exists: %s", devPath))
+		exists, err := d.storeManager.PathExists(devPath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error checking if device exists: %v", err)
+		}
+		if !exists {
+			return nil, status.Errorf(codes.NotFound, "[NodePublishVolume] Device %s not found", devPath)
+		}
+		err = d.storeManager.FormatAndMount(devPath, target, true, fsType, false, mountOptions, "", "")
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error mounting volume %q at %q: %v", devPath, target, err)
+		}
+
 	case *csi.VolumeCapability_Mount:
 		d.log.Trace("[NodePublishVolume] Mount volume detected.")
 		mountVolume := volCap.GetMount()
@@ -241,11 +260,11 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		}
 
 		mountOptions = collectMountOptions(fsType, mountVolume.GetMountFlags(), mountOptions)
-	}
 
-	err := d.storeManager.BindMount(source, target, fsType, mountOptions)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error bind mounting volume %q. Source: %q. Target: %q. Mount options:%v. Err: %v", volumeID, source, target, mountOptions, err)
+		err := d.storeManager.BindMount(source, target, fsType, mountOptions)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error bind mounting volume %q. Source: %q. Target: %q. Mount options:%v. Err: %v", volumeID, source, target, mountOptions, err)
+		}
 	}
 
 	return &csi.NodePublishVolumeResponse{}, nil
