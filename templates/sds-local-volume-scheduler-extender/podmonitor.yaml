@@ -18,6 +18,8 @@ spec:
           replacement: sds-local-volume
         - sourceLabels: [__meta_kubernetes_pod_node_name]
           targetLabel: node
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          targetLabel: app
         - targetLabel: tier
           replacement: cluster
         - sourceLabels: [__meta_kubernetes_pod_ready]
@@ -25,7 +27,7 @@ spec:
           action: keep
   selector:
     matchLabels:
-      app: sds-local-volume-scheduler
+      app: sds-local-volume
   namespaceSelector:
     matchNames:
       - d8-{{ .Chart.Name }}
