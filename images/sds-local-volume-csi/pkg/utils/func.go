@@ -277,6 +277,7 @@ func GetLVMThinPoolFreeSpace(lvg v1alpha1.LvmVolumeGroup, thinPoolName string) (
 	for _, thinPool := range lvg.Status.ThinPools {
 		if thinPool.Name == thinPoolName {
 			storagePoolThinPool = &thinPool
+			break
 		}
 	}
 
