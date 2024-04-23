@@ -579,12 +579,14 @@ func SortLVGsByNodeName(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string][]*
 }
 
 func getVGFreeSpace(lvg *v1alpha1.LvmVolumeGroup) resource.Quantity {
+	// notice that .Sub method uses pointer but not a copy of the quantity
 	free := lvg.Status.VGSize
 	free.Sub(lvg.Status.AllocatedSize)
 	return free
 }
 
 func getThinPoolFreeSpace(tp *v1alpha1.StatusThinPool) resource.Quantity {
+	// notice that .Sub method uses pointer but not a copy of the quantity
 	free := tp.ActualSize
 	free.Sub(tp.UsedSize)
 
