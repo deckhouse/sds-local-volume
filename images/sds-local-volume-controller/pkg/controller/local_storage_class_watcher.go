@@ -117,7 +117,7 @@ func RunLocalStorageClassWatcherController(
 			if shouldRequeue {
 				log.Warning(fmt.Sprintf("[LocalStorageClassReconciler] Reconciler will requeue the request, name: %s", request.Name))
 				return reconcile.Result{
-					RequeueAfter: cfg.RequeueInterval * time.Second,
+					RequeueAfter: cfg.RequeueStorageClassInterval * time.Second,
 				}, nil
 			}
 
@@ -151,7 +151,7 @@ func RunLocalStorageClassWatcherController(
 						Namespace: lsc.Namespace,
 						Name:      lsc.Name,
 					},
-				}, cfg.RequeueInterval*time.Second)
+				}, cfg.RequeueStorageClassInterval*time.Second)
 				return
 			}
 
@@ -167,7 +167,7 @@ func RunLocalStorageClassWatcherController(
 						Namespace: lsc.Namespace,
 						Name:      lsc.Name,
 					},
-				}, cfg.RequeueInterval*time.Second)
+				}, cfg.RequeueStorageClassInterval*time.Second)
 			}
 			log.Info(fmt.Sprintf("[CreateFunc] ends the reconciliation for the LocalStorageClass %s", e.Object.GetName()))
 		},
@@ -202,7 +202,7 @@ func RunLocalStorageClassWatcherController(
 						Namespace: newLsc.Namespace,
 						Name:      newLsc.Name,
 					},
-				}, cfg.RequeueInterval*time.Second)
+				}, cfg.RequeueStorageClassInterval*time.Second)
 				return
 			}
 
@@ -218,7 +218,7 @@ func RunLocalStorageClassWatcherController(
 						Namespace: newLsc.Namespace,
 						Name:      newLsc.Name,
 					},
-				}, cfg.RequeueInterval*time.Second)
+				}, cfg.RequeueStorageClassInterval*time.Second)
 			}
 
 			log.Info(fmt.Sprintf("[UpdateFunc] ends the reconciliation for the LocalStorageClass %s", e.ObjectNew.GetName()))

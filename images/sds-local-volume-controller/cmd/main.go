@@ -63,7 +63,7 @@ func main() {
 
 	log.Info("[main] CfgParams has been successfully created")
 	log.Info(fmt.Sprintf("[main] %s = %s", config.LogLevel, cfgParams.Loglevel))
-	log.Info(fmt.Sprintf("[main] %s = %d", config.RequeueInterval, cfgParams.RequeueInterval))
+	log.Info(fmt.Sprintf("[main] %s = %d", config.RequeueInterval, cfgParams.RequeueStorageClassInterval))
 
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {
@@ -97,7 +97,12 @@ func main() {
 	metrics := monitoring.GetMetrics("")
 
 	if _, err = controller.RunLocalStorageClassWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
-		log.Error(err, "[main] unable to controller.RunBlockDeviceController")
+		log.Error(err, fmt.Sprintf("[main] unable to run %s", controller.LocalStorageClassCtrlName))
+		os.Exit(1)
+	}
+
+	if _, err = controller.RunLocalCSINodeWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
+		log.Error(err, fmt.Sprintf("[main] unable to run %s", controller.LocalCSINodeWatcherCtrl))
 		os.Exit(1)
 	}
 
