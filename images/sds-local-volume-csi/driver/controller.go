@@ -83,7 +83,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	switch BindingMode {
 	case internal.BindingModeI:
 		d.log.Info(fmt.Sprintf("BindingMode is %s. Start selecting node", internal.BindingModeI))
-		selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(d.log, storageClassLVGs, storageClassLVGParametersMap, LvmType)
+		selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(storageClassLVGs, storageClassLVGParametersMap, LvmType)
 		if err != nil {
 			d.log.Error(err, "error GetNodeMaxVGSize")
 		}
@@ -103,13 +103,13 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		}
 	}
 
-	selectedLVG, err := utils.SelectLVG(storageClassLVGs, storageClassLVGParametersMap, preferredNode)
+	selectedLVG, err := utils.SelectLVG(storageClassLVGs, preferredNode)
 	if err != nil {
 		d.log.Error(err, "error SelectLVG")
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
-	llvSpec := utils.GetLLVSpec(d.log, lvName, selectedLVG, storageClassLVGParametersMap, preferredNode, LvmType, *llvSize)
+	llvSpec := utils.GetLLVSpec(d.log, lvName, selectedLVG, storageClassLVGParametersMap, LvmType, *llvSize)
 	d.log.Info(fmt.Sprintf("LVMLogicalVolumeSpec : %+v", llvSpec))
 	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
 	if err != nil {

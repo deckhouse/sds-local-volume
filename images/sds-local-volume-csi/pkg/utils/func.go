@@ -171,8 +171,7 @@ func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantit
 	return math.Abs(leftSizeFloat-rightSizeFloat) < float64(allowedDelta.Value())
 }
 
-func GetNodeWithMaxFreeSpace(log *logger.Logger, lvgs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
-
+func GetNodeWithMaxFreeSpace(lvgs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
 	var maxFreeSpace int64
 	for _, lvg := range lvgs {
 
@@ -365,7 +364,7 @@ func GetLVGList(ctx context.Context, kc client.Client) (*v1alpha1.LvmVolumeGroup
 	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroupList, last error: %w", KubernetesApiRequestLimit, err)
 }
 
-func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, nodeName, lvmType string, llvSize resource.Quantity) v1alpha1.LVMLogicalVolumeSpec {
+func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity) v1alpha1.LVMLogicalVolumeSpec {
 	var llvThin *v1alpha1.ThinLogicalVolumeSpec
 	if lvmType == internal.LLMTypeThin {
 		llvThin = &v1alpha1.ThinLogicalVolumeSpec{}
@@ -381,7 +380,7 @@ func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolum
 	}
 }
 
-func SelectLVG(storageClassLVGs []v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, nodeName string) (v1alpha1.LvmVolumeGroup, error) {
+func SelectLVG(storageClassLVGs []v1alpha1.LvmVolumeGroup, nodeName string) (v1alpha1.LvmVolumeGroup, error) {
 	for _, lvg := range storageClassLVGs {
 		if lvg.Status.Nodes[0].Name == nodeName {
 			return lvg, nil
