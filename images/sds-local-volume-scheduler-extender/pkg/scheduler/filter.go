@@ -292,10 +292,7 @@ func filterNodes(
 		log.Trace(fmt.Sprintf("[filterNodes] the LVMVolumeGroup %s is actually used. VG size: %s, allocatedSize: %s", lvg.Name, lvg.Status.VGSize, lvg.Status.AllocatedSize))
 	}
 
-	lvgsThickFree, err := getLVGThickFreeSpaces(log, usedLVGs)
-	if err != nil {
-		return nil, err
-	}
+	lvgsThickFree := getLVGThickFreeSpaces(log, usedLVGs)
 	log.Trace(fmt.Sprintf("[filterNodes] for a Pod %s/%s current LVMVolumeGroups Thick FreeSpace on the node: %+v", pod.Namespace, pod.Name, lvgsThickFree))
 
 	for lvgName, freeSpace := range lvgsThickFree {
@@ -440,21 +437,18 @@ func filterNodes(
 	return result, nil
 }
 
-func getLVGThickFreeSpaces(log logger.Logger, lvgs map[string]*v1alpha1.LvmVolumeGroup) (map[string]int64, error) {
+func getLVGThickFreeSpaces(log logger.Logger, lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string]int64 {
 	result := make(map[string]int64, len(lvgs))
 
 	for _, lvg := range lvgs {
 		log.Debug(fmt.Sprintf("[getLVGThickFreeSpaces] tries to count free VG space for LVMVolumeGroup %s", lvg.Name))
-		free, err := getVGFreeSpace(lvg)
-		if err != nil {
-			return nil, err
-		}
+		free := getVGFreeSpace(lvg)
 		log.Debug(fmt.Sprintf("[getLVGThickFreeSpaces] successfully counted free VG space for LVMVolumeGroup %s", lvg.Name))
 
 		result[lvg.Name] = free.Value()
 	}
 
-	return result, nil
+	return result
 }
 
 func findMatchedThinPool(thinPools []v1alpha1.StatusThinPool, name string) *v1alpha1.StatusThinPool {
@@ -584,30 +578,19 @@ func SortLVGsByNodeName(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string][]*
 	return sorted
 }
 
-func getVGFreeSpace(lvg *v1alpha1.LvmVolumeGroup) (resource.Quantity, error) {
-	free, err := resource.ParseQuantity(lvg.Status.VGSize)
-	if err != nil {
-		return resource.Quantity{}, fmt.Errorf("unable to parse Status.VGSize quantity for LVMVolumeGroup %s, err: %w", lvg.Name, err)
-	}
-
-	used, err := resource.ParseQuantity(lvg.Status.AllocatedSize)
-	if err != nil {
-		return resource.Quantity{}, fmt.Errorf("unable to parse Status.AllocatedSize quantity for LVMVolumeGroup %s, err: %w", lvg.Name, err)
-	}
-
-	free.Sub(used)
-	return free, nil
+func getVGFreeSpace(lvg *v1alpha1.LvmVolumeGroup) resource.Quantity {
+	// notice that .Sub method uses pointer but not a copy of the quantity
+	free := lvg.Status.VGSize
+	free.Sub(lvg.Status.AllocatedSize)
+	return free
 }
 
-func getThinPoolFreeSpace(tp *v1alpha1.StatusThinPool) (resource.Quantity, error) {
+func getThinPoolFreeSpace(tp *v1alpha1.StatusThinPool) resource.Quantity {
+	// notice that .Sub method uses pointer but not a copy of the quantity
 	free := tp.ActualSize
-	used, err := resource.ParseQuantity(tp.UsedSize)
-	if err != nil {
-		return resource.Quantity{}, err
-	}
-	free.Sub(used)
+	free.Sub(tp.UsedSize)
 
-	return free, nil
+	return free
 }
 
 func getPersistentVolumes(ctx context.Context, cl client.Client) (map[string]corev1.PersistentVolume, error) {

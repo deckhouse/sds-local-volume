@@ -24,6 +24,7 @@ rules:
       - storage.k8s.io
     verbs:
       - get
+      - list
     resources:
       - storageclasses
 

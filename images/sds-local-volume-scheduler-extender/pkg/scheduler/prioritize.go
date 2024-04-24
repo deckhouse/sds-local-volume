@@ -157,11 +157,7 @@ func scoreNodes(
 				lvg := lvgs[commonLVG.Name]
 				switch pvcReq.DeviceType {
 				case thick:
-					freeSpace, err = getVGFreeSpace(lvg)
-					if err != nil {
-						errs <- err
-						return
-					}
+					freeSpace = getVGFreeSpace(lvg)
 					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space before PVC reservation: %s", lvg.Name, freeSpace.String()))
 					reserved, err := schedulerCache.GetLVGReservedSpace(lvg.Name)
 					if err != nil {
@@ -181,20 +177,11 @@ func scoreNodes(
 						return
 					}
 
-					freeSpace, err = getThinPoolFreeSpace(thinPool)
-					if err != nil {
-						errs <- err
-						return
-					}
+					freeSpace = getThinPoolFreeSpace(thinPool)
 				}
 
-				lvgTotalSize, err := resource.ParseQuantity(lvg.Status.VGSize)
-				if err != nil {
-					errs <- err
-					return
-				}
-				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s total size: %s", lvg.Name, lvgTotalSize.String()))
-				totalFreeSpaceLeft += getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize, lvgTotalSize.Value())
+				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s total size: %s", lvg.Name, lvg.Status.VGSize.String()))
+				totalFreeSpaceLeft += getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize, lvg.Status.VGSize.Value())
 			}
 
 			averageFreeSpace := totalFreeSpaceLeft / int64(len(pvcs))

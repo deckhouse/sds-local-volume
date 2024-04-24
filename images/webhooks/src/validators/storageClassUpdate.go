@@ -18,6 +18,10 @@ package validators
 
 import (
 	"context"
+	"fmt"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	"webhooks/v1alpha1"
 
 	"github.com/slok/kubewebhook/v2/pkg/model"
@@ -39,6 +43,29 @@ func StorageClassUpdate(ctx context.Context, _ *model.AdmissionReview, obj metav
 			thickExists = true
 		} else {
 			thinExists = true
+		}
+	}
+
+	if sc.Spec.IsDefault == true {
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			klog.Fatal(err.Error())
+		}
+
+		staticClient, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			klog.Fatal(err)
+		}
+
+		storageClasses, _ := staticClient.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
+		for _, storageClass := range storageClasses.Items {
+			for label, value := range storageClass.GetObjectMeta().GetAnnotations() {
+				if label == "storageclass.kubernetes.io/is-default-class" && value == "true" && storageClass.Name != sc.Name {
+					klog.Infof("Default StorageClass already set: %s", storageClass.Name)
+					return &kwhvalidating.ValidatorResult{Valid: false, Message: fmt.Sprintf("Default StorageClass already set: %s", storageClass.Name)},
+						nil
+				}
+			}
 		}
 	}
 

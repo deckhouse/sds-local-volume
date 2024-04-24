@@ -83,7 +83,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	switch BindingMode {
 	case internal.BindingModeI:
 		d.log.Info(fmt.Sprintf("BindingMode is %s. Start selecting node", internal.BindingModeI))
-		selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(d.log, storageClassLVGs, storageClassLVGParametersMap, LvmType)
+		selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(storageClassLVGs, storageClassLVGParametersMap, LvmType)
 		if err != nil {
 			d.log.Error(err, "error GetNodeMaxVGSize")
 		}
@@ -103,13 +103,13 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		}
 	}
 
-	selectedLVG, err := utils.SelectLVG(storageClassLVGs, storageClassLVGParametersMap, preferredNode)
+	selectedLVG, err := utils.SelectLVG(storageClassLVGs, preferredNode)
 	if err != nil {
 		d.log.Error(err, "error SelectLVG")
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
-	llvSpec := utils.GetLLVSpec(d.log, lvName, selectedLVG, storageClassLVGParametersMap, preferredNode, LvmType, *llvSize)
+	llvSpec := utils.GetLLVSpec(d.log, lvName, selectedLVG, storageClassLVGParametersMap, LvmType, *llvSize)
 	d.log.Info(fmt.Sprintf("LVMLogicalVolumeSpec : %+v", llvSpec))
 	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
 	if err != nil {
@@ -306,11 +306,8 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
 	}
 
-	if llv.Spec.Type == internal.LVMTypeThick {
-		lvgFreeSpace, err := utils.GetLVMVolumeGroupFreeSpace(*lvg)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroupCapacity: %v", err)
-		}
+	if llv.Spec.Type == internal.LLMTypeThick {
+		lvgFreeSpace := utils.GetLVMVolumeGroupFreeSpace(*lvg)
 
 		if lvgFreeSpace.Value() < (requestCapacity.Value() - llv.Status.ActualSize.Value()) {
 			return nil, status.Errorf(codes.Internal, "requested size: %s is greater than the capacity of the LVMVolumeGroup: %s", requestCapacity.String(), lvgFreeSpace.String())
