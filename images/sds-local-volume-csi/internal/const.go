@@ -34,4 +34,5 @@ const (
 	ResizeDelta       = "32Mi"
 	// FSTypeExt4 represents the ext4 filesystem type
 	FSTypeExt4 = "ext4"
+	FSTypeXfs  = "xfs"
 )

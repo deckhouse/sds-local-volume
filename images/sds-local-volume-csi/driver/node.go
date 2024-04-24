@@ -77,8 +77,6 @@ func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolu
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
-	isBlock := false
-
 	mountVolume := volCap.GetMount()
 	if mountVolume == nil {
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume capability mount cannot be empty")
@@ -124,7 +122,7 @@ func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolu
 	d.log.Trace(fmt.Sprintf("lvmThinPoolName = %s", lvmThinPoolName))
 	d.log.Trace(fmt.Sprintf("fsType = %s", fsType))
 
-	err = d.storeManager.FormatAndMount(devPath, target, isBlock, fsType, false, mountOptions, lvmType, lvmThinPoolName)
+	err = d.storeManager.NodeStageVolumeFS(devPath, target, fsType, mountOptions, lvmType, lvmThinPoolName)
 	if err != nil {
 		d.log.Error(err, "[NodeStageVolume] Error mounting volume")
 		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error format device %q and mounting volume at %q: %v", devPath, target, err)
@@ -219,8 +217,6 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		d.inFlight.Delete(volumeID)
 	}()
 
-	fsType := ""
-
 	switch volCap.GetAccessType().(type) {
 	case *csi.VolumeCapability_Block:
 		d.log.Trace("[NodePublishVolume] Block volume detected.")
@@ -238,13 +234,13 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 		if !exists {
 			return nil, status.Errorf(codes.NotFound, "[NodePublishVolume] Device %s not found", devPath)
 		}
-		err = d.storeManager.FormatAndMount(devPath, target, true, fsType, false, mountOptions, "", "")
+		err = d.storeManager.NodePublishVolumeBlock(devPath, target, mountOptions)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error mounting volume %q at %q: %v", devPath, target, err)
 		}
 
 	case *csi.VolumeCapability_Mount:
-		d.log.Trace("[NodePublishVolume] Mount volume detected.")
+		d.log.Trace("[NodePublishVolume] FS type volume detected.")
 		mountVolume := volCap.GetMount()
 		if mountVolume == nil {
 			return nil, status.Error(codes.InvalidArgument, "[NodePublishVolume] Volume capability mount cannot be empty")
@@ -261,7 +257,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 
 		mountOptions = collectMountOptions(fsType, mountVolume.GetMountFlags(), mountOptions)
 
-		err := d.storeManager.BindMount(source, target, fsType, mountOptions)
+		err := d.storeManager.NodePublishVolumeFS(source, target, fsType, mountOptions)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error bind mounting volume %q. Source: %q. Target: %q. Mount options:%v. Err: %v", volumeID, source, target, mountOptions, err)
 		}
@@ -378,12 +374,13 @@ func collectMountOptions(fsType string, mountFlags, mountOptions []string) []str
 		}
 	}
 
-	// // By default, xfs does not allow mounting of two volumes with the same filesystem uuid.
-	// // Force ignore this uuid to be able to mount volume + its clone / restored snapshot on the same node.
-	// if fsType == FSTypeXfs {
-	// 	if !slices.Contains(mountOptions, "nouuid") {
-	// 		mountOptions = append(mountOptions, "nouuid")
-	// 	}
-	// }
+	// By default, xfs does not allow mounting of two volumes with the same filesystem uuid.
+	// Force ignore this uuid to be able to mount volume + its clone / restored snapshot on the same node.
+	if fsType == internal.FSTypeXfs {
+		if !slices.Contains(mountOptions, "nouuid") {
+			mountOptions = append(mountOptions, "nouuid")
+		}
+	}
+
 	return mountOptions
 }
