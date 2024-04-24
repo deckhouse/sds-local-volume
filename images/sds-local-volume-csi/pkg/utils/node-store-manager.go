@@ -133,7 +133,7 @@ func (s *Store) NodeStageVolumeFS(source, target string, fsType string, mountOpt
 }
 
 func (s *Store) NodePublishVolumeBlock(source, target string, mountOpts []string) error {
-	s.Log.Trace(" ----== Start NodePublishVolumeBlock ==---- ")
+	s.Log.Info(" ----== Start NodePublishVolumeBlock ==---- ")
 
 	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 	s.Log.Trace(fmt.Sprintf("[NodePublishVolumeBlock] params source=%s target=%s mountOptions=%v", source, target, mountOpts))
