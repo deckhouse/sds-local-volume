@@ -306,7 +306,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
 	}
 
-	if llv.Spec.Type == internal.LLMTypeThick {
+	if llv.Spec.Type == internal.LVMTypeThick {
 		lvgFreeSpace := utils.GetLVMVolumeGroupFreeSpace(*lvg)
 
 		if lvgFreeSpace.Value() < (requestCapacity.Value() - llv.Status.ActualSize.Value()) {
