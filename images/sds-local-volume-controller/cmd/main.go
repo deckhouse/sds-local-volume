@@ -27,6 +27,7 @@ import (
 	"sds-local-volume-controller/pkg/kubutils"
 	"sds-local-volume-controller/pkg/logger"
 	"sds-local-volume-controller/pkg/monitoring"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	v1 "k8s.io/api/core/v1"
 	sv1 "k8s.io/api/storage/v1"
@@ -81,10 +82,20 @@ func main() {
 	}
 	log.Info("[main] successfully read scheme CR")
 
+	cacheOpt := cache.Options{
+		DefaultNamespaces: map[string]cache.Config{
+			cfgParams.ControllerNamespace: {},
+		},
+	}
+
 	managerOpts := manager.Options{
 		Scheme: scheme,
+		Cache:  cacheOpt,
 		//MetricsBindAddress: cfgParams.MetricsPort,
-		Logger: log.GetLogger(),
+		LeaderElection:          true,
+		LeaderElectionNamespace: cfgParams.ControllerNamespace,
+		LeaderElectionID:        config.ControllerName,
+		Logger:                  log.GetLogger(),
 	}
 
 	mgr, err := manager.New(kConfig, managerOpts)

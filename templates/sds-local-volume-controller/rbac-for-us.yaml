@@ -55,7 +55,6 @@ rules:
     resources:
       - nodes
       - persistentvolumes
-      - secrets
     verbs:
       - get
       - list

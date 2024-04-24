@@ -173,6 +173,8 @@ func reconcileLocalCSILabels(ctx context.Context, cl client.Client, log logger.L
 			log.Debug(fmt.Sprintf("[reconcileLocalCSILabels] no dependent resources were found for the node %s. Label %s will be removed from the node", node.Name, localCsiNodeSelectorLabel))
 
 			delete(node.Labels, localCsiNodeSelectorLabel)
+			delete(node.Labels, nodeManualEvictionLabel)
+
 			err = cl.Update(ctx, &node)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[reconcileLocalCSILabels] unable to update the node %s", node.Name))
