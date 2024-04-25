@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"webhooks/handlers"
 	"webhooks/v1alpha1"
-	"webhooks/webhooks"
 
 	"github.com/sirupsen/logrus"
 	kwhlogrus "github.com/slok/kubewebhook/v2/pkg/log/logrus"
@@ -65,20 +65,19 @@ func main() {
 
 	cfg := initFlags()
 
-	// podSchedulerMutation
-	podSchedulerMutatingWebHookHandler, err := webhooks.GetMutatingWebhookHandler(webhooks.PodSchedulerMutate, PodSchedulerMutatorID, &corev1.Pod{}, logger)
+	podSchedulerMutatingWebHookHandler, err := handlers.GetMutatingWebhookHandler(handlers.PodSchedulerMutate, PodSchedulerMutatorID, &corev1.Pod{}, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating podSchedulerMutatingWebHookHandler: %s", err)
 		os.Exit(1)
 	}
 
-	lscValidatingWebhookHandler, err := webhooks.GetValidatingWebhookHandler(webhooks.LSCValidate, LSCValidatorId, &v1alpha1.LocalStorageClass{}, logger)
+	lscValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LSCValidate, LSCValidatorId, &v1alpha1.LocalStorageClass{}, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating lscValidatingWebhookHandler: %s", err)
 		os.Exit(1)
 	}
 
-	scValidatingWebhookHandler, err := webhooks.GetValidatingWebhookHandler(webhooks.SCValidate, SCValidatorId, &storagev1.StorageClass{}, logger)
+	scValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.SCValidate, SCValidatorId, &storagev1.StorageClass{}, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating scValidatingWebhookHandler: %s", err)
 		os.Exit(1)
