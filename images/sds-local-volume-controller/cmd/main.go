@@ -27,6 +27,7 @@ import (
 	"sds-local-volume-controller/pkg/kubutils"
 	"sds-local-volume-controller/pkg/logger"
 	"sds-local-volume-controller/pkg/monitoring"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	v1 "k8s.io/api/core/v1"
 	sv1 "k8s.io/api/storage/v1"
@@ -63,7 +64,7 @@ func main() {
 
 	log.Info("[main] CfgParams has been successfully created")
 	log.Info(fmt.Sprintf("[main] %s = %s", config.LogLevel, cfgParams.Loglevel))
-	log.Info(fmt.Sprintf("[main] %s = %d", config.RequeueInterval, cfgParams.RequeueInterval))
+	log.Info(fmt.Sprintf("[main] %s = %d", config.RequeueInterval, cfgParams.RequeueStorageClassInterval))
 
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {
@@ -81,10 +82,20 @@ func main() {
 	}
 	log.Info("[main] successfully read scheme CR")
 
+	cacheOpt := cache.Options{
+		DefaultNamespaces: map[string]cache.Config{
+			cfgParams.ControllerNamespace: {},
+		},
+	}
+
 	managerOpts := manager.Options{
 		Scheme: scheme,
+		Cache:  cacheOpt,
 		//MetricsBindAddress: cfgParams.MetricsPort,
-		Logger: log.GetLogger(),
+		LeaderElection:          true,
+		LeaderElectionNamespace: cfgParams.ControllerNamespace,
+		LeaderElectionID:        config.ControllerName,
+		Logger:                  log.GetLogger(),
 	}
 
 	mgr, err := manager.New(kConfig, managerOpts)
@@ -97,7 +108,12 @@ func main() {
 	metrics := monitoring.GetMetrics("")
 
 	if _, err = controller.RunLocalStorageClassWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
-		log.Error(err, "[main] unable to controller.RunBlockDeviceController")
+		log.Error(err, fmt.Sprintf("[main] unable to run %s", controller.LocalStorageClassCtrlName))
+		os.Exit(1)
+	}
+
+	if _, err = controller.RunLocalCSINodeWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
+		log.Error(err, fmt.Sprintf("[main] unable to run %s", controller.LocalCSINodeWatcherCtrl))
 		os.Exit(1)
 	}
 

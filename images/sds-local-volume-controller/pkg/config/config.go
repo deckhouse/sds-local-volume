@@ -14,19 +14,27 @@ limitations under the License.
 package config
 
 import (
+	"log"
 	"os"
 	"sds-local-volume-controller/pkg/logger"
 	"time"
 )
 
 const (
-	LogLevel        = "LOG_LEVEL"
-	RequeueInterval = "REQUEUE_INTERVAL"
+	LogLevel               = "LOG_LEVEL"
+	RequeueInterval        = "REQUEUE_INTERVAL"
+	ConfigSecretName       = "d8-sds-local-volume-controller-config"
+	ControllerNamespaceEnv = "CONTROLLER_NAMESPACE"
+	HardcodedControllerNS  = "d8-sds-local-volume"
+	ControllerName         = "sds-local-volume-controller"
 )
 
 type Options struct {
-	Loglevel        logger.Verbosity
-	RequeueInterval time.Duration
+	Loglevel                    logger.Verbosity
+	RequeueStorageClassInterval time.Duration
+	RequeueSecretInterval       time.Duration
+	ConfigSecretName            string
+	ControllerNamespace         string
 }
 
 func NewConfig() *Options {
@@ -39,7 +47,23 @@ func NewConfig() *Options {
 		opts.Loglevel = logger.Verbosity(loglevel)
 	}
 
-	opts.RequeueInterval = 10
+	opts.ControllerNamespace = os.Getenv(ControllerNamespaceEnv)
+	if opts.ControllerNamespace == "" {
+
+		namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+		if err != nil {
+			log.Printf("Failed to get namespace from filesystem: %v", err)
+			log.Printf("Using hardcoded namespace: %s", HardcodedControllerNS)
+			opts.ControllerNamespace = HardcodedControllerNS
+		} else {
+			log.Printf("Got namespace from filesystem: %s", string(namespace))
+			opts.ControllerNamespace = string(namespace)
+		}
+	}
+
+	opts.RequeueStorageClassInterval = 10
+	opts.RequeueSecretInterval = 10
+	opts.ConfigSecretName = ConfigSecretName
 
 	return &opts
 }
