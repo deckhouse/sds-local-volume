@@ -26,6 +26,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sds-local-volume-csi/internal"
 	"sds-local-volume-csi/pkg/logger"
 	"sds-local-volume-csi/pkg/utils"
 	"sync"
@@ -68,6 +69,7 @@ type Driver struct {
 	ready        bool
 	cl           client.Client
 	storeManager utils.NodeStoreManager
+	inFlight     *internal.InFlight
 }
 
 // NewDriver returns a CSI plugin that contains the necessary gRPC
@@ -90,6 +92,7 @@ func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Log
 		waitActionTimeout: defaultWaitActionTimeout,
 		cl:                cl,
 		storeManager:      st,
+		inFlight:          internal.NewInFlight(),
 	}, nil
 }
 

@@ -176,9 +176,9 @@ func GetNodeWithMaxFreeSpace(lvgs []v1alpha1.LvmVolumeGroup, storageClassLVGPara
 	for _, lvg := range lvgs {
 
 		switch lvmType {
-		case internal.LLMTypeThick:
+		case internal.LVMTypeThick:
 			freeSpace = GetLVMVolumeGroupFreeSpace(lvg)
-		case internal.LLMTypeThin:
+		case internal.LVMTypeThin:
 			thinPoolName, ok := storageClassLVGParametersMap[lvg.Name]
 			if !ok {
 				return "", freeSpace, fmt.Errorf("thin pool name for lvg %s not found in storage class parameters: %+v", lvg.Name, storageClassLVGParametersMap)
@@ -366,7 +366,7 @@ func GetLVGList(ctx context.Context, kc client.Client) (*v1alpha1.LvmVolumeGroup
 
 func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity) v1alpha1.LVMLogicalVolumeSpec {
 	var llvThin *v1alpha1.ThinLogicalVolumeSpec
-	if lvmType == internal.LLMTypeThin {
+	if lvmType == internal.LVMTypeThin {
 		llvThin = &v1alpha1.ThinLogicalVolumeSpec{}
 		llvThin.PoolName = storageClassLVGParametersMap[selectedLVG.Name]
 		log.Info(fmt.Sprintf("[GetLLVSpec] Thin pool name: %s", llvThin.PoolName))

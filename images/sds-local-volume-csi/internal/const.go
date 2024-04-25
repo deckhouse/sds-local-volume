@@ -25,10 +25,14 @@ const (
 	TopologyKey       = "topology.sds-local-volume-csi/node"
 	SubPath           = "subPath"
 	VGNameKey         = "vgname"
-	LLMTypeThin       = "Thin"
-	LLMTypeThick      = "Thick"
+	ThinPoolNameKey   = "thinPoolName"
+	LVMTypeThin       = "Thin"
+	LVMTypeThick      = "Thick"
 	LLVStatusCreated  = "Created"
 	BindingModeWFFC   = "WaitForFirstConsumer"
 	BindingModeI      = "Immediate"
 	ResizeDelta       = "32Mi"
+	// FSTypeExt4 represents the ext4 filesystem type
+	FSTypeExt4 = "ext4"
+	FSTypeXfs  = "xfs"
 )
