@@ -108,6 +108,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/pod-scheduler-mutation", pscmWhHandler)
 	mux.Handle("/storage-class-update", scuWhHandler)
+	http.HandleFunc("/sc-validate", validators.ValidateSCOperation)
 	mux.HandleFunc("/healthz", httpHandlerHealthz)
 
 	logger.Infof("Listening on %s", port)
