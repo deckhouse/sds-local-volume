@@ -22,7 +22,7 @@ webhooks:
       service:
         namespace: "d8-{{ .Chart.Name }}"
         name: "webhooks"
-        path: "/pod-scheduler-mutation"
+        path: "/pod-scheduler-mutate"
       caBundle: |
         {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca }}
 
@@ -34,9 +34,9 @@ webhooks:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: "d8-{{ .Chart.Name }}-storage-class-update"
+  name: "d8-{{ .Chart.Name }}-lsc-validation"
 webhooks:
-  - name: "d8-{{ .Chart.Name }}-storage-class-update.deckhouse.io"
+  - name: "d8-{{ .Chart.Name }}-lsc-validation.deckhouse.io"
     failurePolicy: Fail
     rules:
       - apiGroups: ["storage.deckhouse.io"]
@@ -48,7 +48,7 @@ webhooks:
       service:
         namespace: "d8-{{ .Chart.Name }}"
         name: "webhooks"
-        path: "/storage-class-update"
+        path: "/lsc-validate"
       caBundle: |
         {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca }}
 
@@ -59,9 +59,9 @@ webhooks:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: "d8-sds-local-volume-sc-validation"
+  name: "d8-{{ .Chart.Name }}-sc-validation"
 webhooks:
-  - name: "d8-sds-local-volume-sc-validation.deckhouse.io"
+  - name: "d8-{{ .Chart.Name }}-sc-validation.deckhouse.io"
     rules:
       - apiGroups: ["storage.k8s.io"]
         apiVersions: ["v1"]
