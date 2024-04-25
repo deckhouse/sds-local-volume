@@ -59,9 +59,9 @@ webhooks:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: "d8-{{ .Chart.Name }}-sc-validation"
+  name: "d8-sds-local-volume-sc-validation"
 webhooks:
-  - name: "d8-{{ .Chart.Name }}-sc-validation.storage.deckhouse.io"
+  - name: "d8-sds-local-volume-sc-validation.deckhouse.io"
     rules:
       - apiGroups: ["storage.k8s.io"]
         apiVersions: ["v1"]
