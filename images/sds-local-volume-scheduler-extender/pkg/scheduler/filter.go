@@ -289,7 +289,7 @@ func filterNodes(
 
 	usedLVGs := RemoveUnusedLVGs(lvgs, scLVGs)
 	for _, lvg := range usedLVGs {
-		log.Trace(fmt.Sprintf("[filterNodes] the LVMVolumeGroup %s is actually used. VG size: %s, allocatedSize: %s", lvg.Name, lvg.Status.VGSize, lvg.Status.AllocatedSize))
+		log.Trace(fmt.Sprintf("[filterNodes] the LVMVolumeGroup %s is actually used. VG size: %s, allocatedSize: %s", lvg.Name, lvg.Status.VGSize.String(), lvg.Status.AllocatedSize.String()))
 	}
 
 	lvgsThickFree := getLVGThickFreeSpaces(log, usedLVGs)
