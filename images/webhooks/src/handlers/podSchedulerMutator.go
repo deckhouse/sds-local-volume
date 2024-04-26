@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package validators
+package handlers
 
 import (
 	"context"
@@ -34,7 +34,7 @@ const (
 	schedulerName             = "sds-local-volume"
 )
 
-func PodSchedulerMutation(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhmutating.MutatorResult, error) {
+func PodSchedulerMutate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhmutating.MutatorResult, error) {
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		// If not a pod just continue the mutation chain(if there is one) and do nothing.

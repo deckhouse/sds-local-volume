@@ -14,23 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package validators
+package handlers
 
 import (
 	"context"
 	"fmt"
+	"webhooks/v1alpha1"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"webhooks/v1alpha1"
 
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func StorageClassUpdate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhvalidating.ValidatorResult, error) {
-	sc, ok := obj.(*v1alpha1.LocalStorageClass)
+func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhvalidating.ValidatorResult, error) {
+	lsc, ok := obj.(*v1alpha1.LocalStorageClass)
 	if !ok {
 		// If not a storage class just continue the validation chain(if there is one) and do nothing.
 		return &kwhvalidating.ValidatorResult{}, nil
@@ -38,7 +39,7 @@ func StorageClassUpdate(ctx context.Context, _ *model.AdmissionReview, obj metav
 
 	thickExists := false
 	thinExists := false
-	for _, lvmGroup := range sc.Spec.LVM.LVMVolumeGroups {
+	for _, lvmGroup := range lsc.Spec.LVM.LVMVolumeGroups {
 		if lvmGroup.Thin == nil {
 			thickExists = true
 		} else {
@@ -46,7 +47,7 @@ func StorageClassUpdate(ctx context.Context, _ *model.AdmissionReview, obj metav
 		}
 	}
 
-	if sc.Spec.IsDefault == true {
+	if lsc.Spec.IsDefault == true {
 		config, err := rest.InClusterConfig()
 		if err != nil {
 			klog.Fatal(err.Error())
@@ -60,7 +61,7 @@ func StorageClassUpdate(ctx context.Context, _ *model.AdmissionReview, obj metav
 		storageClasses, _ := staticClient.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
 		for _, storageClass := range storageClasses.Items {
 			for label, value := range storageClass.GetObjectMeta().GetAnnotations() {
-				if label == "storageclass.kubernetes.io/is-default-class" && value == "true" && storageClass.Name != sc.Name {
+				if label == "storageclass.kubernetes.io/is-default-class" && value == "true" && storageClass.Name != lsc.Name {
 					klog.Infof("Default StorageClass already set: %s", storageClass.Name)
 					return &kwhvalidating.ValidatorResult{Valid: false, Message: fmt.Sprintf("Default StorageClass already set: %s", storageClass.Name)},
 						nil
@@ -69,12 +70,12 @@ func StorageClassUpdate(ctx context.Context, _ *model.AdmissionReview, obj metav
 		}
 	}
 
-	if thinExists && sc.Spec.LVM.Type == "Thick" {
+	if thinExists && lsc.Spec.LVM.Type == "Thick" {
 		return &kwhvalidating.ValidatorResult{Valid: false, Message: "there must be only thick pools with Thick LVM type"},
 			nil
 	}
 
-	if thickExists && sc.Spec.LVM.Type == "Thin" {
+	if thickExists && lsc.Spec.LVM.Type == "Thin" {
 		return &kwhvalidating.ValidatorResult{Valid: false, Message: "there must be only thin pools with Thin LVM type"},
 			nil
 	}
