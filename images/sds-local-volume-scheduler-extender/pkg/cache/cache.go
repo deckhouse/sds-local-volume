@@ -51,6 +51,7 @@ func (c *Cache) AddLVG(lvg *v1alpha1.LvmVolumeGroup) {
 		return
 	}
 
+	c.log.Trace(fmt.Sprintf("[AddLVG] the LVMVolumeGroup %s nodes: %v", lvg.Name, lvg.Status.Nodes))
 	for _, node := range lvg.Status.Nodes {
 		lvgsOnTheNode, _ := c.nodeLVGs.Load(node.Name)
 		if lvgsOnTheNode == nil {
@@ -58,6 +59,7 @@ func (c *Cache) AddLVG(lvg *v1alpha1.LvmVolumeGroup) {
 		}
 
 		lvgsOnTheNode = append(lvgsOnTheNode.([]string), lvg.Name)
+		c.log.Debug(fmt.Sprintf("[AddLVG] the LVMVolumeGroup %s has been added to the node %s", lvg.Name, node.Name))
 		c.nodeLVGs.Store(node.Name, lvgsOnTheNode)
 	}
 }
@@ -66,6 +68,23 @@ func (c *Cache) AddLVG(lvg *v1alpha1.LvmVolumeGroup) {
 func (c *Cache) UpdateLVG(lvg *v1alpha1.LvmVolumeGroup) error {
 	if cache, found := c.lvgs.Load(lvg.Name); found {
 		cache.(*lvgCache).lvg = lvg
+
+		c.log.Trace(fmt.Sprintf("[UpdateLVG] the LVMVolumeGroup %s nodes: %v", lvg.Name, lvg.Status.Nodes))
+		for _, node := range lvg.Status.Nodes {
+			lvgsOnTheNode, _ := c.nodeLVGs.Load(node.Name)
+			if lvgsOnTheNode == nil {
+				lvgsOnTheNode = make([]string, 0, lvgsPerNodeCount)
+			}
+
+			if !slices2.Contains(lvgsOnTheNode.([]string), lvg.Name) {
+				lvgsOnTheNode = append(lvgsOnTheNode.([]string), lvg.Name)
+				c.log.Debug(fmt.Sprintf("[UpdateLVG] the LVMVolumeGroup %s has been added to the node %s", lvg.Name, node.Name))
+				c.nodeLVGs.Store(node.Name, lvgsOnTheNode)
+			} else {
+				c.log.Debug(fmt.Sprintf("[UpdateLVG] the LVMVolumeGroup %s has been already added to the node %s", lvg.Name, node.Name))
+			}
+		}
+
 		return nil
 	}
 

@@ -304,7 +304,7 @@ func TestCache_UpdateLVG(t *testing.T) {
 			Name: name,
 		},
 		Status: v1alpha1.LvmVolumeGroupStatus{
-			AllocatedSize: "1Gi",
+			AllocatedSize: resource.MustParse("1Gi"),
 		},
 	}
 	cache.AddLVG(lvg)
@@ -314,7 +314,7 @@ func TestCache_UpdateLVG(t *testing.T) {
 			Name: name,
 		},
 		Status: v1alpha1.LvmVolumeGroupStatus{
-			AllocatedSize: "2Gi",
+			AllocatedSize: resource.MustParse("2Gi"),
 		},
 	}
 
@@ -352,10 +352,10 @@ func BenchmarkCache_UpdateLVG(b *testing.B) {
 					Name: name,
 				},
 				Status: v1alpha1.LvmVolumeGroupStatus{
-					AllocatedSize: fmt.Sprintf("2%dGi", i),
+					AllocatedSize: resource.MustParse(fmt.Sprintf("2%dGi", i)),
 				},
 			}
-			b.Logf("updates the LVG with allocated size: %s", updated.Status.AllocatedSize)
+			b.Logf("updates the LVG with allocated size: %s", updated.Status.AllocatedSize.String())
 			err := cache.UpdateLVG(updated)
 			if err != nil {
 				b.Error(err)
@@ -435,7 +435,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 								Name: nodeName,
 							},
 						},
-						AllocatedSize: fmt.Sprintf("1%dGi", i),
+						AllocatedSize: resource.MustParse(fmt.Sprintf("1%dGi", i)),
 					},
 				},
 				{
@@ -448,7 +448,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 								Name: nodeName,
 							},
 						},
-						AllocatedSize: fmt.Sprintf("1%dGi", i),
+						AllocatedSize: resource.MustParse(fmt.Sprintf("1%dGi", i)),
 					},
 				},
 				{
@@ -461,7 +461,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 								Name: nodeName,
 							},
 						},
-						AllocatedSize: fmt.Sprintf("1%dGi", i),
+						AllocatedSize: resource.MustParse(fmt.Sprintf("1%dGi", i)),
 					},
 				},
 			}
@@ -505,7 +505,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 						Name: fmt.Sprintf("test-lvg-%d", i),
 					},
 					Status: v1alpha1.LvmVolumeGroupStatus{
-						AllocatedSize: fmt.Sprintf("1%dGi", i+1),
+						AllocatedSize: resource.MustParse(fmt.Sprintf("1%dGi", i+1)),
 					},
 				},
 				{
@@ -513,7 +513,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 						Name: fmt.Sprintf("test-lvg-%d", i+1),
 					},
 					Status: v1alpha1.LvmVolumeGroupStatus{
-						AllocatedSize: fmt.Sprintf("1%dGi", i+1),
+						AllocatedSize: resource.MustParse(fmt.Sprintf("1%dGi", i+1)),
 					},
 				},
 				{
@@ -521,7 +521,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 						Name: fmt.Sprintf("test-lvg-%d", i+2),
 					},
 					Status: v1alpha1.LvmVolumeGroupStatus{
-						AllocatedSize: fmt.Sprintf("1%dGi", i+1),
+						AllocatedSize: resource.MustParse(fmt.Sprintf("1%dGi", i+1)),
 					},
 				},
 			}
