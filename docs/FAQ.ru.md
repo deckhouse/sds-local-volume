@@ -29,7 +29,8 @@ kubectl -n d8-sds-local-volume get po -owide
 Если pod отсутствует, значит данный узел не удовлетворяет `nodeSelector`, указанному в настройках `ModuleConfig` `sds-local-volume`. 
 Настройка модуля и `nodeSelector` описаны [здесь](README.ru.md#добавление-узла-в-nodeselector-модуля).
 
-Если лейблы присутствуют, необходимо проверить наличие лейба `storage.deckhouse.io/sds-local-volume-node=`. Если лейбл отсутствует, следует проверить работает ли `sds-local-volume-controller`, и в случае его работоспособности, проверить логи: 
+Если лейблы присутствуют, необходимо проверить наличие лейбла `storage.deckhouse.io/sds-local-volume-node=` на узле. Если лейбл отсутствует, следует проверить работает ли `sds-local-volume-controller`, и в случае его работоспособности, проверить логи:
+
 ```shell
 kubectl -n d8-sds-local-volume get po -l app=sds-local-volume-controller
 kubectl -n d8-sds-local-volume logs -l app=sds-local-volume-controller
