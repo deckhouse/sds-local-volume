@@ -68,9 +68,98 @@ moduleStatus: experimental
   kubectl -n d8-sds-node-configurator get pod -o wide -w
   ```
 
+### Подготовка узлов к созданию хранилищ на них
+
+Для создания хранилищ на узлах необходимо, чтобы на выбранных узлах были запущены pod-ы `sds-local-volume-csi-node`. 
+
+Расположение данных pod-ов определяется специальными лейблами (nodeSelector), которые указываются в конфиге секрета `d8-sds-local-volume-controller-config` в пространстве имен `d8-sds-local-volume`. 
+
+Показать секрет `d8-sds-local-volume-controller-config` можно следующей командой:
+```shell
+kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config -oyaml
+```
+
+Примерное содержимое секрета:
+```yaml
+apiVersion: v1
+data:
+  config: bm9kZVNlbGVjdG9yOiAKICBrdWJlcm5ldGVzLmlvL29zOiBsaW51eA==
+kind: Secret
+metadata:
+  annotations:
+    meta.helm.sh/release-name: sds-local-volume
+    meta.helm.sh/release-namespace: d8-system
+  creationTimestamp: "2024-04-22T10:53:46Z"
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: d8-sds-local-volume-controller-config
+  namespace: d8-sds-local-volume
+  resourceVersion: "25714399"
+  uid: 31d1d719-38b8-4fbd-8130-b43f52d5f14c
+type: Opaque
+```
+
+> Обратите внимание на поле `data.config` - именно в нем в формате base64 хранится `nodeSelector`, указывающим на узлы, на которых будут запущены pod-ы `sds-local-volume-csi-node`. 
+
+Примерный вид декодированной строки из поля `data.config`: 
+```yaml
+nodeSelector: 
+  kubernetes.io/os: linux
+```
+
+> Обратите внимание, что в поле `nodeSelector` может быть указано любое количество лейблов, но важно, что каждый из указанных лейблов присутствовал на узле, который Вы собираетесь использовать для работы с модулем. Именно при наличии всех указанных лейблов на выбранном узле, произойдет запуск pod-а `sds-local-volume-csi-node`.
+
+### Добавление узла в `nodeSelector` модуля.
+- Составьте список желаемых для `nodeSelector` лейблов
+```yaml
+nodeSelector: 
+  my-custom-label-key: my-custom-label-value
+```
+- Закодируйте `nodeSelector` в формате base64
+- Добавьте получившуюся строку в конфиг модуля
+
+  - Выполните команду
+  ```shell
+  kubectl -n d8-sds-local-volume edit secret d8-sds-local-volume-controller-config
+  ```
+  - Добавьте в поле `data.config` Вашу закодированную строку
+```yaml
+apiVersion: v1
+data:
+  config: my-base64-node-selector
+kind: Secret
+metadata:
+  annotations:
+    meta.helm.sh/release-name: sds-local-volume
+    meta.helm.sh/release-namespace: d8-system
+  creationTimestamp: "2024-04-22T10:53:46Z"
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: d8-sds-local-volume-controller-config
+  namespace: d8-sds-local-volume
+  resourceVersion: "25714399"
+  uid: 31d1d719-38b8-4fbd-8130-b43f52d5f14c
+type: Opaque
+```
+- Сохраните изменения
+- Добавьте лейблы, указанные в `nodeSelector`, на узлы, которые вы желаете отдать под управление модулю
+```shell
+kubectl label node %node-name% %label-from-selector%
+```
+
+После добавление лейблов на узлах должны быть запущены pod-ы `sds-local-volume-csi-node`. Проверить их наличие можно командой:
+```shell
+ kubectl -n d8-sds-local-volume get pod -owide
+ ```
+
 ### Настройка хранилища на узлах
 
 Необходимо на этих узлах создать группы томов `LVM` с помощью пользовательских ресурсов `LVMVolumeGroup`. В быстром старте будем создавать обычное `Thin` хранилище.
+
+> Пожалуйста, перед созданием `LVMVolumeGroup` убедитесь, что узел, на котором Вы планируете создать группу томов `LVM`, включен в `nodeSelector` в конфиге `d8-sds-local-volume-controller-config` (иначе говоря, что на данном узле запущен pod `sds-local-volume-csi-node`). Это можно сделать командой:
+> ```shell
+> kubectl -n d8-sds-local-volume get pod -owide
+> ```
 
 Приступим к настройке хранилища:
 
@@ -211,7 +300,132 @@ moduleStatus: experimental
   kubectl get sc local-storage-class
   ```
 
-- Если `StorageClass` с именем `local-storage-class` появился, значит настройка модуля `sds-local-volume` завершена. Теперь пользователи могут создавать PV, указывая `StorageClass` с именем `replicated-storage-class`. При указанных выше настройках будет создаваться том с 3мя репликами на разных узлах.
+- Если `StorageClass` с именем `local-storage-class` появился, значит настройка модуля `sds-local-volume` завершена. Теперь пользователи могут создавать PV, указывая `StorageClass` с именем `local-storage-class`. При указанных выше настройках будет создаваться том с 3мя репликами на разных узлах.
+
+## Вывод узла из-под управления модуля
+
+Если в процессе работы появилась необходимость вывести узел из-под управления модуля, необходимо убрать лейблы, указанные в `nodeSelector` в конфиге модуля `d8-sds-local-volume-controller-config`. 
+
+> Обратите внимание, что для успешного вывода узла из-под управления модуля, необходимо, чтобы на узле не было создано ресурсов `LVMVolumeGroup`, которые использовались бы в ресурсах `LocalStorageClass`, то есть, которые использовались бы `Storage Class` с `provisioner` `local.csi.storage.deckhouse.io`. 
+
+### Проверка используемых `LVMVolumeGroup` в `LocalStorageClass`
+Для проверки таковых ресурсов необходимо выполнить следующие шаги:
+ 1. Отобразить имеющиеся `LocalStorageClass` ресурсы
+```shell
+kubectl get lsc
+```
+2. Проверить у каждого из них список используемых `LVMVolumeGroup` ресурсов
+```shell
+kubectl get lsc %lsc-name% -oyaml
+```
+ Примерный вид `LocalStorageClass`
+```yaml
+apiVersion: v1
+items:
+- apiVersion: storage.deckhouse.io/v1alpha1
+  kind: LocalStorageClass
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"storage.deckhouse.io/v1alpha1","kind":"LocalStorageClass","metadata":{"annotations":{},"name":"test-sc"},"spec":{"isDefault":false,"lvm":{"lvmVolumeGroups":[{"name":"test-vg"}],"type":"Thick"},"reclaimPolicy":"Delete","volumeBindingMode":"WaitForFirstConsumer"}}
+    creationTimestamp: "2024-04-26T07:40:36Z"
+    finalizers:
+    - localstorageclass.storage.deckhouse.io
+    generation: 2
+    name: test-sc
+    resourceVersion: "26243988"
+    uid: 05e32b0c-0bb1-4754-a305-7646d483175e
+  spec:
+    isDefault: false
+    lvm:
+      lvmVolumeGroups:
+      - name: test-vg
+      type: Thick
+    reclaimPolicy: Delete
+    volumeBindingMode: WaitForFirstConsumer
+  status:
+    phase: Created
+kind: List
+metadata:
+  resourceVersion: ""
+```
+> Обратите внимание на поле spec.lvm.lvmVolumeGroups - именно в нем указаны используемые `LVMVolumeGroup` ресурсы.
+
+3. Отобразите список существующих `LVMVolumeGroup` ресурсов
+```shell
+kubectl get lvg
+```
+Примерный вывод `LVMVolumeGroup` ресурсов 
+```text
+NAME              HEALTH        NODE                         SIZE       ALLOCATED SIZE   VG        AGE
+lvg-on-worker-0   Operational   node-worker-0   40956Mi    0                test-vg   15d
+lvg-on-worker-1   Operational   node-worker-1   61436Mi    0                test-vg   15d
+lvg-on-worker-2   Operational   node-worker-2   122876Mi   0                test-vg   15d
+lvg-on-worker-3   Operational   node-worker-3   307196Mi   0                test-vg   15d
+lvg-on-worker-4   Operational   node-worker-4   307196Mi   0                test-vg   15d
+lvg-on-worker-5   Operational   node-worker-5   204796Mi   0                test-vg   15d
+```
+
+4. Проверьте, что на узле, который вы собираетесь вывести из-под управления модуля, не присутствует какой-либо `LVMVolumeGroup` ресурс, используемый в `LocalStorageClass` ресурсах.
+
+> Во избежание непредвиденной потери контроля за уже созданными с помощью модуля томами пользователю необходимо вручную удалить зависимые ресурсы, совершив необходимые операции над томом.
+
+### Вывод узла из-под управления модуля 
+- Проверьте указанные в `nodeSelector` лейблы
+```shell
+kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config -oyaml
+```
+Примерное содержимое секрета:
+```yaml
+apiVersion: v1
+data:
+  config: bm9kZVNlbGVjdG9yOiAKICBrdWJlcm5ldGVzLmlvL29zOiBsaW51eA==
+kind: Secret
+metadata:
+  annotations:
+    meta.helm.sh/release-name: sds-local-volume
+    meta.helm.sh/release-namespace: d8-system
+  creationTimestamp: "2024-04-22T10:53:46Z"
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  name: d8-sds-local-volume-controller-config
+  namespace: d8-sds-local-volume
+  resourceVersion: "25714399"
+  uid: 31d1d719-38b8-4fbd-8130-b43f52d5f14c
+type: Opaque
+```
+
+> Обратите внимание на поле `data.config` - именно в нем в формате base64 хранится `nodeSelector`, указывающим на узлы, на которых будут запущены pod-ы `sds-local-volume-csi-node`.
+
+Примерный вид декодированной строки из поля `data.config`:
+```yaml
+nodeSelector: 
+  my-custom-label-key: my-custom-label-value
+```
+
+- Снимите указанные в `nodeSelector` лейблы с желаемых узлов
+```shell
+kubectl label node %node-name% %label-from-selector%-
+```
+> Обратите внимание, что для снятия лейбла необходимо после его ключа вместо значения сразу же поставить знак минуса.
+
+В результате pod `sds-local-volume-csi-node` должен быть удален с желаемого узла. Для проверки состояния можно выполнить команду
+```shell
+kubectl -n d8-sds-local-volume get po -owide
+```
+
+> Если pod `sds-local-volume-csi-node` после удаления лейблов `nodeSelector` все же остался на узле, пожалуйста, убедитесь, указанные в конфиге `d8-sds-local-volume-controller-config` в `nodeSelector` лейблы действительно успешно снялись с выбранного узла. 
+> Проверить это можно командой: 
+> ```shell
+> kubectl get node %node-name% --show-labels=true
+> ```
+> Если лейблы из `nodeSelector` не присутствуют на узле, то убедитесь, что данному узлу не принадлежат `LVMVolumeGroup` ресурсы, использующиеся `LocalStorageClass` ресурсами. Для этого необходимо выполнить следующую [проверку](#проверка-используемых-lvmvolumegroup-в-localstorageclass).
+
+> Обратите внимание, что на ресурсах `LVMVolumeGroup` и `LocalStorageClass`, из-за которых не удается вывести узел из-под управления модуля будут отображен лейбл `storage.deckhouse.io/sds-local-volume-candidate-for-eviction`.
+> 
+> На самой же ноде будет присутствовать лейбл `storage.deckhouse.io/sds-local-volume-need-manual-eviction`.
+
+
 
 ## Системные требования и рекомендации
 
