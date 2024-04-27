@@ -72,74 +72,77 @@ moduleStatus: experimental
 
 Для создания хранилищ на узлах необходимо, чтобы на выбранных узлах были запущены pod-ы `sds-local-volume-csi-node`. 
 
-Расположение данных pod-ов определяется специальными лейблами (nodeSelector), которые указываются в конфиге секрета `d8-sds-local-volume-controller-config` в пространстве имен `d8-sds-local-volume`. 
+Расположение данных pod-ов определяется специальными лейблами (nodeSelector), которые указываются в поле `spec.settings.dataNodes.nodeSelector` в настройках модуля.
 
-Показать секрет `d8-sds-local-volume-controller-config` можно следующей командой:
-```shell
-kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config -oyaml
-```
-
-Примерное содержимое секрета:
 ```yaml
-apiVersion: v1
-data:
-  config: bm9kZVNlbGVjdG9yOiAKICBrdWJlcm5ldGVzLmlvL29zOiBsaW51eA==
-kind: Secret
+apiVersion: deckhouse.io/v1alpha1
+kind: ModuleConfig
 metadata:
   annotations:
-    meta.helm.sh/release-name: sds-local-volume
-    meta.helm.sh/release-namespace: d8-system
-  creationTimestamp: "2024-04-22T10:53:46Z"
-  labels:
-    app.kubernetes.io/managed-by: Helm
-  name: d8-sds-local-volume-controller-config
-  namespace: d8-sds-local-volume
-  resourceVersion: "25714399"
-  uid: 31d1d719-38b8-4fbd-8130-b43f52d5f14c
-type: Opaque
-```
-
-> Обратите внимание на поле `data.config` - именно в нем в формате base64 хранится `nodeSelector`, указывающим на узлы, на которых будут запущены pod-ы `sds-local-volume-csi-node`. 
-
-Примерный вид декодированной строки из поля `data.config`: 
-```yaml
-nodeSelector: 
-  kubernetes.io/os: linux
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"deckhouse.io/v1alpha1","kind":"ModuleConfig","metadata":{"annotations":{},"name":"sds-replicated-volume"},"spec":{"enabled":true}}
+  creationTimestamp: "2024-03-18T08:43:29Z"
+  generation: 1
+  name: sds-replicated-volume
+  resourceVersion: "14754"
+  uid: fa12a377-4ecf-4ec4-a671-2ea28d369f33
+spec:
+  enabled: true
+  settings:
+    dataNodes:
+      nodeSelector:
+        my-custom-label-key: my-custom-label-value
+status:
+  message: ""
+  version: "1"
 ```
 
 > Обратите внимание, что в поле `nodeSelector` может быть указано любое количество лейблов, но важно, что каждый из указанных лейблов присутствовал на узле, который Вы собираетесь использовать для работы с модулем. Именно при наличии всех указанных лейблов на выбранном узле, произойдет запуск pod-а `sds-local-volume-csi-node`.
 
-### Добавление узла в `nodeSelector` модуля.
-- Составьте список желаемых для `nodeSelector` лейблов
+Проверить наличие существующих лейблов можно командой: 
+```shell
+kubectl get mc sds-local-volume -o=jsonpath={.spec.settings.dataNodes.nodeSelector}
+```
+
+Вы можете дополнительно проверить селекторы, которые используются модулем в конфиге секрета `d8-sds-local-volume-controller-config` в пространстве имен `d8-sds-local-volume`. 
+
+```shell
+kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config  -o jsonpath='{.data.config}' | base64 --decode
+```
+
+Примерный вывод команды:
 ```yaml
-nodeSelector: 
+nodeSelector:
+  kubernetes.io/os: linux
   my-custom-label-key: my-custom-label-value
 ```
-- Закодируйте `nodeSelector` в формате base64
-- Добавьте получившуюся строку в конфиг модуля
 
-  - Выполните команду
-  ```shell
-  kubectl -n d8-sds-local-volume edit secret d8-sds-local-volume-controller-config
-  ```
-  - Добавьте в поле `data.config` Вашу закодированную строку
+> В выводе данной команды должны быть указаны все лейблы из настроек модуля `data.nodeSelector`, а также `kubernetes.io/os: linux`.
+
+### Добавление узла в `nodeSelector` модуля.
+- Добавьте желаемые лейблы (nodeSelector) в поле `spec.settings.dataNodes.nodeSelector` в настройках модуля.
+
 ```yaml
-apiVersion: v1
-data:
-  config: my-base64-node-selector
-kind: Secret
+apiVersion: deckhouse.io/v1alpha1
+kind: ModuleConfig
 metadata:
   annotations:
-    meta.helm.sh/release-name: sds-local-volume
-    meta.helm.sh/release-namespace: d8-system
-  creationTimestamp: "2024-04-22T10:53:46Z"
-  labels:
-    app.kubernetes.io/managed-by: Helm
-  name: d8-sds-local-volume-controller-config
-  namespace: d8-sds-local-volume
-  resourceVersion: "25714399"
-  uid: 31d1d719-38b8-4fbd-8130-b43f52d5f14c
-type: Opaque
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"deckhouse.io/v1alpha1","kind":"ModuleConfig","metadata":{"annotations":{},"name":"sds-replicated-volume"},"spec":{"enabled":true}}
+  creationTimestamp: "2024-03-18T08:43:29Z"
+  generation: 1
+  name: sds-replicated-volume
+  resourceVersion: "14754"
+  uid: fa12a377-4ecf-4ec4-a671-2ea28d369f33
+spec:
+  enabled: true
+  settings:
+    dataNodes:
+      nodeSelector:
+        my-custom-label-key: my-custom-label-value
+status:
+  message: ""
+  version: "1"
 ```
 - Сохраните изменения
 - Добавьте лейблы, указанные в `nodeSelector`, на узлы, которые вы желаете отдать под управление модулю
@@ -304,7 +307,7 @@ kubectl label node %node-name% %label-from-selector%
 
 ## Вывод узла из-под управления модуля
 
-Если в процессе работы появилась необходимость вывести узел из-под управления модуля, необходимо убрать лейблы, указанные в `nodeSelector` в конфиге модуля `d8-sds-local-volume-controller-config`. 
+Если в процессе работы появилась необходимость вывести узел из-под управления модуля, необходимо убрать лейблы, указанные в `nodeSelector` в настройках `ModuleConfig` `sds-local-volume`. 
 
 > Обратите внимание, что для успешного вывода узла из-под управления модуля, необходимо, чтобы на узле не было создано ресурсов `LVMVolumeGroup`, которые использовались бы в ресурсах `LocalStorageClass`, то есть, которые использовались бы `Storage Class` с `provisioner` `local.csi.storage.deckhouse.io`. 
 
@@ -318,7 +321,8 @@ kubectl get lsc
 ```shell
 kubectl get lsc %lsc-name% -oyaml
 ```
- Примерный вид `LocalStorageClass`
+
+Примерный вид `LocalStorageClass`
 ```yaml
 apiVersion: v1
 items:
@@ -371,35 +375,15 @@ lvg-on-worker-5   Operational   node-worker-5   204796Mi   0                test
 > Во избежание непредвиденной потери контроля за уже созданными с помощью модуля томами пользователю необходимо вручную удалить зависимые ресурсы, совершив необходимые операции над томом.
 
 ### Вывод узла из-под управления модуля 
-- Проверьте указанные в `nodeSelector` лейблы
+
+Проверить наличие существующих лейблов в `nodeSelector` можно командой:
 ```shell
-kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config -oyaml
-```
-Примерное содержимое секрета:
-```yaml
-apiVersion: v1
-data:
-  config: bm9kZVNlbGVjdG9yOiAKICBrdWJlcm5ldGVzLmlvL29zOiBsaW51eA==
-kind: Secret
-metadata:
-  annotations:
-    meta.helm.sh/release-name: sds-local-volume
-    meta.helm.sh/release-namespace: d8-system
-  creationTimestamp: "2024-04-22T10:53:46Z"
-  labels:
-    app.kubernetes.io/managed-by: Helm
-  name: d8-sds-local-volume-controller-config
-  namespace: d8-sds-local-volume
-  resourceVersion: "25714399"
-  uid: 31d1d719-38b8-4fbd-8130-b43f52d5f14c
-type: Opaque
+kubectl get mc sds-local-volume -o=jsonpath={.spec.settings.dataNodes.nodeSelector}
 ```
 
-> Обратите внимание на поле `data.config` - именно в нем в формате base64 хранится `nodeSelector`, указывающим на узлы, на которых будут запущены pod-ы `sds-local-volume-csi-node`.
-
-Примерный вид декодированной строки из поля `data.config`:
+Примерный вывод команды:
 ```yaml
-nodeSelector: 
+nodeSelector:
   my-custom-label-key: my-custom-label-value
 ```
 
@@ -423,7 +407,7 @@ kubectl -n d8-sds-local-volume get po -owide
 
 > Обратите внимание, что на ресурсах `LVMVolumeGroup` и `LocalStorageClass`, из-за которых не удается вывести узел из-под управления модуля будут отображен лейбл `storage.deckhouse.io/sds-local-volume-candidate-for-eviction`.
 > 
-> На самой же ноде будет присутствовать лейбл `storage.deckhouse.io/sds-local-volume-need-manual-eviction`.
+> На самом узле будет присутствовать лейбл `storage.deckhouse.io/sds-local-volume-need-manual-eviction`.
 
 
 
