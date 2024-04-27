@@ -78,14 +78,7 @@ moduleStatus: experimental
 apiVersion: deckhouse.io/v1alpha1
 kind: ModuleConfig
 metadata:
-  annotations:
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"deckhouse.io/v1alpha1","kind":"ModuleConfig","metadata":{"annotations":{},"name":"sds-replicated-volume"},"spec":{"enabled":true}}
-  creationTimestamp: "2024-03-18T08:43:29Z"
-  generation: 1
   name: sds-replicated-volume
-  resourceVersion: "14754"
-  uid: fa12a377-4ecf-4ec4-a671-2ea28d369f33
 spec:
   enabled: true
   settings:
@@ -127,13 +120,7 @@ apiVersion: deckhouse.io/v1alpha1
 kind: ModuleConfig
 metadata:
   annotations:
-    kubectl.kubernetes.io/last-applied-configuration: |
-      {"apiVersion":"deckhouse.io/v1alpha1","kind":"ModuleConfig","metadata":{"annotations":{},"name":"sds-replicated-volume"},"spec":{"enabled":true}}
-  creationTimestamp: "2024-03-18T08:43:29Z"
-  generation: 1
   name: sds-replicated-volume
-  resourceVersion: "14754"
-  uid: fa12a377-4ecf-4ec4-a671-2ea28d369f33
 spec:
   enabled: true
   settings:
@@ -145,10 +132,7 @@ status:
   version: "1"
 ```
 - Сохраните изменения
-- Добавьте лейблы, указанные в `nodeSelector`, на узлы, которые вы желаете отдать под управление модулю
-```shell
-kubectl label node %node-name% %label-from-selector%
-```
+- Добавьте лейблы, указанные в `nodeSelector`, на узлы, которые вы желаете отдать под управление модулю, используя шаблоны в `NodeGroup`. 
 
 После добавление лейблов на узлах должны быть запущены pod-ы `sds-local-volume-csi-node`. Проверить их наличие можно командой:
 ```shell
@@ -159,7 +143,7 @@ kubectl label node %node-name% %label-from-selector%
 
 Необходимо на этих узлах создать группы томов `LVM` с помощью пользовательских ресурсов `LVMVolumeGroup`. В быстром старте будем создавать обычное `Thin` хранилище.
 
-> Пожалуйста, перед созданием `LVMVolumeGroup` убедитесь, что узел, на котором Вы планируете создать группу томов `LVM`, включен в `nodeSelector` в конфиге `d8-sds-local-volume-controller-config` (иначе говоря, что на данном узле запущен pod `sds-local-volume-csi-node`). Это можно сделать командой:
+> Пожалуйста, перед созданием `LVMVolumeGroup` убедитесь, что на данном узле запущен pod `sds-local-volume-csi-node`. Это можно сделать командой:
 > ```shell
 > kubectl -n d8-sds-local-volume get pod -owide
 > ```
