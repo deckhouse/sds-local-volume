@@ -63,8 +63,7 @@ const (
 	LVMVolumeBindingModeParamKey = LocalStorageClassProvisioner + "/volume-binding-mode"
 	LVMVolumeGroupsParamKey      = LocalStorageClassProvisioner + "/lvm-volume-groups"
 
-	DefaultStorageClassAnnotationKey = "storageclass.kubernetes.io/is-default-class"
-	LocalStorageClassFinalizerName   = "localstorageclass.storage.deckhouse.io"
+	LocalStorageClassFinalizerName = "localstorageclass.storage.deckhouse.io"
 
 	AllowVolumeExpansionDefaultValue = true
 
@@ -90,7 +89,7 @@ func RunLocalStorageClassWatcherController(
 
 	c, err := controller.New(LocalStorageClassCtrlName, mgr, controller.Options{
 		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-			log.Info("[LocalStorageClassReconciler] starts Reconcile")
+			log.Info("[LocalStorageClassReconciler] starts Reconcile for the LocalStorageClass %q", request.Name)
 			lsc := &v1alpha1.LocalStorageClass{}
 			err := cl.Get(ctx, request.NamespacedName, lsc)
 			if err != nil && !errors2.IsNotFound(err) {
@@ -122,7 +121,7 @@ func RunLocalStorageClassWatcherController(
 				}, nil
 			}
 
-			log.Info("[LocalStorageClassReconciler] ends Reconcile")
+			log.Info("[LocalStorageClassReconciler] ends Reconcile for the LocalStorageClass %q", request.Name)
 			return reconcile.Result{}, nil
 		}),
 	})
@@ -133,47 +132,12 @@ func RunLocalStorageClassWatcherController(
 
 	err = c.Watch(source.Kind(mgr.GetCache(), &v1alpha1.LocalStorageClass{}), handler.Funcs{
 		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
-			log.Info(fmt.Sprintf("[CreateFunc] starts the reconciliation for the LocalStorageClass %s", e.Object.GetName()))
-
-			lsc, ok := e.Object.(*v1alpha1.LocalStorageClass)
-			if !ok {
-				err = errors.New("unable to cast event object to a given type")
-				log.Error(err, "[CreateFunc] an error occurred while handling create event")
-				return
-			}
-
-			scList := &v1.StorageClassList{}
-			err = cl.List(ctx, scList)
-			if err != nil {
-				log.Error(err, "[CreateFunc] unable to list Storage Classes")
-				err = updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, fmt.Sprintf("Unable to list storage classes, err: %s", err.Error()))
-				q.AddAfter(reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Namespace: lsc.Namespace,
-						Name:      lsc.Name,
-					},
-				}, cfg.RequeueStorageClassInterval*time.Second)
-				return
-			}
-
-			shouldRequeue, err := runEventReconcile(ctx, cl, log, scList, lsc)
-			if err != nil {
-				log.Error(err, fmt.Sprintf("[CreateFunc] an error occured while reconciles the LocalStorageClass, name: %s", lsc.Name))
-			}
-
-			if shouldRequeue {
-				log.Warning(fmt.Sprintf("[CreateFunc] the LocalStorageClass %s event will be requeued", lsc.Name))
-				q.AddAfter(reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Namespace: lsc.Namespace,
-						Name:      lsc.Name,
-					},
-				}, cfg.RequeueStorageClassInterval*time.Second)
-			}
-			log.Info(fmt.Sprintf("[CreateFunc] ends the reconciliation for the LocalStorageClass %s", e.Object.GetName()))
+			log.Info(fmt.Sprintf("[CreateFunc] get event for LocalStorageClass %q. Add to the queue", e.Object.GetName()))
+			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: e.Object.GetNamespace(), Name: e.Object.GetName()}}
+			q.Add(request)
 		},
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-			log.Info(fmt.Sprintf("[UpdateFunc] starts the reconciliation for the LocalStorageClass %s", e.ObjectNew.GetName()))
+			log.Info(fmt.Sprintf("[UpdateFunc] get event for LocalStorageClass %q. Check if it should be reconciled", e.ObjectNew.GetName()))
 
 			oldLsc, ok := e.ObjectOld.(*v1alpha1.LocalStorageClass)
 			if !ok {
@@ -193,36 +157,9 @@ func RunLocalStorageClassWatcherController(
 				return
 			}
 
-			scList := &v1.StorageClassList{}
-			err = cl.List(ctx, scList)
-			if err != nil {
-				log.Error(err, "[UpdateFunc] unable to list Storage Classes")
-				err = updateLocalStorageClassPhase(ctx, cl, newLsc, FailedStatusPhase, fmt.Sprintf("Unable to list storage classes, err: %s", err.Error()))
-				q.AddAfter(reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Namespace: newLsc.Namespace,
-						Name:      newLsc.Name,
-					},
-				}, cfg.RequeueStorageClassInterval*time.Second)
-				return
-			}
-
-			shouldRequeue, err := runEventReconcile(ctx, cl, log, scList, newLsc)
-			if err != nil {
-				log.Error(err, fmt.Sprintf("[UpdateFunc] an error occured while reconciles the LocalStorageClass, name: %s", newLsc.Name))
-			}
-
-			if shouldRequeue {
-				log.Warning(fmt.Sprintf("[UpdateFunc] the LocalStorageClass %s event will be requeued", newLsc.Name))
-				q.AddAfter(reconcile.Request{
-					NamespacedName: types.NamespacedName{
-						Namespace: newLsc.Namespace,
-						Name:      newLsc.Name,
-					},
-				}, cfg.RequeueStorageClassInterval*time.Second)
-			}
-
-			log.Info(fmt.Sprintf("[UpdateFunc] ends the reconciliation for the LocalStorageClass %s", e.ObjectNew.GetName()))
+			log.Info(fmt.Sprintf("[UpdateFunc] the LocalStorageClass %q will be reconciled. Add to the queue", newLsc.Name))
+			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: newLsc.Namespace, Name: newLsc.Name}}
+			q.Add(request)
 		},
 	})
 	if err != nil {
@@ -286,7 +223,7 @@ func reconcileLSCDeleteFunc(
 		} else {
 			log.Info(fmt.Sprintf("[reconcileLSCDeleteFunc] the storage class %s belongs to %s provisioner. It will be deleted", sc.Name, LocalStorageClassProvisioner))
 
-			err := cl.Delete(ctx, sc)
+			err := deleteStorageClass(ctx, cl, sc)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[reconcileLSCDeleteFunc] unable to delete a storage class, name: %s", sc.Name))
 				upErr := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, fmt.Sprintf("Unable to delete a storage class, err: %s", err.Error()))
@@ -300,7 +237,7 @@ func reconcileLSCDeleteFunc(
 	}
 
 	log.Debug(fmt.Sprintf("[reconcileLSCDeleteFunc] starts removing a finalizer %s from the LocalStorageClass, name: %s", LocalStorageClassFinalizerName, lsc.Name))
-	removed, err := removeLocalSCFinalizerIfExists(ctx, cl, lsc)
+	removed, err := removeLocalSCFinalizerIfExistsForLSC(ctx, cl, lsc)
 	if err != nil {
 		log.Error(err, "[reconcileLSCDeleteFunc] unable to remove a finalizer %s from the LocalStorageClass, name: %s", LocalStorageClassFinalizerName, lsc.Name)
 		upErr := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, fmt.Sprintf("Unable to remove a finalizer, err: %s", err.Error()))
@@ -315,7 +252,7 @@ func reconcileLSCDeleteFunc(
 	return false, nil
 }
 
-func removeLocalSCFinalizerIfExists(ctx context.Context, cl client.Client, lsc *v1alpha1.LocalStorageClass) (bool, error) {
+func removeLocalSCFinalizerIfExistsForLSC(ctx context.Context, cl client.Client, lsc *v1alpha1.LocalStorageClass) (bool, error) {
 	removed := false
 	for i, f := range lsc.Finalizers {
 		if f == LocalStorageClassFinalizerName {
@@ -327,6 +264,26 @@ func removeLocalSCFinalizerIfExists(ctx context.Context, cl client.Client, lsc *
 
 	if removed {
 		err := cl.Update(ctx, lsc)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return removed, nil
+}
+
+func removeLocalSCFinalizerIfExistsForSC(ctx context.Context, cl client.Client, sc *v1.StorageClass) (bool, error) {
+	removed := false
+	for i, f := range sc.Finalizers {
+		if f == LocalStorageClassFinalizerName {
+			sc.Finalizers = append(sc.Finalizers[:i], sc.Finalizers[i+1:]...)
+			removed = true
+			break
+		}
+	}
+
+	if removed {
+		err := cl.Update(ctx, sc)
 		if err != nil {
 			return false, err
 		}
@@ -364,7 +321,7 @@ func reconcileLSCUpdateFunc(
 		}
 	}
 	if sc == nil {
-		err := errors.New(fmt.Sprintf("a storage class %s does not exist", lsc.Name))
+		err := fmt.Errorf("a storage class %s does not exist", lsc.Name)
 		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to find a storage class for the LocalStorageClass, name: %s", lsc.Name))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
 		if upError != nil {
@@ -375,12 +332,34 @@ func reconcileLSCUpdateFunc(
 
 	log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] successfully found a storage class for the LocalStorageClass, name: %s", lsc.Name))
 
-	if lsc.Spec.LVM != nil {
-		log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] storage class %s params: %+v", sc.Name, sc.Parameters))
-		log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] LocalStorageClass %s Spec.LVM: %+v", lsc.Name, lsc.Spec.LVM))
-		hasDiff, err := hasLVGDiff(sc, lsc)
+	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] storage class %s params: %+v", sc.Name, sc.Parameters))
+	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] LocalStorageClass %s Spec.LVM: %+v", lsc.Name, lsc.Spec.LVM))
+	hasDiff, err := hasLVGDiff(sc, lsc)
+	if err != nil {
+		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to identify the LVMVolumeGroup difference for the LocalStorageClass %s", lsc.Name))
+		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+		if upError != nil {
+			log.Error(upError, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to update the LocalStorageClass %s", lsc.Name))
+		}
+		return true, err
+	}
+
+	if hasDiff {
+		log.Info(fmt.Sprintf("[reconcileLSCUpdateFunc] current Storage Class LVMVolumeGroups do not match LocalStorageClass ones. The Storage Class %s will be recreated with new ones", lsc.Name))
+		sc, err = configureStorageClass(lsc)
 		if err != nil {
-			log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to identify the LVMVolumeGroup difference for the LocalStorageClass %s", lsc.Name))
+			log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to configure a Storage Class for the LocalStorageClass %s", lsc.Name))
+			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+			if upError != nil {
+				log.Error(upError, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to update the LocalStorageClass %s", lsc.Name))
+				return true, upError
+			}
+			return false, err
+		}
+
+		err = recreateStorageClass(ctx, cl, sc)
+		if err != nil {
+			log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to recreate a Storage Class %s", sc.Name))
 			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
 			if upError != nil {
 				log.Error(upError, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to update the LocalStorageClass %s", lsc.Name))
@@ -388,50 +367,8 @@ func reconcileLSCUpdateFunc(
 			return true, err
 		}
 
-		if hasDiff {
-			log.Info(fmt.Sprintf("[reconcileLSCUpdateFunc] current Storage Class LVMVolumeGroups do not match LocalStorageClass ones. The Storage Class %s will be recreated with new ones", lsc.Name))
-			err = cl.Delete(ctx, sc)
-			if err != nil {
-				log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to delete a Storage Class %s", sc.Name))
-				upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
-				if upError != nil {
-					log.Error(upError, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to update the LocalStorageClass %s", lsc.Name))
-				}
-				return true, err
-			}
-
-			sc, err = configureStorageClass(lsc)
-			err = cl.Create(ctx, sc)
-			if err != nil {
-				log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to create a Storage Class %s", sc.Name))
-				upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
-				if upError != nil {
-					log.Error(upError, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to update the LocalStorageClass %s", lsc.Name))
-				}
-				return true, err
-			}
-
-			log.Info(fmt.Sprintf("[reconcileLSCUpdateFunc] a Storage Class %s was successfully recreated", sc.Name))
-			err = updateLocalStorageClassPhase(ctx, cl, lsc, CreatedStatusPhase, "")
-			if err != nil {
-				log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to update the LocalStorageClass, name: %s", lsc.Name))
-				return true, err
-			}
-			log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] successfully updated the LocalStorageClass %s status", sc.Name))
-
-			return false, nil
-		}
+		log.Info(fmt.Sprintf("[reconcileLSCUpdateFunc] a Storage Class %s was successfully recreated", sc.Name))
 	}
-
-	sc = patchSCByLSC(sc, lsc)
-	log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] patched a storage class by the LocalStorageClass, name: %s", lsc.Name))
-
-	err := cl.Update(ctx, sc)
-	if err != nil {
-		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to update a storage class, name: %s", sc.Name))
-		return true, err
-	}
-	log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] successfully updated the storage class, name: %s", sc.Name))
 
 	err = updateLocalStorageClassPhase(ctx, cl, lsc, CreatedStatusPhase, "")
 	if err != nil {
@@ -443,26 +380,12 @@ func reconcileLSCUpdateFunc(
 	return false, nil
 }
 
-func patchSCByLSC(sc *v1.StorageClass, lsc *v1alpha1.LocalStorageClass) *v1.StorageClass {
-
-	if lsc.Spec.IsDefault {
-		if sc.Annotations == nil {
-			sc.Annotations = make(map[string]string)
-		}
-		sc.Annotations[DefaultStorageClassAnnotationKey] = "true"
-	} else {
-		_, isDefault := sc.Annotations[DefaultStorageClassAnnotationKey]
-		if isDefault {
-			delete(sc.Annotations, DefaultStorageClassAnnotationKey)
-		}
+func identifyReconcileFunc(scList *v1.StorageClassList, lsc *v1alpha1.LocalStorageClass) (reconcileType, error) {
+	if shouldReconcileByDeleteFunc(lsc) {
+		return DeleteReconcile, nil
 	}
 
-	return sc
-}
-
-func identifyReconcileFunc(scList *v1.StorageClassList, lsc *v1alpha1.LocalStorageClass) (reconcileType, error) {
-	should := shouldReconcileByCreateFunc(scList, lsc)
-	if should {
+	if shouldReconcileByCreateFunc(scList, lsc) {
 		return CreateReconcile, nil
 	}
 
@@ -472,11 +395,6 @@ func identifyReconcileFunc(scList *v1.StorageClassList, lsc *v1alpha1.LocalStora
 	}
 	if should {
 		return UpdateReconcile, nil
-	}
-
-	should = shouldReconcileByDeleteFunc(lsc)
-	if should {
-		return DeleteReconcile, nil
 	}
 
 	return "none", nil
@@ -495,33 +413,34 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *v1alpha1.Loca
 		return false, nil
 	}
 
-	if lsc.Status.Phase == FailedStatusPhase {
-		return true, nil
-	}
-
 	for _, sc := range scList.Items {
-		if sc.Name == lsc.Name && sc.Provisioner == LocalStorageClassProvisioner {
-			lscDefault := "false"
-			if lsc.Spec.IsDefault {
-				lscDefault = "true"
-			}
+		if sc.Name == lsc.Name {
+			if sc.Provisioner == LocalStorageClassProvisioner {
+				diff, err := hasLVGDiff(&sc, lsc)
+				if err != nil {
+					return false, err
+				}
 
-			if sc.Annotations[DefaultStorageClassAnnotationKey] != lscDefault {
-				return true, nil
-			}
+				if diff {
+					return true, nil
+				}
 
-			diff, err := hasLVGDiff(&sc, lsc)
-			if err != nil {
+				if lsc.Status.Phase == FailedStatusPhase {
+					return true, nil
+				}
+
+				return false, nil
+
+			} else {
+				err := fmt.Errorf("a storage class %s does not belong to %s provisioner", sc.Name, LocalStorageClassProvisioner)
 				return false, err
-			}
-
-			if diff {
-				return true, nil
 			}
 		}
 	}
 
-	return false, nil
+	err := fmt.Errorf("a storage class %s does not exist", lsc.Name)
+	return false, err
+
 }
 
 func hasLVGDiff(sc *v1.StorageClass, lsc *v1alpha1.LocalStorageClass) (bool, error) {
@@ -537,6 +456,18 @@ func hasLVGDiff(sc *v1.StorageClass, lsc *v1alpha1.LocalStorageClass) (bool, err
 	for i := range currentLVGs {
 		if currentLVGs[i].Name != lsc.Spec.LVM.LVMVolumeGroups[i].Name {
 			return true, nil
+		}
+		if lsc.Spec.LVM.Type == Thin {
+			if currentLVGs[i].Thin == nil && lsc.Spec.LVM.LVMVolumeGroups[i].Thin != nil {
+				return true, nil
+			}
+			if currentLVGs[i].Thin == nil && lsc.Spec.LVM.LVMVolumeGroups[i].Thin == nil {
+				err := fmt.Errorf("LocalStorageClass type=%q: unable to identify the Thin pool differences for the LocalStorageClass %q. The current LVMVolumeGroup %q does not have a Thin pool configured in either the StorageClass or the LocalStorageClass", lsc.Spec.LVM.Type, lsc.Name, currentLVGs[i].Name)
+				return false, err
+			}
+			if currentLVGs[i].Thin.PoolName != lsc.Spec.LVM.LVMVolumeGroups[i].Thin.PoolName {
+				return true, nil
+			}
 		}
 	}
 
@@ -578,6 +509,13 @@ func reconcileLSCCreateFunc(
 	lsc *v1alpha1.LocalStorageClass,
 ) (bool, error) {
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] starts the LocalStorageClass %s validation", lsc.Name))
+	added, err := addFinalizerIfNotExistsForLSC(ctx, cl, lsc)
+	if err != nil {
+		log.Error(err, fmt.Sprintf("[reconcileLSCCreateFunc] unable to add a finalizer %s to the LocalStorageClass %s", LocalStorageClassFinalizerName, lsc.Name))
+		return true, err
+	}
+	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] finalizer %s was added to the LocalStorageClass %s: %t", LocalStorageClassFinalizerName, lsc.Name, added))
+
 	valid, msg := validateLocalStorageClass(ctx, cl, scList, lsc)
 	if !valid {
 		err := errors.New("validation failed. Check the resource's Status.Message for more information")
@@ -617,7 +555,40 @@ func reconcileLSCCreateFunc(
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] a storage class %s was created: %t", sc.Name, created))
 	if created {
 		log.Info(fmt.Sprintf("[reconcileLSCCreateFunc] successfully create storage class, name: %s", sc.Name))
+	} else {
+		log.Info(fmt.Sprintf("[reconcileLSCCreateFunc] a storage class %s already exists", sc.Name))
+		hasDiff, err := hasLVGDiff(sc, lsc)
+		if err != nil {
+			log.Error(err, fmt.Sprintf("[reconcileLSCCreateFunc] unable to identify the LVMVolumeGroup difference for the LocalStorageClass %s", lsc.Name))
+			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+			if upError != nil {
+				log.Error(upError, fmt.Sprintf("[reconcileLSCCreateFunc] unable to update the LocalStorageClass %s", lsc.Name))
+			}
+			return true, err
+		}
+		if hasDiff {
+			log.Info(fmt.Sprintf("[reconcileLSCCreateFunc] current Storage Class LVMVolumeGroups do not match LocalStorageClass ones. The Storage Class %s will be recreated with new ones", lsc.Name))
+			err := recreateStorageClass(ctx, cl, sc)
+			if err != nil {
+				log.Error(err, fmt.Sprintf("[reconcileLSCCreateFunc] unable to recreate a Storage Class %s", sc.Name))
+				upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+				if upError != nil {
+					log.Error(upError, fmt.Sprintf("[reconcileLSCCreateFunc] unable to update the LocalStorageClass %s", lsc.Name))
+				}
+				return true, err
+			}
+			log.Info(fmt.Sprintf("[reconcileLSCCreateFunc] a Storage Class %s was successfully recreated", sc.Name))
+		} else {
+			log.Info(fmt.Sprintf("[reconcileLSCCreateFunc] the Storage Class %s is up-to-date", sc.Name))
+		}
 	}
+
+	added, err = addFinalizerIfNotExistsForSC(ctx, cl, sc)
+	if err != nil {
+		log.Error(err, fmt.Sprintf("[reconcileLSCCreateFunc] unable to add a finalizer %s to the StorageClass %s", LocalStorageClassFinalizerName, sc.Name))
+		return true, err
+	}
+	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] finalizer %s was added to the StorageClass %s: %t", LocalStorageClassFinalizerName, sc.Name, added))
 
 	err = updateLocalStorageClassPhase(ctx, cl, lsc, CreatedStatusPhase, "")
 	if err != nil {
@@ -625,13 +596,6 @@ func reconcileLSCCreateFunc(
 		return true, err
 	}
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] successfully updated the LocalStorageClass %s status", sc.Name))
-
-	added, err := addFinalizerIfNotExists(ctx, cl, lsc)
-	if err != nil {
-		log.Error(err, fmt.Sprintf("[reconcileLSCCreateFunc] unable to add a finalizer %s to the LocalStorageClass %s", LocalStorageClassFinalizerName, lsc.Name))
-		return true, err
-	}
-	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] finalizer %s was added to the LocalStorageClass %s: %t", LocalStorageClassFinalizerName, lsc.Name, added))
 
 	return false, nil
 }
@@ -656,12 +620,25 @@ func createStorageClassIfNotExists(
 	return true, err
 }
 
-func addFinalizerIfNotExists(ctx context.Context, cl client.Client, lsc *v1alpha1.LocalStorageClass) (bool, error) {
+func addFinalizerIfNotExistsForLSC(ctx context.Context, cl client.Client, lsc *v1alpha1.LocalStorageClass) (bool, error) {
 	if !slices.Contains(lsc.Finalizers, LocalStorageClassFinalizerName) {
 		lsc.Finalizers = append(lsc.Finalizers, LocalStorageClassFinalizerName)
 	}
 
 	err := cl.Update(ctx, lsc)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func addFinalizerIfNotExistsForSC(ctx context.Context, cl client.Client, sc *v1.StorageClass) (bool, error) {
+	if !slices.Contains(sc.Finalizers, LocalStorageClassFinalizerName) {
+		sc.Finalizers = append(sc.Finalizers, LocalStorageClassFinalizerName)
+	}
+
+	err := cl.Update(ctx, sc)
 	if err != nil {
 		return false, err
 	}
@@ -691,11 +668,6 @@ func configureStorageClass(lsc *v1alpha1.LocalStorageClass) (*v1.StorageClass, e
 		LVMVolumeGroupsParamKey:      string(lvgsParam),
 	}
 
-	isDefault := "false"
-	if lsc.Spec.IsDefault {
-		isDefault = "true"
-	}
-
 	sc := &v1.StorageClass{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       StorageClassKind,
@@ -704,9 +676,6 @@ func configureStorageClass(lsc *v1alpha1.LocalStorageClass) (*v1.StorageClass, e
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      lsc.Name,
 			Namespace: lsc.Namespace,
-			Annotations: map[string]string{
-				DefaultStorageClassAnnotationKey: isDefault,
-			},
 		},
 		Provisioner:          LocalStorageClassProvisioner,
 		Parameters:           params,
@@ -754,15 +723,7 @@ func validateLocalStorageClass(
 	unmanagedScName := findUnmanagedDuplicatedSC(scList, lsc)
 	if unmanagedScName != "" {
 		valid = false
-		failedMsgBuilder.WriteString(fmt.Sprintf("There already is a storage class with the same name: %s\n", unmanagedScName))
-	}
-
-	if lsc.Spec.IsDefault {
-		exsDefaultSCNames := findOtherDefaultStorageClasses(scList, lsc)
-		if len(exsDefaultSCNames) != 0 {
-			valid = false
-			failedMsgBuilder.WriteString(fmt.Sprintf("There already is a default storage class, name: %s\n", strings.Join(exsDefaultSCNames, ",")))
-		}
+		failedMsgBuilder.WriteString(fmt.Sprintf("There already is a storage class with the same name: %s but it is not managed by the LocalStorageClass controller\n", unmanagedScName))
 	}
 
 	lvgList := &v1alpha1.LvmVolumeGroupList{}
@@ -907,15 +868,34 @@ func findLVMVolumeGroupsOnTheSameNode(lvgList *v1alpha1.LvmVolumeGroupList, lsc 
 	return badLVGs
 }
 
-func findOtherDefaultStorageClasses(scList *v1.StorageClassList, lsc *v1alpha1.LocalStorageClass) []string {
-	defaults := make([]string, 0, len(scList.Items))
-
-	for _, sc := range scList.Items {
-		isDefault := sc.Annotations[DefaultStorageClassAnnotationKey]
-		if isDefault == "true" && sc.Name != lsc.Name {
-			defaults = append(defaults, sc.Name)
-		}
+func recreateStorageClass(ctx context.Context, cl client.Client, sc *v1.StorageClass) error {
+	err := deleteStorageClass(ctx, cl, sc)
+	if err != nil {
+		return err
 	}
 
-	return defaults
+	err = cl.Create(ctx, sc)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func deleteStorageClass(ctx context.Context, cl client.Client, sc *v1.StorageClass) error {
+	if sc.Provisioner != LocalStorageClassProvisioner {
+		return fmt.Errorf("a storage class %s does not belong to %s provisioner", sc.Name, LocalStorageClassProvisioner)
+	}
+
+	_, err := removeLocalSCFinalizerIfExistsForSC(ctx, cl, sc)
+	if err != nil {
+		return err
+	}
+
+	err = cl.Delete(ctx, sc)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

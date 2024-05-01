@@ -29,29 +29,13 @@ spec:
           properties:
             spec:
               type: object
-              x-kubernetes-validations:
-                - rule: "!has(self.fileSystem)"
-                  message: "The 'fileSystem' field is not supported yet and cannot be used."
-                - rule: has(self.lvm) == has(oldSelf.lvm) && has(self.fileSystem) == has(oldSelf.fileSystem)
-                  message: "Modification error: Once defined, 'lvm' or 'fileSystem' configuration cannot be replaced or removed. Ensure the existing storage configuration type is maintained."
               description: |
                 Defines a Kubernetes Storage class configuration.
               required:
                 - reclaimPolicy
                 - volumeBindingMode
-              oneOf:
-                - required:
-                    - lvm
-                - required:
-                    - fileSystem
+                - lvm
               properties:
-                isDefault:
-                  type: boolean
-                  default: false
-                  description: |
-                    Should this Storage class be used as default.
-                    
-                    > Note that the default value is false.
                 reclaimPolicy:
                   type: string
                   x-kubernetes-validations:
@@ -120,16 +104,6 @@ spec:
                                   The name of the thin pool.
                                 minLength: 1
                                 pattern: ^.*$
-                fileSystem:
-                  type: object
-                  x-kubernetes-validations:
-                    - rule: self == oldSelf
-                      message: Value is immutable.
-                  required:
-                    - localPath
-                  properties:
-                    localPath:
-                      type: string
             status:
               type: object
               description: |
@@ -152,9 +126,6 @@ spec:
         - jsonPath: .status.phase
           name: Phase
           type: string
-        - jsonPath: .spec.isDefault
-          name: isDefault
-          type: boolean
         - jsonPath: .status.reason
           name: Reason
           type: string
