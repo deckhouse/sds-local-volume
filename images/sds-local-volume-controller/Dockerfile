@@ -1,7 +1,7 @@
 ARG BASE_ALPINE=registry.deckhouse.io/base_images/alpine:3.16.3@sha256:5548e9172c24a1b0ca9afdd2bf534e265c94b12b36b3e0c0302f5853eaf00abb
-ARG BASE_GOLANG_20_ALPINE_BUILDER=registry.deckhouse.io/base_images/golang:1.20.5-alpine3.18@sha256:51a47fb0851397db2f506c15c426735bc23de31177cbdd962880c0879d1906a4
+ARG BASE_GOLANG_21_ALPINE_BUILDER=registry.deckhouse.io/base_images/golang:1.21.4-alpine3.18@sha256:cf84f3d6882c49ea04b6478ac514a2582c8922d7e5848b43d2918fff8329f6e6
 
-FROM $BASE_GOLANG_20_ALPINE_BUILDER as builder
+FROM $BASE_GOLANG_21_ALPINE_BUILDER as builder
 
 WORKDIR /go/src
 ADD go.mod .
