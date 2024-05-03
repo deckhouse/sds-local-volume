@@ -71,7 +71,7 @@ Note that all commands must be run on a machine that has administrator access to
 
 ### Configuring storage on nodes
 
-You need to create `LVM` volume groups on the nodes using `LVMVolumeGroup` custom resources. As part of this quickstart guide, we will create a regular `Thin` storage.
+You need to create `LVM` volume groups on the nodes using `LVMVolumeGroup` custom resources. As part of this quickstart guide, we will create a regular `Thick` storage.
 
 To configure the storage:
 
@@ -96,15 +96,12 @@ To configure the storage:
   apiVersion: storage.deckhouse.io/v1alpha1
   kind: LvmVolumeGroup
   metadata:
-    name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LvmVolumeGroup resource name will be used to create ReplicatedStoragePool in the future
+    name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LvmVolumeGroup resource name will be used to create LocalStorageClass in the future
   spec:
     type: Local
     blockDeviceNames:  # specify the names of the BlockDevice resources that are located on the target node and whose CONSUMABLE is set to true. Note that the node name is not specified anywhere since it is derived from BlockDevice resources.
       - dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa
       - dev-0cfc0d07f353598e329d34f3821bed992c1ffbcd
-    thinPools:
-      - name: ssd-thin
-        size: 50Gi
     actualVGNameOnTheNode: "vg-1" # the name of the LVM VG to be created from the above block devices on the node 
   EOF
   ```
@@ -130,9 +127,6 @@ To configure the storage:
     blockDeviceNames:
     - dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0
     - dev-b103062f879a2349a9c5f054e0366594568de68d
-    thinPools:
-    - name: ssd-thin
-      size: 50Gi
     actualVGNameOnTheNode: "vg-1"
   EOF
   ```
@@ -158,9 +152,6 @@ To configure the storage:
     blockDeviceNames:
     - dev-53d904f18b912187ac82de29af06a34d9ae23199
     - dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1
-    thinPools:
-    - name: ssd-thin
-      size: 50Gi
     actualVGNameOnTheNode: "vg-1"
   EOF
   ```
@@ -186,15 +177,9 @@ To configure the storage:
     lvm:
       lvmVolumeGroups:
         - name: vg-1-on-worker-0
-          thin:
-            poolName: ssd-thin
         - name: vg-1-on-worker-1
-          thin:
-            poolName: ssd-thin
         - name: vg-1-on-worker-2
-          thin:
-            poolName: ssd-thin
-      type: Thin
+      type: Thick
     reclaimPolicy: Delete
     volumeBindingMode: WaitForFirstConsumer
   EOF

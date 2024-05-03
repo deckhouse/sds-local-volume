@@ -78,7 +78,7 @@ moduleStatus: experimental
 apiVersion: deckhouse.io/v1alpha1
 kind: ModuleConfig
 metadata:
-  name: sds-replicated-volume
+  name: sds-local-volume
 spec:
   enabled: true
   settings:
@@ -120,7 +120,7 @@ apiVersion: deckhouse.io/v1alpha1
 kind: ModuleConfig
 metadata:
   annotations:
-  name: sds-replicated-volume
+  name: sds-local-volume
 spec:
   enabled: true
   settings:
@@ -141,7 +141,7 @@ status:
 
 ### Настройка хранилища на узлах
 
-Необходимо на этих узлах создать группы томов `LVM` с помощью пользовательских ресурсов `LVMVolumeGroup`. В быстром старте будем создавать обычное `Thin` хранилище.
+Необходимо на этих узлах создать группы томов `LVM` с помощью пользовательских ресурсов `LVMVolumeGroup`. В быстром старте будем создавать обычное `Thick` хранилище.
 
 > Пожалуйста, перед созданием `LVMVolumeGroup` убедитесь, что на данном узле запущен pod `sds-local-volume-csi-node`. Это можно сделать командой:
 > ```shell
@@ -171,15 +171,12 @@ status:
   apiVersion: storage.deckhouse.io/v1alpha1
   kind: LvmVolumeGroup
   metadata:
-    name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LvmVolumeGroup resource name will be used to create ReplicatedStoragePool in the future
+    name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LvmVolumeGroup resource name will be used to create LocalStorageClass in the future
   spec:
     type: Local
     blockDeviceNames:  # specify the names of the BlockDevice resources that are located on the target node and whose CONSUMABLE is set to true. Note that the node name is not specified anywhere since it is derived from BlockDevice resources.
       - dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa
       - dev-0cfc0d07f353598e329d34f3821bed992c1ffbcd
-    thinPools:
-      - name: ssd-thin
-        size: 50Gi
     actualVGNameOnTheNode: "vg-1" # the name of the LVM VG to be created from the above block devices on the node 
     EOF
   ```
@@ -205,9 +202,6 @@ status:
     blockDeviceNames:
     - dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0
     - dev-b103062f879a2349a9c5f054e0366594568de68d
-    thinPools:
-    - name: ssd-thin
-      size: 50Gi
     actualVGNameOnTheNode: "vg-1"
   EOF
   ```
@@ -233,9 +227,6 @@ status:
     blockDeviceNames:
     - dev-53d904f18b912187ac82de29af06a34d9ae23199
     - dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1
-    thinPools:
-    - name: ssd-thin
-      size: 50Gi
     actualVGNameOnTheNode: "vg-1"
   EOF
   ```
@@ -257,19 +248,12 @@ status:
   metadata:
     name: local-storage-class
   spec:
-    isDefault: false
     lvm:
       lvmVolumeGroups:
         - name: vg-1-on-worker-0
-          thin:
-            poolName: ssd-thin
         - name: vg-1-on-worker-1
-          thin:
-            poolName: ssd-thin
         - name: vg-1-on-worker-2
-          thin:
-            poolName: ssd-thin
-      type: Thin
+      type: Thick
     reclaimPolicy: Delete
     volumeBindingMode: WaitForFirstConsumer
     EOF
@@ -313,10 +297,6 @@ items:
 - apiVersion: storage.deckhouse.io/v1alpha1
   kind: LocalStorageClass
   metadata:
-    annotations:
-      kubectl.kubernetes.io/last-applied-configuration: |
-        {"apiVersion":"storage.deckhouse.io/v1alpha1","kind":"LocalStorageClass","metadata":{"annotations":{},"name":"test-sc"},"spec":{"isDefault":false,"lvm":{"lvmVolumeGroups":[{"name":"test-vg"}],"type":"Thick"},"reclaimPolicy":"Delete","volumeBindingMode":"WaitForFirstConsumer"}}
-    creationTimestamp: "2024-04-26T07:40:36Z"
     finalizers:
     - localstorageclass.storage.deckhouse.io
     generation: 2
@@ -324,7 +304,6 @@ items:
     resourceVersion: "26243988"
     uid: 05e32b0c-0bb1-4754-a305-7646d483175e
   spec:
-    isDefault: false
     lvm:
       lvmVolumeGroups:
       - name: test-vg
