@@ -147,7 +147,7 @@ kubectl -n d8-sds-local-volume get po -owide
 kubectl get node %node-name% --show-labels
 ```
 
-Если метки из `nodeSelector` не присутствуют на узле, то убедитесь, что данному узлу не принадлежат `LVMVolumeGroup` ресурсы, использующиеся `LocalStorageClass` ресурсами. Подробнее об этой проверке можно [здесь](#как-проверить-имеются-ли-зависимые-ресурсы-lvmvolumegroup-на-узле-).
+Если метки из `nodeSelector` не присутствуют на узле, то убедитесь, что данному узлу не принадлежат `LVMVolumeGroup` ресурсы, использующиеся `LocalStorageClass` ресурсами. Подробнее об этой проверке можно прочитать [здесь](#как-проверить-имеются-ли-зависимые-ресурсы-lvmvolumegroup-на-узле-).
 
 
 > Обратите внимание, что на ресурсах `LVMVolumeGroup` и `LocalStorageClass`, из-за которых не удается вывести узел из-под управления модуля будет отображена метка `storage.deckhouse.io/sds-local-volume-candidate-for-eviction`.

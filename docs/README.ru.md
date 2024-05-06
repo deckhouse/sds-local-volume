@@ -131,20 +131,20 @@ kubectl get lvg vg-1-on-worker-0 -w
 
 - Далее создать ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-1`:
 
-  ```yaml
-  kubectl apply -f - <<EOF
-  apiVersion: storage.deckhouse.io/v1alpha1
-  kind: LvmVolumeGroup
-  metadata:
-    name: "vg-1-on-worker-1"
-  spec:
-    type: Local
-    blockDeviceNames:
-    - dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0
-    - dev-b103062f879a2349a9c5f054e0366594568de68d
-    actualVGNameOnTheNode: "vg-1"
-  EOF
-  ```
+```yaml
+kubectl apply -f - <<EOF
+apiVersion: storage.deckhouse.io/v1alpha1
+kind: LvmVolumeGroup
+metadata:
+  name: "vg-1-on-worker-1"
+spec:
+  type: Local
+  blockDeviceNames:
+  - dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0
+  - dev-b103062f879a2349a9c5f054e0366594568de68d
+  actualVGNameOnTheNode: "vg-1"
+EOF
+```
 
 - Дождаться, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Operational`:
 
