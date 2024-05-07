@@ -1,0 +1,161 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: localstorageclasses.storage.deckhouse.io
+  labels:
+    heritage: deckhouse
+    module: sds-local-volume
+spec:
+  group: storage.deckhouse.io
+  scope: Cluster
+  names:
+    plural: localstorageclasses
+    singular: localstorageclass
+    kind: LocalStorageClass
+    shortNames:
+      - lsc
+  preserveUnknownFields: false
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: |
+            LocalStorageClass - это пользовательский ресурс Kubernetes, который определяет конфигурацию для Kubernetes Storage Class.
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              x-kubernetes-validations:
+                - rule: "!has(self.fileSystem)"
+                  message: "The 'fileSystem' field is not supported yet and cannot be used."
+                - rule: has(self.lvm) == has(oldSelf.lvm) && has(self.fileSystem) == has(oldSelf.fileSystem)
+                  message: "Modification error: Once defined, 'lvm' or 'fileSystem' configuration cannot be replaced or removed. Ensure the existing storage configuration type is maintained."
+              description: |
+                Описывает конфигурацию Kubernetes Storage Class.
+              required:
+                - reclaimPolicy
+                - volumeBindingMode
+              oneOf:
+                - required:
+                    - lvm
+                - required:
+                    - fileSystem
+              properties:
+                isDefault:
+                  type: boolean
+                  default: false
+                  description: |
+                    Следует ли использовать данный Storage class по умолчанию.
+                    
+                    > Обратите внимание, что false является значением по умолчанию.
+                reclaimPolicy:
+                  type: string
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: Value is immutable.
+                  description: |
+                    Reclaim policy данного storage class'а. Может быть:
+                    - Delete (При удалении Persistent Volume Claim также удаляются Persistent Volume и связанное хранилище)
+                    - Retain (При удалении Persistent Volume Claim остаются Persistent Volume и связанное хранилище)
+                  enum:
+                    - Delete
+                    - Retain
+                volumeBindingMode:
+                  type: string
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: Value is immutable.
+                  description: |
+                    Binding mode для данного Storage class'а. Может быть:
+                    - Immediate (создает PV сразу же, как будет создан PVC)
+                    - WaitForFirstConsumer (создает PV только после того, как будет создан Pod для PVC)
+                  enum:
+                    - Immediate
+                    - WaitForFirstConsumer
+                lvm:
+                  type: object
+                  description: |
+                    Поле описывает конфигурацию LVM.
+                  required:
+                    - type
+                    - lvmVolumeGroups
+                  properties:
+                    type:
+                      type: string
+                      x-kubernetes-validations:
+                        - rule: self == oldSelf
+                          message: Value is immutable.
+                      description: |
+                        Тип девайса.
+                      enum:
+                        - Thick
+                        - Thin
+                    lvmVolumeGroups:
+                      type: array
+                      description: |
+                        LVMVolumeGroup ресурсы, на которых будут размещены Persistent Volume.
+                      items:
+                        type: object
+                        required:
+                          - name
+                        properties:
+                          name:
+                            type: string
+                            description: |
+                              Имя LVMVolumeGroup ресурса.
+                          thin:
+                            type: object
+                            description: |
+                              Thin pool в выбранном LVMVolumeGroup ресурсе.
+                            required:
+                              - poolName
+                            properties:
+                              poolName:
+                                type: string
+                                description: |
+                                  Имя выбранного Thin pool.
+                                minLength: 1
+                                pattern: ^.*$
+                fileSystem:
+                  type: object
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: Value is immutable.
+                  required:
+                    - localPath
+                  properties:
+                    localPath:
+                      type: string
+            status:
+              type: object
+              description: |
+                Описывает текущую информацию о соответствующем Storage Class.
+              properties:
+                phase:
+                  type: string
+                  description: |
+                    Текущее состояние Storage class. Может быть: 
+                    - Failed (в случае, если контроллер получил некорректную конфигурацию, или возникли ошибки в ходе выполнения операций)
+                    - Create (если все операции завершились успешно)
+                  enum:
+                    - Failed
+                    - Created
+                reason:
+                  type: string
+                  description: |
+                    Дополнительная информация о состоянии Storage Class.
+      additionalPrinterColumns:
+        - jsonPath: .status.phase
+          name: Phase
+          type: string
+        - jsonPath: .spec.isDefault
+          name: isDefault
+          type: boolean
+        - jsonPath: .status.reason
+          name: Reason
+          type: string
+          priority: 1
