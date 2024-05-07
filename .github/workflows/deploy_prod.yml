@@ -66,10 +66,11 @@ jobs:
        - name: ECHO VAR
          run: |
            echo $MODULES_MODULE_SOURCE
-      #  - name: Check previous release
-      #    run: |
-      #      .github/check_previous_channel_release.sh $MODULE_SOURCE_NAME ce $RELEASE_CHANNEL $MODULES_MODULE_TAG
        - uses: actions/checkout@v4
+       - name: Check previous release
+         run: |
+           chmod +x .github/check_previous_channel_release.sh
+           .github/check_previous_channel_release.sh $MODULE_SOURCE_NAME ce $RELEASE_CHANNEL $MODULES_MODULE_TAG
        - uses: deckhouse/modules-actions/setup@v1
        - uses: deckhouse/modules-actions/deploy@v1
   
@@ -85,10 +86,11 @@ jobs:
       - name: ECHO VAR
         run: |
            echo $MODULES_MODULE_SOURCE
-      # - name: Check previous release
-      #   run: |
-      #     .github/check_previous_channel_release.sh $MODULE_SOURCE_NAME ee $RELEASE_CHANNEL $MODULES_MODULE_TAG
       - uses: actions/checkout@v4
+      - name: Check previous release
+        run: |
+          chmod +x .github/check_previous_channel_release.sh
+          .github/check_previous_channel_release.sh $MODULE_SOURCE_NAME ee $RELEASE_CHANNEL $MODULES_MODULE_TAG
       - uses: deckhouse/modules-actions/setup@v1
       - uses: deckhouse/modules-actions/deploy@v1
       
@@ -104,9 +106,10 @@ jobs:
       - name: ECHO VAR
         run: |
            echo $MODULES_MODULE_SOURCE
-      # - name: Check previous release
-      #   run: |
-      #     .github/check_previous_channel_release.sh $MODULE_SOURCE_NAME fe $RELEASE_CHANNEL $MODULES_MODULE_TAG
       - uses: actions/checkout@v4
+      - name: Check previous release
+        run: |
+          chmod +x .github/check_previous_channel_release.sh
+          .github/check_previous_channel_release.sh $MODULE_SOURCE_NAME fe $RELEASE_CHANNEL $MODULES_MODULE_TAG
       - uses: deckhouse/modules-actions/setup@v1
       - uses: deckhouse/modules-actions/deploy@v1
