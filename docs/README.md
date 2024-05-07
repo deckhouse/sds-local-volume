@@ -78,7 +78,7 @@ By default, the pods will be scheduled on all nodes in the cluster. You can veri
  kubectl -n d8-sds-local-volume get pod -owide
  ```
 
-> The location of the pod data is determined by special labels (nodeSelector) specified in the `spec.settings.dataNodes.nodeSelector` field in the module settings. For more detailed information on the configuration, please follow the [link](FAQ.md#i-dont-want-the-module-to-be-used-on-all-nodes-of-the-cluster-how-can-i-select-the-desired-nodes)
+> The location of the pod data is determined by special labels (nodeSelector) specified in the `spec.settings.dataNodes.nodeSelector` field in the module settings. For more detailed information on the configuration, please follow the [link](./faq.html#i-dont-want-the-module-to-be-used-on-all-nodes-of-the-cluster-how-can-i-select-the-desired-nodes).
 
 ### Configuring storage on nodes
 

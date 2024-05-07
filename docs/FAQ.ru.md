@@ -57,22 +57,6 @@ nodeSelector:
   my-custom-label-key: my-custom-label-value
 ```
 
-Также Вы можете дополнительно проверить селекторы, которые используются модулем в конфиге секрета `d8-sds-local-volume-controller-config` в пространстве имен `d8-sds-local-volume`.
-
-```shell
-kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config  -o jsonpath='{.data.config}' | base64 --decode
-```
-
-Примерный вывод команды:
-
-```yaml
-nodeSelector:
-  kubernetes.io/os: linux
-  my-custom-label-key: my-custom-label-value
-```
-
-> В выводе данной команды должны быть указаны все метки из настроек модуля `data.nodeSelector`, а также `kubernetes.io/os: linux`.
-
 Узлы, метки которых включают в себя набор, указанный в настройках, выбираются модулем как целевые для использования. Соответственно, изменяя поле `nodeSelector` Вы можете влиять на список узлов, которые будут использованы модулем.
 
 > Обратите внимание, что в поле `nodeSelector` может быть указано любое количество меток, но важно, чтобы каждая из указанных меток присутствовала на узле, который Вы собираетесь использовать для работы с модулем. Именно при наличии всех указанных меток на выбранном узле, произойдет запуск pod-а `sds-local-volume-csi-node`.
@@ -91,25 +75,7 @@ nodeSelector:
 kubectl -n d8-sds-local-volume get po -owide
 ```
 
-Если pod отсутствует, необходимо проверить, что на нужном узле имеются все указанные в секрете `d8-sds-local-volume-controller-config` метки. 
-
-```shell
-kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config  -o jsonpath='{.data.config}' | base64 --decode
-```
-
-```shell
-kubectl get node %node-name% --show-labels
-```
-
-Если pod отсутствует, значит данный узел не удовлетворяет `nodeSelector`, указанному в настройках `ModuleConfig` `sds-local-volume`. 
-Настройка модуля и `nodeSelector` описаны [здесь](#я-не-хочу-чтобы-модуль-использовался-на-всех-узлах-кластера-как-мне-выбрать-желаемые-узлы-).
-
-Если метки присутствуют, необходимо проверить наличие метки `storage.deckhouse.io/sds-local-volume-node=` на узле. Если метка отсутствует, следует проверить работает ли `sds-local-volume-controller`, и в случае его работоспособности, проверить логи:
-
-```shell
-kubectl -n d8-sds-local-volume get po -l app=sds-local-volume-controller
-kubectl -n d8-sds-local-volume logs -l app=sds-local-volume-controller
-```
+Если pod отсутствует, пожалуйста, убедитесь, что на выбранном узле присутствуют все метки, указанные в настройках модуля в поле `nodeSelector`. Подробнее об этом [здесь](#служебные-поды-компонентов-sds-local-volume-не-создаются-на-нужном-мне-узле-почему).
 
 ## Я хочу вывести узел из-под управления модуля, что делать?
 Для вывода узла из-под управления модуля необходимо убрать метки, указанные в поле `nodeSelector` в настройках модуля `sds-local-volume`. 
@@ -221,3 +187,58 @@ lvg-on-worker-5   Operational   node-worker-5   204796Mi   0                test
 Во избежание непредвиденной потери контроля за уже созданными с помощью модуля томами пользователю необходимо вручную удалить зависимые ресурсы, совершив необходимые операции над томом.
 
 Процесс проверки на наличие вышеуказанных ресурсов описан [здесь](#как-проверить-имеются-ли-зависимые-ресурсы-lvmvolumegroup-на-узле-).
+
+## Служебные pod-ы компонентов `sds-local-volume` не создаются на нужном мне узле. Почему?
+С высокой вероятностью проблемы связаны с метками на узле. 
+
+Узлы, которые будут задействованы модулем, определяются специальными метками, указанными в поле `nodeSelector` в настройках модуля.
+
+Для отображения существующих меток, указанных в поле `nodeSelector`, можно выполнить команду:
+
+```shell
+kubectl get mc sds-local-volume -o=jsonpath={.spec.settings.dataNodes.nodeSelector}
+```
+
+Примерный вывод команды:
+
+```yaml
+nodeSelector:
+  my-custom-label-key: my-custom-label-value
+```
+
+Узлы, метки которых включают в себя набор, указанный в настройках, выбираются модулем как целевые для использования. 
+
+Также Вы можете дополнительно проверить селекторы, которые используются модулем в конфиге секрета `d8-sds-local-volume-controller-config` в пространстве имен `d8-sds-local-volume`.
+
+```shell
+kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config  -o jsonpath='{.data.config}' | base64 --decode
+```
+
+Примерный вывод команды:
+
+```yaml
+nodeSelector:
+  kubernetes.io/os: linux
+  my-custom-label-key: my-custom-label-value
+```
+
+> В выводе данной команды должны быть указаны все метки из настроек модуля `data.nodeSelector`, а также `kubernetes.io/os: linux`.
+
+Проверьте метки на нужном вам узле: 
+
+```shell
+kubectl get node %node-name% --show-labels
+```
+
+При необходимости добавьте недостающие метки на желаемый узел: 
+
+```shell
+kubectl label node %node-name% my-custom-label-key=my-custom-label-value
+```
+
+Если метки присутствуют, необходимо проверить наличие метки `storage.deckhouse.io/sds-local-volume-node=` на узле. Если метка отсутствует, следует проверить работает ли `sds-local-volume-controller`, и в случае его работоспособности, проверить логи:
+
+```shell
+kubectl -n d8-sds-local-volume get po -l app=sds-local-volume-controller
+kubectl -n d8-sds-local-volume logs -l app=sds-local-volume-controller
+```

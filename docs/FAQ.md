@@ -58,22 +58,6 @@ nodeSelector:
   my-custom-label-key: my-custom-label-value
 ```
 
-You can also additionally check the selectors used by the module in the configuration of the secret `d8-sds-local-volume-controller-config` in the namespace `d8-sds-local-volume`.
-
-```shell
-kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config  -o jsonpath='{.data.config}' | base64 --decode
-```
-
-The approximate output of the command would be:
-
-```yaml
-nodeSelector:
-  kubernetes.io/os: linux
-  my-custom-label-key: my-custom-label-value
-```
-
-> В выводе данной команды должны быть указаны все метки из настроек модуля `data.nodeSelector`, а также `kubernetes.io/os: linux`.
-
 Nodes whose labels include the set specified in the settings are selected by the module as targets for usage. Therefore, by changing the `nodeSelector` field, you can influence the list of nodes that the module will use.
 
 > Please note that the `nodeSelector` field can contain any number of labels, but it's crucial that each of the specified labels is present on the node you intend to use for working with the module. It's only when all the specified labels are present on the selected node that the `sds-local-volume-csi-node` pod will be launched.
@@ -92,24 +76,7 @@ Please verify that the pod `sds-local-volume-csi-node` is running on the selecte
 kubectl -n d8-sds-local-volume get po -owide
 ```
 
-If the pod is missing, it's necessary to check that the selected node has all the labels specified in the secret `d8-sds-local-volume-controller-config`.
-
-```shell
-kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config  -o jsonpath='{.data.config}' | base64 --decode
-```
-
-```shell
-kubectl get node %node-name% --show-labels
-```
-
-If the pod is missing, it means that this node does not satisfy the `nodeSelector` specified in the `ModuleConfig` settings for `sds-local-volume`. The module configuration and `nodeSelector` are described [here](#i-dont-want-the-module-to-be-used-on-all-nodes-of-the-cluster-how-can-i-select-the-desired-nodes).
-
-If the labels are present, it's necessary to check for the presence of the label `storage.deckhouse.io/sds-local-volume-node=` on the node. If the label is missing, it's advisable to verify if `sds-local-volume-controller` is running. If it is, then check the logs:
-
-```shell
-kubectl -n d8-sds-local-volume get po -l app=sds-local-volume-controller
-kubectl -n d8-sds-local-volume logs -l app=sds-local-volume-controller
-```
+If the pod is missing, please ensure that all labels specified in the module settings in the `nodeSelector` field are present on the selected node. More details about this can be found [here](#service-pods-for-the-sds-local-volume-components-are-not-being-created-on-the-node-i-need-why-is-that).
 
 ## How do I take a node out of the module's control?
 To take a node out of the module's control, you need to remove the labels specified in the `nodeSelector` field in the module settings for `sds-local-volume`.
@@ -222,3 +189,60 @@ Most likely, there are `LVMVolumeGroup` resources present on the node, which are
 To avoid unintentionally losing control over volumes already created using the module, the user needs to manually delete dependent resources by performing necessary operations on the volume."
 
 The process of checking for the presence of the aforementioned resources is described [here](#how-to-check-if-there-are-dependent-resources-lvmvolumegroup-on-the-node).
+
+
+## Service pods for the `sds-local-volume` components are not being created on the node I need. Why is that?
+
+With a high probability, the issues are related to the labels on the node.
+
+Nodes to be used by the module are determined by special labels specified in the `nodeSelector` field in the module settings.
+
+To display the existing labels specified in the `nodeSelector` field, you can execute the command:
+
+```shell
+kubectl get mc sds-local-volume -o=jsonpath={.spec.settings.dataNodes.nodeSelector}
+```
+
+The approximate output of the command would be:
+
+```yaml
+nodeSelector:
+  my-custom-label-key: my-custom-label-value
+```
+
+Nodes whose labels include the set specified in the settings are chosen by the module as targets for usage.
+
+You can also additionally check the selectors used by the module in the configuration of the secret `d8-sds-local-volume-controller-config` in the namespace `d8-sds-local-volume`.
+
+```shell
+kubectl -n d8-sds-local-volume get secret d8-sds-local-volume-controller-config  -o jsonpath='{.data.config}' | base64 --decode
+```
+
+The approximate output of the command would be:
+
+```yaml
+nodeSelector:
+  kubernetes.io/os: linux
+  my-custom-label-key: my-custom-label-value
+```
+
+> The output of this command should include all labels from the settings of the `data.nodeSelector` module, as well as `kubernetes.io/os: linux`.
+
+Check the labels on the node you need:
+
+```shell
+kubectl get node %node-name% --show-labels
+```
+
+If necessary, add the missing labels to the desired node:
+
+```shell
+kubectl label node %node-name% my-custom-label-key=my-custom-label-value
+```
+
+If the labels are present, it's necessary to check for the existence of the label `storage.deckhouse.io/sds-local-volume-node=` on the node. If the label is absent, it's advisable to verify whether `sds-local-volume-controller` is functioning properly. If it is, then check the logs:
+
+```shell
+kubectl -n d8-sds-local-volume get po -l app=sds-local-volume-controller
+kubectl -n d8-sds-local-volume logs -l app=sds-local-volume-controller
+```
