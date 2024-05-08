@@ -47,7 +47,7 @@ func SCValidate(ctx context.Context, arReview *model.AdmissionReview, obj metav1
 				nil
 		} else {
 			klog.Infof("User %s is not allowed to manage storage classes with provisioner %s", arReview.UserInfo.Username, localCSIProvisioner)
-			return &kwhvalidating.ValidatorResult{Valid: false, Message: fmt.Sprintf("Manual operations with StorageClass with provisioner %s are not allowed. Please use LocalStorageClass instead.", localCSIProvisioner)},
+			return &kwhvalidating.ValidatorResult{Valid: false, Message: fmt.Sprintf("Manual operations with the StorageClass that uses the %s provisioner are not allowed. Please use LocalStorageClass instead.", localCSIProvisioner)},
 				nil
 		}
 	} else {

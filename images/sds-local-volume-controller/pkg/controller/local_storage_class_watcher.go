@@ -313,14 +313,14 @@ func reconcileLSCUpdateFunc(
 	}
 	log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] successfully validated the LocalStorageClass, name: %s", lsc.Name))
 
-	var sc *v1.StorageClass
+	var oldSC *v1.StorageClass
 	for _, s := range scList.Items {
 		if s.Name == lsc.Name {
-			sc = &s
+			oldSC = &s
 			break
 		}
 	}
-	if sc == nil {
+	if oldSC == nil {
 		err := fmt.Errorf("a storage class %s does not exist", lsc.Name)
 		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to find a storage class for the LocalStorageClass, name: %s", lsc.Name))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -332,9 +332,9 @@ func reconcileLSCUpdateFunc(
 
 	log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] successfully found a storage class for the LocalStorageClass, name: %s", lsc.Name))
 
-	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] storage class %s params: %+v", sc.Name, sc.Parameters))
+	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] storage class %s params: %+v", oldSC.Name, oldSC.Parameters))
 	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] LocalStorageClass %s Spec.LVM: %+v", lsc.Name, lsc.Spec.LVM))
-	hasDiff, err := hasLVGDiff(sc, lsc)
+	hasDiff, err := hasLVGDiff(oldSC, lsc)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to identify the LVMVolumeGroup difference for the LocalStorageClass %s", lsc.Name))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -346,7 +346,7 @@ func reconcileLSCUpdateFunc(
 
 	if hasDiff {
 		log.Info(fmt.Sprintf("[reconcileLSCUpdateFunc] current Storage Class LVMVolumeGroups do not match LocalStorageClass ones. The Storage Class %s will be recreated with new ones", lsc.Name))
-		sc, err = configureStorageClass(lsc)
+		newSC, err := configureStorageClass(lsc)
 		if err != nil {
 			log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to configure a Storage Class for the LocalStorageClass %s", lsc.Name))
 			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -357,9 +357,9 @@ func reconcileLSCUpdateFunc(
 			return false, err
 		}
 
-		err = recreateStorageClass(ctx, cl, sc)
+		err = recreateStorageClass(ctx, cl, oldSC, newSC)
 		if err != nil {
-			log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to recreate a Storage Class %s", sc.Name))
+			log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to recreate a Storage Class %s", newSC.Name))
 			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
 			if upError != nil {
 				log.Error(upError, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to update the LocalStorageClass %s", lsc.Name))
@@ -367,7 +367,7 @@ func reconcileLSCUpdateFunc(
 			return true, err
 		}
 
-		log.Info(fmt.Sprintf("[reconcileLSCUpdateFunc] a Storage Class %s was successfully recreated", sc.Name))
+		log.Info(fmt.Sprintf("[reconcileLSCUpdateFunc] a Storage Class %s was successfully recreated", newSC.Name))
 	}
 
 	err = updateLocalStorageClassPhase(ctx, cl, lsc, CreatedStatusPhase, "")
@@ -375,7 +375,7 @@ func reconcileLSCUpdateFunc(
 		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to update the LocalStorageClass, name: %s", lsc.Name))
 		return true, err
 	}
-	log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] successfully updated the LocalStorageClass %s status", sc.Name))
+	log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] successfully updated the LocalStorageClass %s status", lsc.Name))
 
 	return false, nil
 }
@@ -556,31 +556,8 @@ func reconcileLSCCreateFunc(
 	if created {
 		log.Info(fmt.Sprintf("[reconcileLSCCreateFunc] successfully create storage class, name: %s", sc.Name))
 	} else {
-		log.Info(fmt.Sprintf("[reconcileLSCCreateFunc] a storage class %s already exists", sc.Name))
-		hasDiff, err := hasLVGDiff(sc, lsc)
-		if err != nil {
-			log.Error(err, fmt.Sprintf("[reconcileLSCCreateFunc] unable to identify the LVMVolumeGroup difference for the LocalStorageClass %s", lsc.Name))
-			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
-			if upError != nil {
-				log.Error(upError, fmt.Sprintf("[reconcileLSCCreateFunc] unable to update the LocalStorageClass %s", lsc.Name))
-			}
-			return true, err
-		}
-		if hasDiff {
-			log.Info(fmt.Sprintf("[reconcileLSCCreateFunc] current Storage Class LVMVolumeGroups do not match LocalStorageClass ones. The Storage Class %s will be recreated with new ones", lsc.Name))
-			err := recreateStorageClass(ctx, cl, sc)
-			if err != nil {
-				log.Error(err, fmt.Sprintf("[reconcileLSCCreateFunc] unable to recreate a Storage Class %s", sc.Name))
-				upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
-				if upError != nil {
-					log.Error(upError, fmt.Sprintf("[reconcileLSCCreateFunc] unable to update the LocalStorageClass %s", lsc.Name))
-				}
-				return true, err
-			}
-			log.Info(fmt.Sprintf("[reconcileLSCCreateFunc] a Storage Class %s was successfully recreated", sc.Name))
-		} else {
-			log.Info(fmt.Sprintf("[reconcileLSCCreateFunc] the Storage Class %s is up-to-date", sc.Name))
-		}
+		log.Warning(fmt.Sprintf("[reconcileLSCCreateFunc] Storage class %s already exists. Adding event to requeue.", sc.Name))
+		return true, nil
 	}
 
 	added, err = addFinalizerIfNotExistsForSC(ctx, cl, sc)
@@ -868,14 +845,19 @@ func findLVMVolumeGroupsOnTheSameNode(lvgList *v1alpha1.LvmVolumeGroupList, lsc 
 	return badLVGs
 }
 
-func recreateStorageClass(ctx context.Context, cl client.Client, sc *v1.StorageClass) error {
-	err := deleteStorageClass(ctx, cl, sc)
+func recreateStorageClass(ctx context.Context, cl client.Client, oldSC, newSC *v1.StorageClass) error {
+	// It is necessary to pass the original StorageClass to the delete operation because
+	// the deletion will not succeed if the fields in the StorageClass provided to delete
+	// differ from those currently in the cluster.
+	err := deleteStorageClass(ctx, cl, oldSC)
 	if err != nil {
+		err = fmt.Errorf("[recreateStorageClass] unable to delete a storage class %s: %s", oldSC.Name, err.Error())
 		return err
 	}
 
-	err = cl.Create(ctx, sc)
+	err = cl.Create(ctx, newSC)
 	if err != nil {
+		err = fmt.Errorf("[recreateStorageClass] unable to create a storage class %s: %s", newSC.Name, err.Error())
 		return err
 	}
 
