@@ -132,6 +132,12 @@ kubectl get lsc
 
 2. Check each of them for the list of used `LVMVolumeGroup` resources.
 
+> If you want to list all `LocalStorageClass` resources at once, run the command:
+> 
+> ```shell
+> kubectl get lsc -oyaml
+> ```
+
 ```shell
 kubectl get lsc %lsc-name% -oyaml
 ```

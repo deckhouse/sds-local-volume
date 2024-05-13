@@ -128,7 +128,13 @@ kubectl get node %node-name% --show-labels
 kubectl get lsc
 ```
 
-2. Проверить у каждого из них список используемых `LVMVolumeGroup` ресурсов
+2. Проверить у каждого из них список используемых `LVMVolumeGroup` ресурсов 
+
+> Вы можете сразу отобразить содержимое всех `LocalStorageClass` ресурсов, выполнив команду:
+> 
+> ```shell
+> kubectl get lsc -oyaml
+> ```
 
 ```shell
 kubectl get lsc %lsc-name% -oyaml
