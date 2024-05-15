@@ -232,7 +232,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 			return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error checking if device exists: %v", err)
 		}
 		if !exists {
-			return nil, status.Errorf(codes.NotFound, "[NodePublishVolume] Device %s not found", devPath)
+			return nil, status.Errorf(codes.NotFound, "[NodePublishVolume] Device %q not found", devPath)
 		}
 		err = d.storeManager.NodePublishVolumeBlock(devPath, target, mountOptions)
 		if err != nil {
