@@ -71,7 +71,7 @@ jobs:
        - name: Check previous release
          run: |
            chmod +x .github/check_previous_channel_release.sh
-           .github/check_previous_channel_release.sh $MODULE_SOURCE_NAME ce $RELEASE_CHANNEL $MODULES_MODULE_TAG
+           .github/check_previous_channel_release.sh $MODULES_MODULE_NAME ce $RELEASE_CHANNEL $MODULES_MODULE_TAG
        - uses: deckhouse/modules-actions/deploy@v1
   
   job-EE:
@@ -91,7 +91,7 @@ jobs:
       - name: Check previous release
         run: |
           chmod +x .github/check_previous_channel_release.sh
-          .github/check_previous_channel_release.sh $MODULE_SOURCE_NAME ee $RELEASE_CHANNEL $MODULES_MODULE_TAG
+          .github/check_previous_channel_release.sh $MODULES_MODULE_NAME ee $RELEASE_CHANNEL $MODULES_MODULE_TAG
       - uses: deckhouse/modules-actions/deploy@v1
       
   job-FE:
@@ -111,5 +111,5 @@ jobs:
       - name: Check previous release
         run: |
           chmod +x .github/check_previous_channel_release.sh
-          .github/check_previous_channel_release.sh $MODULE_SOURCE_NAME fe $RELEASE_CHANNEL $MODULES_MODULE_TAG
+          .github/check_previous_channel_release.sh $MODULES_MODULE_NAME fe $RELEASE_CHANNEL $MODULES_MODULE_TAG
       - uses: deckhouse/modules-actions/deploy@v1
