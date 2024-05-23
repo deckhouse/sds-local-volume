@@ -19,12 +19,14 @@ package controller
 import (
 	"context"
 	"fmt"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"sds-local-volume-controller/api/v1alpha1"
 	"sds-local-volume-controller/pkg/config"
 	"sds-local-volume-controller/pkg/logger"
-	"sds-local-volume-controller/pkg/monitoring"
+	"strings"
+	"time"
+
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -32,8 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/yaml"
-	"strings"
-	"time"
 )
 
 const (
@@ -48,7 +48,6 @@ func RunLocalCSINodeWatcherController(
 	mgr manager.Manager,
 	cfg config.Options,
 	log logger.Logger,
-	metrics monitoring.Metrics,
 ) (controller.Controller, error) {
 	cl := mgr.GetClient()
 

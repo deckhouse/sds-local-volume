@@ -26,7 +26,7 @@ import (
 	"sds-local-volume-controller/pkg/controller"
 	"sds-local-volume-controller/pkg/kubutils"
 	"sds-local-volume-controller/pkg/logger"
-	"sds-local-volume-controller/pkg/monitoring"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	v1 "k8s.io/api/core/v1"
@@ -89,9 +89,8 @@ func main() {
 	}
 
 	managerOpts := manager.Options{
-		Scheme: scheme,
-		Cache:  cacheOpt,
-		//MetricsBindAddress: cfgParams.MetricsPort,
+		Scheme:                  scheme,
+		Cache:                   cacheOpt,
 		LeaderElection:          true,
 		LeaderElectionNamespace: cfgParams.ControllerNamespace,
 		LeaderElectionID:        config.ControllerName,
@@ -105,14 +104,12 @@ func main() {
 	}
 	log.Info("[main] successfully created kubernetes manager")
 
-	metrics := monitoring.GetMetrics("")
-
-	if _, err = controller.RunLocalStorageClassWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
+	if _, err = controller.RunLocalStorageClassWatcherController(mgr, *cfgParams, *log); err != nil {
 		log.Error(err, fmt.Sprintf("[main] unable to run %s", controller.LocalStorageClassCtrlName))
 		os.Exit(1)
 	}
 
-	if _, err = controller.RunLocalCSINodeWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
+	if _, err = controller.RunLocalCSINodeWatcherController(mgr, *cfgParams, *log); err != nil {
 		log.Error(err, fmt.Sprintf("[main] unable to run %s", controller.LocalCSINodeWatcherCtrl))
 		os.Exit(1)
 	}
