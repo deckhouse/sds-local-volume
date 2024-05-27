@@ -8,6 +8,7 @@ env:
   RELEASE_CHANNEL: ${{ github.event.inputs.version }}
   MODULES_REGISTRY_LOGIN: ${{ vars.PROD_MODULES_REGISTRY_LOGIN }}
   MODULES_REGISTRY_PASSWORD: ${{ secrets.PROD_MODULES_REGISTRY_PASSWORD }}
+  MODULES_READ_REGISTRY_PASSWORD: ${{ secrets.PROD_MODULES_READ_REGISTRY_PASSWORD }}
   MODULES_MODULE_TAG: ${{ github.event.inputs.tag }}
 
 on:
@@ -71,7 +72,7 @@ jobs:
        - name: Check previous release
          run: |
            chmod +x .github/check_previous_channel_release.sh
-           .github/check_previous_channel_release.sh $MODULES_MODULE_NAME ce $RELEASE_CHANNEL $MODULES_MODULE_TAG
+           .github/check_previous_channel_release.sh $MODULES_MODULE_NAME ce $RELEASE_CHANNEL $MODULES_MODULE_TAG license-token $MODULES_READ_REGISTRY_PASSWORD
        - uses: deckhouse/modules-actions/deploy@v1
   
   job-EE:
@@ -91,7 +92,7 @@ jobs:
       - name: Check previous release
         run: |
           chmod +x .github/check_previous_channel_release.sh
-          .github/check_previous_channel_release.sh $MODULES_MODULE_NAME ee $RELEASE_CHANNEL $MODULES_MODULE_TAG
+          .github/check_previous_channel_release.sh $MODULES_MODULE_NAME ee $RELEASE_CHANNEL $MODULES_MODULE_TAG license-token $MODULES_READ_REGISTRY_PASSWORD
       - uses: deckhouse/modules-actions/deploy@v1
       
   job-FE:
@@ -111,5 +112,5 @@ jobs:
       - name: Check previous release
         run: |
           chmod +x .github/check_previous_channel_release.sh
-          .github/check_previous_channel_release.sh $MODULES_MODULE_NAME fe $RELEASE_CHANNEL $MODULES_MODULE_TAG
+          .github/check_previous_channel_release.sh $MODULES_MODULE_NAME fe $RELEASE_CHANNEL $MODULES_MODULE_TAG license-token $MODULES_READ_REGISTRY_PASSWORD
       - uses: deckhouse/modules-actions/deploy@v1
