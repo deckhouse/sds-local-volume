@@ -686,7 +686,7 @@ func removeFinalizerIfExists(ctx context.Context, cl client.Client, obj metav1.O
 	removed := false
 	finalizers := obj.GetFinalizers()
 	for i, f := range finalizers {
-		if f == finalizerName {
+		if f == finalizerName || f == LocalStorageClassFinalizerNameOld {
 			finalizers = append(finalizers[:i], finalizers[i+1:]...)
 			removed = true
 			break
