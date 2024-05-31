@@ -297,16 +297,13 @@ func checkMount(s *Store, devPath, target string, mountOpts []string) error {
 			}
 			s.Log.Trace(fmt.Sprintf("[checkMount] mount point %s is mounted to device %s", target, m.Device))
 
-			// if slices.Contains(mountOpts, "ro") {
-			// 	if !slices.Contains(m.Opts, "ro") {
-			// 		return fmt.Errorf("[checkMount] passed mount options contain 'ro' but mount options from mount point %q do not", target)
-			// 	}
-			// }
-
-			if !slices.Equal(m.Opts, mountOpts) {
-				return fmt.Errorf("mount options %v do not match expected mount options %v", m.Opts, mountOpts)
+			if slices.Contains(mountOpts, "ro") {
+				if !slices.Contains(m.Opts, "ro") {
+					return fmt.Errorf("[checkMount] passed mount options contain 'ro' but mount options from mount point %q do not", target)
+				}
+				s.Log.Trace(fmt.Sprintf("[checkMount] mount point %s is mounted read-only", target))
 			}
-			s.Log.Trace(fmt.Sprintf("[checkMount] mount options %v match expected mount options %v", m.Opts, mountOpts))
+			s.Log.Trace(fmt.Sprintf("[checkMount] mount point %s is mounted to device %s with mount options %v", target, m.Device, m.Opts))
 
 			return nil
 		}
