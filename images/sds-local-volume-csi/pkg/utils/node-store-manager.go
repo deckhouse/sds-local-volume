@@ -31,7 +31,7 @@ import (
 type NodeStoreManager interface {
 	NodeStageVolumeFS(source, target string, fsType string, mountOpts []string, lvmType, lvmThinPoolName string) error
 	NodePublishVolumeBlock(source, target string, mountOpts []string) error
-	NodePublishVolumeFS(source, target, fsType string, mountOpts []string) error
+	NodePublishVolumeFS(source, devPath, target, fsType string, mountOpts []string) error
 	Unstage(target string) error
 	Unpublish(target string) error
 	IsNotMountPoint(target string) (bool, error)
@@ -173,7 +173,7 @@ func (s *Store) NodePublishVolumeBlock(source, target string, mountOpts []string
 	return nil
 }
 
-func (s *Store) NodePublishVolumeFS(source, target, fsType string, mountOpts []string) error {
+func (s *Store) NodePublishVolumeFS(source, devPath, target, fsType string, mountOpts []string) error {
 	s.Log.Info(" ----== Start NodePublishVolumeFS ==---- ")
 	s.Log.Trace(fmt.Sprintf("[NodePublishVolumeFS] params source=%q target=%q mountOptions=%v", source, target, mountOpts))
 	isMountPoint := false
@@ -197,7 +197,7 @@ func (s *Store) NodePublishVolumeFS(source, target, fsType string, mountOpts []s
 
 	if isMountPoint {
 		s.Log.Trace(fmt.Sprintf("[NodePublishVolumeFS] target directory %q is a mount point. Check mount", target))
-		err := checkMount(s, source, target, mountOpts)
+		err := checkMount(s, devPath, target, mountOpts)
 		if err != nil {
 			return fmt.Errorf("[NodePublishVolumeFS] failed to check mount info for %q: %w", target, err)
 		}
@@ -283,23 +283,17 @@ func toMapperPath(devPath string) string {
 	return "/dev/mapper/" + mapperPath
 }
 
-func checkMount(s *Store, source, target string, mountOpts []string) error {
+func checkMount(s *Store, devPath, target string, mountOpts []string) error {
 	mntInfo, err := s.NodeStorage.Interface.List()
 	if err != nil {
 		return fmt.Errorf("[checkMount] failed to list mounts: %w", err)
 	}
-	s.Log.Trace("================ checkMount mntInfo ================")
-	s.Log.Trace(fmt.Sprintf("                      : %+v", mntInfo))
-	s.Log.Trace("================ checkMount mntInfo END ================")
 
 	for _, m := range mntInfo {
 		if m.Path == target {
-			s.Log.Trace("===============================")
-			s.Log.Trace(fmt.Sprintf("mount info for target: %s", target))
-			s.Log.Trace(fmt.Sprintf("                      : %+v", m))
-			s.Log.Trace("================ checkMount END ================")
-			if m.Device != source {
-				return fmt.Errorf("[checkMount] device from mount point %q does not match expected source %q", m.Device, source)
+			mapperDevicePath := toMapperPath(devPath)
+			if m.Device != devPath && m.Device != mapperDevicePath {
+				return fmt.Errorf("[checkMount] device from mount point %q does not match expected source device path %s or mapper device path %s", m.Device, devPath, mapperDevicePath)
 			}
 
 			if slices.Contains(mountOpts, "ro") {
