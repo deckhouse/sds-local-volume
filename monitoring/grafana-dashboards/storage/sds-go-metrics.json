@@ -522,7 +522,7 @@
             "uid": "${ds_prometheus}"
           },
           "editorMode": "code",
-          "expr": "rate(go_goroutines{job=~\"sds.*\"}[5m])",
+          "expr": "go_goroutines{job=~\"sds.*\"}",
           "format": "time_series",
           "intervalFactor": 2,
           "legendFormat": "{{app}} ({{node}})",
