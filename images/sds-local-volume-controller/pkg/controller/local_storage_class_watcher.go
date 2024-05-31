@@ -57,7 +57,7 @@ const (
 	LVMVolumeBindingModeParamKey = LocalStorageClassProvisioner + "/volume-binding-mode"
 	LVMVolumeGroupsParamKey      = LocalStorageClassProvisioner + "/lvm-volume-groups"
 
-	LocalStorageClassFinalizerName = "localstorageclass.storage.deckhouse.io"
+	LocalStorageClassFinalizerName = "storage.deckhouse.io/local-storage-class-controller"
 
 	AllowVolumeExpansionDefaultValue = true
 
