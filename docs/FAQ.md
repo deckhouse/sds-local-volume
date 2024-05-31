@@ -16,9 +16,14 @@ In case of no free space in the pool, degradation in the module's operation as a
 
 ## How do I set the default StorageClass?
 
-Set the `spec.IsDefault` field to `true` in the corresponding [LocalStorageClass](./cr.html#localstorageclass) custom resource.
+Add the annotation `storageclass.kubernetes.io/is-default-class: "true"` to the corresponding StorageClass resource:
+
+```shell
+kubectl annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kubernetes.io/is-default-class=true
+```
 
 ## I don't want the module to be used on all nodes of the cluster. How can I select the desired nodes?
+
 The nodes that will be involved with the module are determined by special labels specified in the `nodeSelector` field in the module settings.
 
 To display and edit the module settings, you can execute the command:

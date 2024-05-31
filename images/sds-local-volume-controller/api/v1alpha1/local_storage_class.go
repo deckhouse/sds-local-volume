@@ -33,7 +33,6 @@ type LocalStorageClassList struct {
 }
 
 type LocalStorageClassSpec struct {
-	IsDefault         bool                  `json:"isDefault"`
 	ReclaimPolicy     string                `json:"reclaimPolicy"`
 	VolumeBindingMode string                `json:"volumeBindingMode"`
 	LVM               *LocalStorageClassLVM `json:"lvm,omitempty"`

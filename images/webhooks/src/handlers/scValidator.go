@@ -18,7 +18,9 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"k8s.io/klog/v2"
 
@@ -46,8 +48,24 @@ func SCValidate(ctx context.Context, arReview *model.AdmissionReview, obj metav1
 			return &kwhvalidating.ValidatorResult{Valid: true},
 				nil
 		} else {
+			if arReview.Operation == model.OperationUpdate {
+				changed, err := isStorageClassChangedExceptAnnotations(arReview.OldObjectRaw, arReview.NewObjectRaw)
+				if err != nil {
+					return nil, err
+				}
+
+				if !changed {
+					klog.Infof("User %s is allowed to change annotations for storage classes with provisioner %s", arReview.UserInfo.Username, localCSIProvisioner)
+					return &kwhvalidating.ValidatorResult{Valid: true},
+						nil
+				}
+			}
+
 			klog.Infof("User %s is not allowed to manage storage classes with provisioner %s", arReview.UserInfo.Username, localCSIProvisioner)
-			return &kwhvalidating.ValidatorResult{Valid: false, Message: fmt.Sprintf("Manual operations with StorageClass with provisioner %s are not allowed. Please use LocalStorageClass instead.", localCSIProvisioner)},
+			return &kwhvalidating.ValidatorResult{
+					Valid:   false,
+					Message: fmt.Sprintf("Direct modifications to the StorageClass (other than annotations) with the provisioner %s are not allowed. Please use LocalStorageClass for such operations.", localCSIProvisioner),
+				},
 				nil
 		}
 	} else {
@@ -55,4 +73,72 @@ func SCValidate(ctx context.Context, arReview *model.AdmissionReview, obj metav1
 			nil
 	}
 
+}
+
+func isStorageClassChangedExceptAnnotations(oldObjectRaw, newObjectRaw []byte) (bool, error) {
+	var oldSC, newSC storagev1.StorageClass
+
+	if err := json.Unmarshal(oldObjectRaw, &oldSC); err != nil {
+		err := fmt.Errorf("failed to unmarshal old object: %v", err)
+		return false, err
+	}
+
+	if err := json.Unmarshal(newObjectRaw, &newSC); err != nil {
+		err := fmt.Errorf("failed to unmarshal new object: %v", err)
+		return false, err
+	}
+
+	klog.Info("=====================================")
+	klog.Infof("Comparing old object: %+v", oldSC)
+	klog.Info("=====================================")
+	klog.Infof("Comparing new object: %+v", newSC)
+	klog.Info("=====================================")
+
+	if oldSC.Provisioner != newSC.Provisioner {
+		klog.Infof("Provisioner changed from %s to %s", oldSC.Provisioner, newSC.Provisioner)
+		return true, nil
+	}
+
+	if *oldSC.VolumeBindingMode != *newSC.VolumeBindingMode {
+		klog.Infof("VolumeBindingMode changed from %s to %s", *oldSC.VolumeBindingMode, *newSC.VolumeBindingMode)
+		return true, nil
+	}
+
+	if *oldSC.ReclaimPolicy != *newSC.ReclaimPolicy {
+		klog.Infof("ReclaimPolicy changed from %s to %s", *oldSC.ReclaimPolicy, *newSC.ReclaimPolicy)
+		return true, nil
+	}
+
+	if !reflect.DeepEqual(oldSC.Parameters, newSC.Parameters) {
+		klog.Infof("Parameters changed from %v to %v", oldSC.Parameters, newSC.Parameters)
+		return true, nil
+	}
+
+	if *oldSC.AllowVolumeExpansion != *newSC.AllowVolumeExpansion {
+		klog.Infof("AllowVolumeExpansion changed from %v to %v", *oldSC.AllowVolumeExpansion, *newSC.AllowVolumeExpansion)
+		return true, nil
+	}
+
+	if !reflect.DeepEqual(oldSC.MountOptions, newSC.MountOptions) {
+		klog.Infof("MountOptions changed from %v to %v", oldSC.MountOptions, newSC.MountOptions)
+		return true, nil
+	}
+
+	if !reflect.DeepEqual(oldSC.AllowedTopologies, newSC.AllowedTopologies) {
+		klog.Infof("AllowedTopologies changed from %v to %v", oldSC.AllowedTopologies, newSC.AllowedTopologies)
+		return true, nil
+	}
+
+	newSC.ObjectMeta.Annotations = nil
+	oldSC.ObjectMeta.Annotations = nil
+
+	newSC.ObjectMeta.ManagedFields = nil
+	oldSC.ObjectMeta.ManagedFields = nil
+
+	if !reflect.DeepEqual(oldSC.ObjectMeta, newSC.ObjectMeta) {
+		klog.Infof("ObjectMeta changed from %+v to %+v", oldSC.ObjectMeta, newSC.ObjectMeta)
+		return true, nil
+	}
+
+	return false, nil
 }

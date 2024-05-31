@@ -10,11 +10,6 @@ spec:
               description: |
                 Описывает конфигурацию Kubernetes Storage Class.
               properties:
-                isDefault:
-                  description: |
-                    Следует ли использовать данный Storage class по умолчанию.
-                    
-                    > Обратите внимание, что false является значением по умолчанию.
                 reclaimPolicy:
                   description: |
                     Reclaim policy данного storage class'а. Может быть:

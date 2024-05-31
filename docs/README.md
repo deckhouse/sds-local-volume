@@ -190,7 +190,6 @@ kind: LocalStorageClass
 metadata:
   name: local-storage-class
 spec:
-  isDefault: false
   lvm:
     lvmVolumeGroups:
       - name: vg-1-on-worker-0
