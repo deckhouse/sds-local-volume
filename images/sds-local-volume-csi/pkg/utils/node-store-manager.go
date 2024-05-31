@@ -201,7 +201,7 @@ func (s *Store) NodePublishVolumeFS(source, devPath, target, fsType string, moun
 		if err != nil {
 			return fmt.Errorf("[NodePublishVolumeFS] failed to check mount info for %q: %w", target, err)
 		}
-		s.Log.Trace(fmt.Sprintf("[NodePublishVolumeFS] target directory %q is a mount point and already mounted to source %q", target, source))
+		s.Log.Trace(fmt.Sprintf("[NodePublishVolumeFS] target directory %q is a mount point and already mounted to source %s. Skipping mount", target, source))
 		return nil
 	}
 
@@ -295,16 +295,18 @@ func checkMount(s *Store, devPath, target string, mountOpts []string) error {
 			if m.Device != devPath && m.Device != mapperDevicePath {
 				return fmt.Errorf("[checkMount] device from mount point %q does not match expected source device path %s or mapper device path %s", m.Device, devPath, mapperDevicePath)
 			}
+			s.Log.Trace(fmt.Sprintf("[checkMount] mount point %s is mounted to device %s", target, m.Device))
 
-			if slices.Contains(mountOpts, "ro") {
-				if !slices.Contains(m.Opts, "ro") {
-					return fmt.Errorf("[checkMount] passed mount options contain 'ro' but mount options from mount point %q do not", target)
-				}
+			// if slices.Contains(mountOpts, "ro") {
+			// 	if !slices.Contains(m.Opts, "ro") {
+			// 		return fmt.Errorf("[checkMount] passed mount options contain 'ro' but mount options from mount point %q do not", target)
+			// 	}
+			// }
 
-				if slices.Equal(m.Opts, mountOpts) {
-					return fmt.Errorf("mount options %v do not match expected mount options %v", m.Opts, mountOpts)
-				}
+			if !slices.Equal(m.Opts, mountOpts) {
+				return fmt.Errorf("mount options %v do not match expected mount options %v", m.Opts, mountOpts)
 			}
+			s.Log.Trace(fmt.Sprintf("[checkMount] mount options %v match expected mount options %v", m.Opts, mountOpts))
 
 			return nil
 		}
