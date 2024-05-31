@@ -288,9 +288,16 @@ func checkMount(s *Store, source, target string, mountOpts []string) error {
 	if err != nil {
 		return fmt.Errorf("[checkMount] failed to list mounts: %w", err)
 	}
+	s.Log.Trace("================ checkMount mntInfo ================")
+	s.Log.Trace(fmt.Sprintf("                      : %+v", mntInfo))
+	s.Log.Trace("================ checkMount mntInfo END ================")
 
 	for _, m := range mntInfo {
 		if m.Path == target {
+			s.Log.Trace("===============================")
+			s.Log.Trace(fmt.Sprintf("mount info for target: %s", target))
+			s.Log.Trace(fmt.Sprintf("                      : %+v", m))
+			s.Log.Trace("================ checkMount END ================")
 			if m.Device != source {
 				return fmt.Errorf("[checkMount] device from mount point %q does not match expected source %q", m.Device, source)
 			}
