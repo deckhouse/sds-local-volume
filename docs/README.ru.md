@@ -1,7 +1,7 @@
 ---
 title: "Модуль sds-local-volume"
 description: "Модуль sds-local-volume: общие концепции и положения."
-moduleStatus: experimental
+moduleStatus: preview
 ---
 
 Модуль управляет локальным блочным хранилищем на базе `LVM`. Модуль позволяет создавать `StorageClass` в `Kubernetes` через создание [пользовательских ресурсов Kubernetes](./cr.html) `LocalStorageClass` (пример создания ниже).
