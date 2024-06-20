@@ -142,7 +142,7 @@ func reconcileLSCUpdateFunc(
 
 	if hasDiff {
 		log.Info(fmt.Sprintf("[reconcileLSCUpdateFunc] current Storage Class LVMVolumeGroups do not match LocalStorageClass ones. The Storage Class %s will be recreated with new ones", lsc.Name))
-		newSC, err := configureStorageClass(lsc)
+		newSC, err := updateStorageClass(lsc, oldSC)
 		if err != nil {
 			log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to configure a Storage Class for the LocalStorageClass %s", lsc.Name))
 			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -702,4 +702,17 @@ func removeFinalizerIfExists(ctx context.Context, cl client.Client, obj metav1.O
 	}
 
 	return removed, nil
+}
+
+func updateStorageClass(lsc *v1alpha1.LocalStorageClass, oldSC *v1.StorageClass) (*v1.StorageClass, error) {
+	newSC, err := configureStorageClass(lsc)
+	if err != nil {
+		return nil, err
+	}
+
+	if oldSC.Annotations != nil {
+		newSC.Annotations = oldSC.Annotations
+	}
+
+	return newSC, nil
 }

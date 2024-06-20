@@ -60,6 +60,9 @@ const (
 	LocalStorageClassFinalizerName    = "storage.deckhouse.io/local-storage-class-controller"
 	LocalStorageClassFinalizerNameOld = "localstorageclass.storage.deckhouse.io"
 
+	StorageClassDefaultAnnotationKey     = "storageclass.kubernetes.io/is-default-class"
+	StorageClassDefaultAnnotationValTrue = "true"
+
 	AllowVolumeExpansionDefaultValue = true
 
 	FailedStatusPhase  = "Failed"
