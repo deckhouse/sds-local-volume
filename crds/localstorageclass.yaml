@@ -71,9 +71,11 @@ spec:
                     - rule: |
                         (self.type == "Thin" && !has(self.thick)) || self.type != "Thin"
                       message: Field spec.lvm.thick is forbidden for Thin type.
-                    - rule: "!has(self.thick) || !has(self.thick.contiguous) || (has(self.thick.contiguous) && self.thick.contiguous == oldSelf.thick.contiguous)"
+                    - rule: |
+                        (!has(self.thick) || !has(self.thick.contiguous) || (has(self.thick.contiguous) && self.thick.contiguous == oldSelf.thick.contiguous))
                       message: "Field 'contiguous' is immutable and cannot be added if not specified at creation."
-                    - rule: "!has(oldSelf.thick) || has(self.thick) || !has(oldSelf.thick.contiguous)"
+                    - rule: |
+                        (!has(oldSelf.thick) || has(self.thick) || !has(oldSelf.thick.contiguous))
                       message: "Field 'thick' cannot be removed if 'thick.contiguous' is specified."
                   properties:
                     type:
@@ -89,9 +91,11 @@ spec:
                     thick:
                       type: object
                       x-kubernetes-validations:
-                        - rule: "!has(oldSelf.contiguous) || has(self.contiguous)"
+                        - rule: |
+                            (!has(oldSelf.contiguous) || has(self.contiguous))
                           message: "Field 'contiguous' cannot be removed."
-                        - rule: "!has(self.contiguous) || (has(self.contiguous) && self.contiguous == oldSelf.contiguous)"
+                        - rule: |
+                            (!has(self.contiguous) || (has(self.contiguous) && self.contiguous == oldSelf.contiguous))
                           message: Field 'contiguous' is immutable and cannot be added if not specified at creation.
                       description: |
                         Settings for Logical Volumes in a LVMVolumeGroup resource.
