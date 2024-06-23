@@ -30,6 +30,7 @@ import (
 	"gopkg.in/yaml.v2"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -364,19 +365,27 @@ func GetLVGList(ctx context.Context, kc client.Client) (*v1alpha1.LvmVolumeGroup
 	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroupList, last error: %w", KubernetesApiRequestLimit, err)
 }
 
-func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity) v1alpha1.LVMLogicalVolumeSpec {
-	var llvThin *v1alpha1.ThinLogicalVolumeSpec
+func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity, contiguous bool) v1alpha1.LVMLogicalVolumeSpec {
+	var llvThin *v1alpha1.LVMLogicalVolumeThinSpec
 	if lvmType == internal.LVMTypeThin {
-		llvThin = &v1alpha1.ThinLogicalVolumeSpec{}
+		llvThin = &v1alpha1.LVMLogicalVolumeThinSpec{}
 		llvThin.PoolName = storageClassLVGParametersMap[selectedLVG.Name]
 		log.Info(fmt.Sprintf("[GetLLVSpec] Thin pool name: %s", llvThin.PoolName))
 	}
+
+	var llvThick *v1alpha1.LVMLogicalVolumeThickSpec
+	if lvmType == internal.LVMTypeThick {
+		llvThick = &v1alpha1.LVMLogicalVolumeThickSpec{}
+		llvThick.Contiguous = contiguous
+	}
+
 	return v1alpha1.LVMLogicalVolumeSpec{
 		ActualLVNameOnTheNode: lvName,
 		Type:                  lvmType,
 		Size:                  llvSize,
 		LvmVolumeGroupName:    selectedLVG.Name,
 		Thin:                  llvThin,
+		Thick:                 llvThick,
 	}
 }
 
@@ -408,4 +417,17 @@ func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *v1alp
 		return true, nil
 	}
 	return false, nil
+}
+
+func IsContiguous(request *csi.CreateVolumeRequest, lvmType string) bool {
+	if lvmType == internal.LVMTypeThin {
+		return false
+	}
+
+	val, exist := request.Parameters[internal.LVMVThickContiguousParamKey]
+	if exist {
+		return val == "true"
+	}
+
+	return false
 }

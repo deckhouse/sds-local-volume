@@ -2,15 +2,16 @@ package controller
 
 import (
 	"context"
+	"sds-local-volume-controller/api/v1alpha1"
+	"sds-local-volume-controller/pkg/logger"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sds-local-volume-controller/api/v1alpha1"
-	"sds-local-volume-controller/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"testing"
 )
 
 func TestRunLocalCSINodeWatcherController(t *testing.T) {
@@ -82,7 +83,7 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 				Name: "test-lsc",
 			},
 			Spec: v1alpha1.LocalStorageClassSpec{
-				LVM: &v1alpha1.LocalStorageClassLVM{
+				LVM: &v1alpha1.LocalStorageClassLVMSpec{
 					LVMVolumeGroups: []v1alpha1.LocalStorageClassLVG{
 						{
 							Name: "lvgOnNode4",

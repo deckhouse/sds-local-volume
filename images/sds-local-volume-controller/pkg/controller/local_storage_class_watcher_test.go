@@ -541,8 +541,8 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 
 	It("Create_local_thin_sc_with_existing_thin_lvgs", func() {
 		lvgSpec := []v1alpha1.LocalStorageClassLVG{
-			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-1"}},
-			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-2"}},
+			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-1"}},
+			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-2"}},
 		}
 
 		err := cl.Create(ctx, existingThinLVG1Template)
@@ -585,9 +585,9 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 
 	It("Update_local_thin_sc_add_existing_thin_lvg", func() {
 		lvgSpec := []v1alpha1.LocalStorageClassLVG{
-			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-1"}},
-			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-2"}},
-			{Name: newThinLVGName, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-1"}},
+			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-1"}},
+			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-2"}},
+			{Name: newThinLVGName, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-1"}},
 		}
 
 		err := cl.Create(ctx, newThinLVGTemplate)
@@ -597,7 +597,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		err = cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, lsc)
 		Expect(err).NotTo(HaveOccurred())
 
-		lsc.Spec.LVM.LVMVolumeGroups = append(lsc.Spec.LVM.LVMVolumeGroups, v1alpha1.LocalStorageClassLVG{Name: newThinLVGName, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-1"}})
+		lsc.Spec.LVM.LVMVolumeGroups = append(lsc.Spec.LVM.LVMVolumeGroups, v1alpha1.LocalStorageClassLVG{Name: newThinLVGName, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-1"}})
 
 		err = cl.Update(ctx, lsc)
 		Expect(err).NotTo(HaveOccurred())
@@ -625,8 +625,8 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 
 	It("Update_local_thin_sc_remove_existing_thin_lvg", func() {
 		lvgSpec := []v1alpha1.LocalStorageClassLVG{
-			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-1"}},
-			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-2"}},
+			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-1"}},
+			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-2"}},
 		}
 
 		lsc := &v1alpha1.LocalStorageClass{}
@@ -661,13 +661,13 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 
 	It("Update_local_thin_sc_add_existing_thick_lvg", func() {
 		lvgSpecOld := []v1alpha1.LocalStorageClassLVG{
-			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-1"}},
-			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-2"}},
+			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-1"}},
+			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-2"}},
 		}
 
 		lvgSpec := []v1alpha1.LocalStorageClassLVG{
-			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-1"}},
-			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-2"}},
+			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-1"}},
+			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-2"}},
 			{Name: existingThickLVG1Name},
 		}
 
@@ -703,8 +703,8 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 
 	It("Remove_local_thin_sc_with_existing_thick_lvg", func() {
 		lvgSpec := []v1alpha1.LocalStorageClassLVG{
-			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-1"}},
-			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSettings{PoolName: "thin-pool-2"}},
+			{Name: existingThinLVG1Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-1"}},
+			{Name: existingThinLVG2Name, Thin: &v1alpha1.LocalStorageClassLVMThinPoolSpec{PoolName: "thin-pool-2"}},
 			{Name: existingThickLVG1Name},
 		}
 
@@ -787,7 +787,7 @@ func generateLocalStorageClass(lscName, reclaimPolicy, volumeBindingMode, lvmTyp
 		Spec: v1alpha1.LocalStorageClassSpec{
 			ReclaimPolicy:     reclaimPolicy,
 			VolumeBindingMode: volumeBindingMode,
-			LVM: &v1alpha1.LocalStorageClassLVM{
+			LVM: &v1alpha1.LocalStorageClassLVMSpec{
 				Type:            lvmType,
 				LVMVolumeGroups: lvgs,
 			},
