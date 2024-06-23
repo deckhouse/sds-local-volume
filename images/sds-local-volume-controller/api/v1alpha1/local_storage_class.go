@@ -39,8 +39,9 @@ type LocalStorageClassSpec struct {
 }
 
 type LocalStorageClassLVM struct {
-	Type            string                 `json:"type"`
-	LVMVolumeGroups []LocalStorageClassLVG `json:"lvmVolumeGroups"`
+	Type            string                             `json:"type"`
+	Thick           *LocalStorageClassLVMThickSettings `json:"thick,omitempty"`
+	LVMVolumeGroups []LocalStorageClassLVG             `json:"lvmVolumeGroups"`
 }
 
 type LocalStorageClassStatus struct {
@@ -49,10 +50,14 @@ type LocalStorageClassStatus struct {
 }
 
 type LocalStorageClassLVG struct {
-	Name string                     `json:"name"`
-	Thin *LocalStorageClassThinPool `json:"thin,omitempty"`
+	Name string                                `json:"name"`
+	Thin *LocalStorageClassLVMThinPoolSettings `json:"thin,omitempty"`
 }
 
-type LocalStorageClassThinPool struct {
+type LocalStorageClassLVMThinPoolSettings struct {
 	PoolName string `json:"poolName"`
+}
+
+type LocalStorageClassLVMThickSettings struct {
+	Contiguous bool `json:"contiguous"`
 }

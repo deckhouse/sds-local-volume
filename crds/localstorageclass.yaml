@@ -67,6 +67,10 @@ spec:
                   required:
                     - type
                     - lvmVolumeGroups
+                  x-kubernetes-validations:
+                    - rule: |
+                        (self.type == "Thin" && !has(self.thick)) || self.type != "Thin"
+                      message: Field spec.lvm.thick is forbidden for Thin type.
                   properties:
                     type:
                       type: string
@@ -74,10 +78,19 @@ spec:
                         - rule: self == oldSelf
                           message: Value is immutable.
                       description: |
-                        The type of the device.
+                        The provisioning type of the LVM Logical Volumes (LV) created for Persistent Volumes (PV).
                       enum:
                         - Thick
                         - Thin
+                    thick:
+                      type: object
+                      description: |
+                        Settings for Logical Volumes in a LVMVolumeGroup resource.
+                      properties:
+                        contiguous:
+                          type: boolean
+                          description: |
+                            If true, the Logical Volume will be created with the contiguous flag. Note: This flag should be used with caution because it may lead to poor scheduling of pods using the Persistent Volume. Our scheduler checks the free space in VG and selects nodes with the most free space for pods. However, it cannot determine the maximum amount of sequential free space available. Consequently, there may be situations where a pod is scheduled to a node, but the volume cannot be created due to insufficient contiguous free space. If such a situation arises, manual intervention will be required.
                     lvmVolumeGroups:
                       type: array
                       description: |
