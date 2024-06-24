@@ -33,14 +33,15 @@ type LocalStorageClassList struct {
 }
 
 type LocalStorageClassSpec struct {
-	ReclaimPolicy     string                `json:"reclaimPolicy"`
-	VolumeBindingMode string                `json:"volumeBindingMode"`
-	LVM               *LocalStorageClassLVM `json:"lvm,omitempty"`
+	ReclaimPolicy     string                    `json:"reclaimPolicy"`
+	VolumeBindingMode string                    `json:"volumeBindingMode"`
+	LVM               *LocalStorageClassLVMSpec `json:"lvm,omitempty"`
 }
 
-type LocalStorageClassLVM struct {
-	Type            string                 `json:"type"`
-	LVMVolumeGroups []LocalStorageClassLVG `json:"lvmVolumeGroups"`
+type LocalStorageClassLVMSpec struct {
+	Type            string                         `json:"type"`
+	Thick           *LocalStorageClassLVMThickSpec `json:"thick,omitempty"`
+	LVMVolumeGroups []LocalStorageClassLVG         `json:"lvmVolumeGroups"`
 }
 
 type LocalStorageClassStatus struct {
@@ -49,10 +50,14 @@ type LocalStorageClassStatus struct {
 }
 
 type LocalStorageClassLVG struct {
-	Name string                     `json:"name"`
-	Thin *LocalStorageClassThinPool `json:"thin,omitempty"`
+	Name string                            `json:"name"`
+	Thin *LocalStorageClassLVMThinPoolSpec `json:"thin,omitempty"`
 }
 
-type LocalStorageClassThinPool struct {
+type LocalStorageClassLVMThinPoolSpec struct {
 	PoolName string `json:"poolName"`
+}
+
+type LocalStorageClassLVMThickSpec struct {
+	Contiguous bool `json:"contiguous"`
 }

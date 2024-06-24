@@ -440,6 +440,12 @@ func configureStorageClass(lsc *v1alpha1.LocalStorageClass) (*v1.StorageClass, e
 		LVMVolumeGroupsParamKey:      string(lvgsParam),
 	}
 
+	if lsc.Spec.LVM.Thick != nil {
+		if lsc.Spec.LVM.Thick.Contiguous {
+			params[LVMVThickContiguousParamKey] = "true"
+		}
+	}
+
 	sc := &v1.StorageClass{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       StorageClassKind,

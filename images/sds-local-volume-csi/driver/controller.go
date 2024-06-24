@@ -66,6 +66,10 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		d.log.Error(err, "error GetStorageClassLVGs")
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
+
+	contiguous := utils.IsContiguous(request, LvmType)
+	d.log.Info(fmt.Sprintf("contiguous: %t", contiguous))
+
 	// TODO: Consider refactoring the naming strategy for llvName and lvName.
 	// Currently, we use the same name for llvName (the name of the LVMLogicalVolume resource in Kubernetes)
 	// and lvName (the name of the LV in LVM on the node) because the PV name is unique within the cluster,
@@ -109,7 +113,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
-	llvSpec := utils.GetLLVSpec(d.log, lvName, selectedLVG, storageClassLVGParametersMap, LvmType, *llvSize)
+	llvSpec := utils.GetLLVSpec(d.log, lvName, selectedLVG, storageClassLVGParametersMap, LvmType, *llvSize, contiguous)
 	d.log.Info(fmt.Sprintf("LVMLogicalVolumeSpec : %+v", llvSpec))
 	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
 	if err != nil {

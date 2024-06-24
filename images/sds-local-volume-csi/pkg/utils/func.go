@@ -30,6 +30,7 @@ import (
 	"gopkg.in/yaml.v2"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -364,20 +365,28 @@ func GetLVGList(ctx context.Context, kc client.Client) (*v1alpha1.LvmVolumeGroup
 	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroupList, last error: %w", KubernetesApiRequestLimit, err)
 }
 
-func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity) v1alpha1.LVMLogicalVolumeSpec {
-	var llvThin *v1alpha1.ThinLogicalVolumeSpec
-	if lvmType == internal.LVMTypeThin {
-		llvThin = &v1alpha1.ThinLogicalVolumeSpec{}
-		llvThin.PoolName = storageClassLVGParametersMap[selectedLVG.Name]
-		log.Info(fmt.Sprintf("[GetLLVSpec] Thin pool name: %s", llvThin.PoolName))
-	}
-	return v1alpha1.LVMLogicalVolumeSpec{
+func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity, contiguous bool) v1alpha1.LVMLogicalVolumeSpec {
+	lvmLogicalVolumeSpec := v1alpha1.LVMLogicalVolumeSpec{
 		ActualLVNameOnTheNode: lvName,
 		Type:                  lvmType,
 		Size:                  llvSize,
 		LvmVolumeGroupName:    selectedLVG.Name,
-		Thin:                  llvThin,
 	}
+
+	switch lvmType {
+	case internal.LVMTypeThin:
+		lvmLogicalVolumeSpec.Thin = &v1alpha1.LVMLogicalVolumeThinSpec{
+			PoolName: storageClassLVGParametersMap[selectedLVG.Name],
+		}
+		log.Info(fmt.Sprintf("[GetLLVSpec] Thin pool name: %s", lvmLogicalVolumeSpec.Thin.PoolName))
+	case internal.LVMTypeThick:
+		lvmLogicalVolumeSpec.Thick = &v1alpha1.LVMLogicalVolumeThickSpec{
+			Contiguous: contiguous,
+		}
+		log.Info(fmt.Sprintf("[GetLLVSpec] Thick contiguous: %t", contiguous))
+	}
+
+	return lvmLogicalVolumeSpec
 }
 
 func SelectLVG(storageClassLVGs []v1alpha1.LvmVolumeGroup, nodeName string) (v1alpha1.LvmVolumeGroup, error) {
@@ -408,4 +417,17 @@ func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *v1alp
 		return true, nil
 	}
 	return false, nil
+}
+
+func IsContiguous(request *csi.CreateVolumeRequest, lvmType string) bool {
+	if lvmType == internal.LVMTypeThin {
+		return false
+	}
+
+	val, exist := request.Parameters[internal.LVMVThickContiguousParamKey]
+	if exist {
+		return val == "true"
+	}
+
+	return false
 }

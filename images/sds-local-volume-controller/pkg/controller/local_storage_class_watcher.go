@@ -56,6 +56,7 @@ const (
 	LVMTypeParamKey              = LocalStorageClassProvisioner + "/lvm-type"
 	LVMVolumeBindingModeParamKey = LocalStorageClassProvisioner + "/volume-binding-mode"
 	LVMVolumeGroupsParamKey      = LocalStorageClassProvisioner + "/lvm-volume-groups"
+	LVMVThickContiguousParamKey  = LocalStorageClassProvisioner + "/lvm-thick-contiguous"
 
 	LocalStorageClassFinalizerName    = "storage.deckhouse.io/local-storage-class-controller"
 	LocalStorageClassFinalizerNameOld = "localstorageclass.storage.deckhouse.io"
