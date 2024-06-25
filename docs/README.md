@@ -38,7 +38,7 @@ EOF
 - Wait for it to become `Ready`. At this stage, you do NOT need to check the pods in the `d8-sds-node-configurator` namespace.
 
 ```shell
-kubectl get mc sds-node-configurator -w
+kubectl get modules sds-node-configurator -w
 ```
 
 - Enable the `sds-local-volume` module. Refer to the [configuration](./configuration.html) to learn more about module settings. In the example below, the module is launched with the default settings. This will result This will cause the service pads of the `sds-local-volume` components to be launched on all nodes of the cluster.
@@ -111,9 +111,9 @@ dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1   worker-2   false        894006140
 ```yaml
 kubectl apply -f - <<EOF
 apiVersion: storage.deckhouse.io/v1alpha1
-kind: LvmVolumeGroup
+kind: LVMVolumeGroup
 metadata:
-  name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LvmVolumeGroup resource name will be used to create LocalStorageClass in the future
+  name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LVMVolumeGroup resource name will be used to create LocalStorageClass in the future
 spec:
   type: Local
   blockDeviceNames:  # specify the names of the BlockDevice resources that are located on the target node and whose CONSUMABLE is set to true. Note that the node name is not specified anywhere since it is derived from BlockDevice resources.
@@ -136,7 +136,7 @@ kubectl get lvg vg-1-on-worker-0 -w
 ```yaml
 kubectl apply -f - <<EOF
 apiVersion: storage.deckhouse.io/v1alpha1
-kind: LvmVolumeGroup
+kind: LVMVolumeGroup
 metadata:
   name: "vg-1-on-worker-1"
 spec:
@@ -161,7 +161,7 @@ kubectl get lvg vg-1-on-worker-1 -w
 ```yaml
 kubectl apply -f - <<EOF
 apiVersion: storage.deckhouse.io/v1alpha1
-kind: LvmVolumeGroup
+kind: LVMVolumeGroup
 metadata:
   name: "vg-1-on-worker-2"
 spec:
