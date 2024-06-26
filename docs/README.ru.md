@@ -38,7 +38,7 @@ EOF
 - Дождаться, когда модуль перейдет в состояние `Ready`. На этом этапе НЕ нужно проверять поды в namespace `d8-sds-node-configurator`.
 
 ```shell
-kubectl get mc sds-node-configurator -w
+kubectl get modules sds-node-configurator -w
  ```
 
 - Включить модуль `sds-local-volume`. Возможные настройки модуля рекомендуем посмотреть в [конфигурации](./configuration.html). В примере ниже модуль запускается с настройками по умолчанию. Это приведет к тому, что на всех узлах кластера будут запущены служебные поды компонентов `sds-local-volume`.
@@ -109,16 +109,16 @@ kubectl -n d8-sds-node-configurator get pod -o wide -w
 ```yaml
 kubectl apply -f - <<EOF
 apiVersion: storage.deckhouse.io/v1alpha1
-kind: LvmVolumeGroup
+kind: LVMVolumeGroup
 metadata:
-  name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LvmVolumeGroup resource name will be used to create LocalStorageClass in the future
+  name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LVMVolumeGroup resource name will be used to create LocalStorageClass in the future
 spec:
   type: Local
   blockDeviceNames:  # specify the names of the BlockDevice resources that are located on the target node and whose CONSUMABLE is set to true. Note that the node name is not specified anywhere since it is derived from BlockDevice resources.
     - dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa
     - dev-0cfc0d07f353598e329d34f3821bed992c1ffbcd
   actualVGNameOnTheNode: "vg-1" # the name of the LVM VG to be created from the above block devices on the node 
-  EOF
+EOF
 ```
 
 - Дождаться, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Operational`:
@@ -134,7 +134,7 @@ kubectl get lvg vg-1-on-worker-0 -w
 ```yaml
 kubectl apply -f - <<EOF
 apiVersion: storage.deckhouse.io/v1alpha1
-kind: LvmVolumeGroup
+kind: LVMVolumeGroup
 metadata:
   name: "vg-1-on-worker-1"
 spec:
@@ -159,7 +159,7 @@ kubectl get lvg vg-1-on-worker-1 -w
 ```yaml
 kubectl apply -f - <<EOF
 apiVersion: storage.deckhouse.io/v1alpha1
-kind: LvmVolumeGroup
+kind: LVMVolumeGroup
 metadata:
   name: "vg-1-on-worker-2"
 spec:
@@ -196,7 +196,7 @@ spec:
     type: Thick
   reclaimPolicy: Delete
   volumeBindingMode: WaitForFirstConsumer
-  EOF
+EOF
 ```
 
 - Дождаться, когда созданный ресурс `LocalStorageClass` перейдет в состояние `Created`:
