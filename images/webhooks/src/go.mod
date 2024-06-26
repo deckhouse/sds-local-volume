@@ -5,17 +5,22 @@ go 1.22.1
 toolchain go1.22.2
 
 require (
+	github.com/deckhouse/deckhouse v1.61.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slok/kubewebhook/v2 v2.6.0
-	k8s.io/api v0.30.0
-	k8s.io/apimachinery v0.30.0
-	k8s.io/client-go v0.30.0
+	k8s.io/api v0.30.2
+	k8s.io/apiextensions-apiserver v0.30.2
+	k8s.io/apimachinery v0.30.2
+	k8s.io/client-go v0.30.2
 	k8s.io/klog/v2 v2.120.1
+	sigs.k8s.io/controller-runtime v0.18.4
 )
 
 require (
+	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.0 // indirect
+	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
@@ -31,6 +36,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	golang.org/x/net v0.24.0 // indirect
 	golang.org/x/oauth2 v0.19.0 // indirect
 	golang.org/x/sys v0.19.0 // indirect
