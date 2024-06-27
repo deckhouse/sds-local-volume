@@ -157,9 +157,9 @@ func scoreNodes(
 				lvg := lvgs[commonLVG.Name]
 				switch pvcReq.DeviceType {
 				case thick:
-					freeSpace = getVGFreeSpace(lvg)
+					freeSpace = lvg.Status.VGFree
 					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space before PVC reservation: %s", lvg.Name, freeSpace.String()))
-					reserved, err := schedulerCache.GetLVGReservedSpace(lvg.Name)
+					reserved, err := schedulerCache.GetLVGThickReservedSpace(lvg.Name)
 					if err != nil {
 						log.Error(err, fmt.Sprintf("[scoreNodes] unable to count reserved space for the LVMVolumeGroup %s", lvg.Name))
 						continue
@@ -177,7 +177,7 @@ func scoreNodes(
 						return
 					}
 
-					freeSpace = getThinPoolFreeSpace(thinPool)
+					freeSpace = thinPool.AvailableSpace
 				}
 
 				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s total size: %s", lvg.Name, lvg.Status.VGSize.String()))

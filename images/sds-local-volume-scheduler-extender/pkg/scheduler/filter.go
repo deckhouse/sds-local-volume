@@ -167,7 +167,8 @@ func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, sche
 				pvc := pvcs[volume.PersistentVolumeClaim.ClaimName]
 				sc := scs[*pvc.Spec.StorageClassName]
 
-				if sc.Parameters[lvmTypeParamKey] == thick {
+				switch sc.Parameters[lvmTypeParamKey] {
+				case thick:
 					log.Debug(fmt.Sprintf("[populateCache] Storage Class %s has device type Thick, so the cache will be populated by PVC space requests", sc.Name))
 					lvgsForPVC, err := ExtractLVGsFromSC(sc)
 					if err != nil {
@@ -178,14 +179,29 @@ func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, sche
 					for _, lvg := range lvgsForPVC {
 						if slices.Contains(lvgNamesForTheNode, lvg.Name) {
 							log.Trace(fmt.Sprintf("[populateCache] PVC %s/%s will reserve space in LVMVolumeGroup %s cache", pvc.Namespace, pvc.Name, lvg.Name))
-							err = schedulerCache.AddPVC(lvg.Name, pvc)
+							err = schedulerCache.AddThickPVC(lvg.Name, pvc)
 							if err != nil {
 								return err
 							}
 						}
 					}
-				} else {
-					log.Debug(fmt.Sprintf("[populateCache] Storage Class %s has device type Thin, so the cache should NOT be populated by PVC space requests", sc.Name))
+				case thin:
+					log.Debug(fmt.Sprintf("[populateCache] Storage Class %s has device type Thin, so the cache will be populated by PVC space requests", sc.Name))
+					lvgsForPVC, err := ExtractLVGsFromSC(sc)
+					if err != nil {
+						return err
+					}
+
+					log.Trace(fmt.Sprintf("[populateCache] LVMVolumeGroups from Storage Class %s for PVC %s/%s: %+v", sc.Name, pvc.Namespace, pvc.Name, lvgsForPVC))
+					for _, lvg := range lvgsForPVC {
+						if slices.Contains(lvgNamesForTheNode, lvg.Name) {
+							log.Trace(fmt.Sprintf("[populateCache] PVC %s/%s will reserve space in LVMVolumeGroup %s Thin Pool %s cache", pvc.Namespace, pvc.Name, lvg.Name, lvg.Thin.PoolName))
+							err = schedulerCache.AddThinPVC(lvg.Name, lvg.Thin.PoolName, pvc)
+							if err != nil {
+								return err
+							}
+						}
+					}
 				}
 			}
 		}
@@ -292,22 +308,34 @@ func filterNodes(
 		log.Trace(fmt.Sprintf("[filterNodes] the LVMVolumeGroup %s is actually used. VG size: %s, allocatedSize: %s", lvg.Name, lvg.Status.VGSize.String(), lvg.Status.AllocatedSize.String()))
 	}
 
-	lvgsThickFree := getLVGThickFreeSpaces(log, usedLVGs)
+	lvgsThickFree := getLVGThickFreeSpaces(usedLVGs)
 	log.Trace(fmt.Sprintf("[filterNodes] for a Pod %s/%s current LVMVolumeGroups Thick FreeSpace on the node: %+v", pod.Namespace, pod.Name, lvgsThickFree))
-
 	for lvgName, freeSpace := range lvgsThickFree {
 		log.Trace(fmt.Sprintf("[filterNodes] current LVMVolumeGroup %s Thick free space %s", lvgName, resource.NewQuantity(freeSpace, resource.BinarySI)))
-		reservedSize, err := schedulerCache.GetLVGReservedSpace(lvgName)
+		reservedSpace, err := schedulerCache.GetLVGThickReservedSpace(lvgName)
 		if err != nil {
-			log.Error(err, fmt.Sprintf("[filterNodes] unable to cound cache reserved size for the LVMVolumeGroup %s", lvgName))
+			log.Error(err, fmt.Sprintf("[filterNodes] unable to count cache reserved space for the LVMVolumeGroup %s", lvgName))
 			continue
 		}
-		log.Trace(fmt.Sprintf("[filterNodes] current LVMVolumeGroup %s reserved PVC space %s", lvgName, resource.NewQuantity(reservedSize, resource.BinarySI)))
-		lvgsThickFree[lvgName] -= reservedSize
+		log.Trace(fmt.Sprintf("[filterNodes] current LVMVolumeGroup %s reserved PVC space %s", lvgName, resource.NewQuantity(reservedSpace, resource.BinarySI)))
+		lvgsThickFree[lvgName] -= reservedSpace
 	}
 	log.Trace(fmt.Sprintf("[filterNodes] for a Pod %s/%s current LVMVolumeGroups Thick FreeSpace with reserved PVC: %+v", pod.Namespace, pod.Name, lvgsThickFree))
 
-	lvgsThickFreeMutex := &sync.RWMutex{}
+	lvgsThinFree := getLVGThinFreeSpaces(usedLVGs)
+	log.Trace(fmt.Sprintf("[filterNodes] for a Pod %s/%s current LVMVolumeGroups Thin FreeSpace on the node: %+v", pod.Namespace, pod.Name, lvgsThinFree))
+	for lvgName, thinPools := range lvgsThinFree {
+		for tpName, freeSpace := range thinPools {
+			log.Trace(fmt.Sprintf("[filterNodes] current LVMVolumeGroup %s Thin Pool %s free space %s", lvgName, tpName, resource.NewQuantity(freeSpace, resource.BinarySI)))
+			reservedSpace, err := schedulerCache.GetLVGThinReservedSpace(lvgName, tpName)
+			if err != nil {
+				log.Error(err, fmt.Sprintf("[filterNodes] unable to count cache reserved space for the Thin pool %s of the LVMVolumeGroup %s", tpName, lvgName))
+				continue
+			}
+			log.Trace(fmt.Sprintf("[filterNodes] current LVMVolumeGroup %s Thin pool %s reserved PVC space %s", lvgName, tpName, resource.NewQuantity(reservedSpace, resource.BinarySI)))
+			lvgsThinFree[lvgName][tpName] -= reservedSpace
+		}
+	}
 
 	nodeLVGs := SortLVGsByNodeName(usedLVGs)
 	for n, ls := range nodeLVGs {
@@ -325,6 +353,9 @@ func filterNodes(
 		Nodes:       &corev1.NodeList{},
 		FailedNodes: FailedNodesMap{},
 	}
+
+	thickFreeMtx := &sync.RWMutex{}
+	thinFreeMtx := &sync.RWMutex{}
 	failedNodesMutex := &sync.Mutex{}
 
 	wg := &sync.WaitGroup{}
@@ -333,9 +364,9 @@ func filterNodes(
 
 	for i, node := range nodes.Items {
 		go func(i int, node corev1.Node) {
-			log.Debug(fmt.Sprintf("[filterNodes] gourutine %d starts the work", i))
+			log.Trace(fmt.Sprintf("[filterNodes] gourutine %d starts the work", i))
 			defer func() {
-				log.Debug(fmt.Sprintf("[filterNodes] gourutine %d ends the work", i))
+				log.Trace(fmt.Sprintf("[filterNodes] gourutine %d ends the work", i))
 				wg.Done()
 			}()
 
@@ -347,12 +378,18 @@ func filterNodes(
 				return
 			}
 
+			// we get all LVMVolumeGroups from the node-applicant (which is common for all the PVCs)
 			lvgsFromNode := commonNodes[node.Name]
 			hasEnoughSpace := true
 
+			// now we iterate all over the PVCs to get if we can place all of them on the node (does the node have enough space)
 			for _, pvc := range pvcs {
 				pvcReq := pvcRequests[pvc.Name]
+
+				// we get LVGs which might be used by the PVC
 				lvgsFromSC := scLVGs[*pvc.Spec.StorageClassName]
+
+				// we get the specific LVG which the PVC can use on the node
 				commonLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
 				if commonLVG == nil {
 					err = errors.New(fmt.Sprintf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
@@ -361,12 +398,13 @@ func filterNodes(
 				}
 				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s is common for storage class %s and node %s", commonLVG.Name, *pvc.Spec.StorageClassName, node.Name))
 
+				// see what kind of space does the PVC need
 				switch pvcReq.DeviceType {
 				case thick:
 					lvg := lvgs[commonLVG.Name]
-					lvgsThickFreeMutex.RLock()
+					thickFreeMtx.RLock()
 					freeSpace := lvgsThickFree[lvg.Name]
-					lvgsThickFreeMutex.RUnlock()
+					thickFreeMtx.RUnlock()
 
 					log.Trace(fmt.Sprintf("[filterNodes] LVMVolumeGroup %s Thick free space: %s, PVC requested space: %s", lvg.Name, resource.NewQuantity(freeSpace, resource.BinarySI), resource.NewQuantity(pvcReq.RequestedSize, resource.BinarySI)))
 					if freeSpace < pvcReq.RequestedSize {
@@ -374,32 +412,38 @@ func filterNodes(
 						break
 					}
 
-					lvgsThickFreeMutex.Lock()
+					thickFreeMtx.Lock()
 					lvgsThickFree[lvg.Name] -= pvcReq.RequestedSize
-					lvgsThickFreeMutex.Unlock()
+					thickFreeMtx.Unlock()
 				case thin:
 					lvg := lvgs[commonLVG.Name]
+
+					// we try to find specific ThinPool which the PVC can use in the LVMVolumeGroup
 					targetThinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 					if targetThinPool == nil {
 						err = fmt.Errorf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s; node: %s; lvg thin pools: %+v; thin.poolName from StorageClass: %s", *pvc.Spec.StorageClassName, node.Name, lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 						errs <- err
 						return
 					}
-					// TODO: add after overCommit implementation
-					// freeSpace, err := getThinPoolFreeSpace(targetThinPool)
-					// if err != nil {
-					// 	errs <- err
-					// 	return
-					// }
 
-					// log.Trace(fmt.Sprintf("[filterNodes] ThinPool free space: %d, PVC requested space: %d", freeSpace.Value(), pvcReq.RequestedSize))
+					thinFreeMtx.RLock()
+					freeSpace := lvgsThinFree[lvg.Name][targetThinPool.Name]
+					thinFreeMtx.RUnlock()
 
-					// if freeSpace.Value() < pvcReq.RequestedSize {
-					// 	hasEnoughSpace = false
-					// }
+					log.Trace(fmt.Sprintf("[filterNodes] LVMVolumeGroup %s Thin Pool %s free space: %s, PVC requested space: %s", lvg.Name, targetThinPool.Name, resource.NewQuantity(freeSpace, resource.BinarySI), resource.NewQuantity(pvcReq.RequestedSize, resource.BinarySI)))
+
+					if freeSpace < pvcReq.RequestedSize {
+						hasEnoughSpace = false
+						break
+					}
+
+					thinFreeMtx.Lock()
+					lvgsThinFree[lvg.Name][targetThinPool.Name] -= pvcReq.RequestedSize
+					thinFreeMtx.Unlock()
 				}
 
 				if !hasEnoughSpace {
+					// we break as if only one PVC can't get enough space, the node does not fit
 					break
 				}
 			}
@@ -437,21 +481,33 @@ func filterNodes(
 	return result, nil
 }
 
-func getLVGThickFreeSpaces(log logger.Logger, lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string]int64 {
-	result := make(map[string]int64, len(lvgs))
+func getLVGThinFreeSpaces(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string]map[string]int64 {
+	result := make(map[string]map[string]int64, len(lvgs))
 
 	for _, lvg := range lvgs {
-		log.Debug(fmt.Sprintf("[getLVGThickFreeSpaces] tries to count free VG space for LVMVolumeGroup %s", lvg.Name))
-		free := getVGFreeSpace(lvg)
-		log.Debug(fmt.Sprintf("[getLVGThickFreeSpaces] successfully counted free VG space for LVMVolumeGroup %s", lvg.Name))
+		if result[lvg.Name] == nil {
+			result[lvg.Name] = make(map[string]int64, len(lvg.Status.ThinPools))
+		}
 
-		result[lvg.Name] = free.Value()
+		for _, tp := range lvg.Status.ThinPools {
+			result[lvg.Name][tp.Name] = tp.AvailableSpace.Value()
+		}
 	}
 
 	return result
 }
 
-func findMatchedThinPool(thinPools []v1alpha1.StatusThinPool, name string) *v1alpha1.StatusThinPool {
+func getLVGThickFreeSpaces(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string]int64 {
+	result := make(map[string]int64, len(lvgs))
+
+	for _, lvg := range lvgs {
+		result[lvg.Name] = lvg.Status.VGFree.Value()
+	}
+
+	return result
+}
+
+func findMatchedThinPool(thinPools []v1alpha1.LvmVolumeGroupThinPoolStatus, name string) *v1alpha1.LvmVolumeGroupThinPoolStatus {
 	for _, tp := range thinPools {
 		if tp.Name == name {
 			return &tp
@@ -578,20 +634,20 @@ func SortLVGsByNodeName(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string][]*
 	return sorted
 }
 
-func getVGFreeSpace(lvg *v1alpha1.LvmVolumeGroup) resource.Quantity {
-	// notice that .Sub method uses pointer but not a copy of the quantity
-	free := lvg.Status.VGSize
-	free.Sub(lvg.Status.AllocatedSize)
-	return free
-}
+//func getVGFreeSpace(lvg *v1alpha1.LvmVolumeGroup) resource.Quantity {
+//	// notice that .Sub method uses pointer but not a copy of the quantity
+//	free := lvg.Status.VGSize
+//	free.Sub(lvg.Status.AllocatedSize)
+//	return free
+//}
 
-func getThinPoolFreeSpace(tp *v1alpha1.StatusThinPool) resource.Quantity {
-	// notice that .Sub method uses pointer but not a copy of the quantity
-	free := tp.ActualSize
-	free.Sub(tp.UsedSize)
-
-	return free
-}
+//func getThinPoolFreeSpace(tp *v1alpha1.LvmVolumeGroupThinPoolStatus) resource.Quantity {
+//	// notice that .Sub method uses pointer but not a copy of the quantity
+//	free := tp.ActualSize
+//	free.Sub(tp.UsedSize)
+//
+//	return free
+//}
 
 func getPersistentVolumes(ctx context.Context, cl client.Client) (map[string]corev1.PersistentVolume, error) {
 	pvs := &corev1.PersistentVolumeList{}

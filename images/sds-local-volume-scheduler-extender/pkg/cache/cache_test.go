@@ -80,7 +80,7 @@ func BenchmarkCache_GetLVGReservedSpace(b *testing.B) {
 	}
 
 	for _, pvc := range pvcs {
-		err := cache.AddPVC(lvg.Name, &pvc)
+		err := cache.AddThickPVC(lvg.Name, &pvc)
 		if err != nil {
 			b.Error(err)
 		}
@@ -88,7 +88,7 @@ func BenchmarkCache_GetLVGReservedSpace(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			_, err := cache.GetLVGReservedSpace(lvg.Name)
+			_, err := cache.GetLVGThickReservedSpace(lvg.Name)
 			if err != nil {
 				b.Error(err)
 			}
@@ -145,15 +145,15 @@ func BenchmarkCache_AddPVC(b *testing.B) {
 				},
 			}
 
-			err := cache.AddPVC(lvg1.Name, pvc)
+			err := cache.AddThickPVC(lvg1.Name, pvc)
 			if err != nil {
 				b.Error(err)
 			}
-			err = cache.AddPVC(lvg2.Name, pvc)
+			err = cache.AddThickPVC(lvg2.Name, pvc)
 			if err != nil {
 				b.Error(err)
 			}
-			err = cache.AddPVC(lvg3.Name, pvc)
+			err = cache.AddThickPVC(lvg3.Name, pvc)
 			if err != nil {
 				b.Error(err)
 			}
@@ -400,11 +400,11 @@ func BenchmarkCache_UpdatePVC(b *testing.B) {
 					},
 				},
 			}
-			err := cache.UpdatePVC(lvg.Name, pvc)
+			err := cache.UpdateThickPVC(lvg.Name, pvc)
 			if err != nil {
 				b.Error(err)
 			}
-			err = cache.UpdatePVC(lvg.Name, updatedPVC)
+			err = cache.UpdateThickPVC(lvg.Name, updatedPVC)
 			if err != nil {
 				b.Error(err)
 			}
@@ -490,7 +490,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 				}
 
 				for _, pvc := range pvcs {
-					err := cache.AddPVC(lvg.Name, pvc)
+					err := cache.AddThickPVC(lvg.Name, pvc)
 					if err != nil {
 						b.Error(err)
 					}
@@ -564,7 +564,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 
 				for _, pvc := range pvcs {
 					for err != nil {
-						err = cache.UpdatePVC(lvg.Name, pvc)
+						err = cache.UpdateThickPVC(lvg.Name, pvc)
 					}
 
 					cache.GetLVGNamesForPVC(pvc)
@@ -573,11 +573,11 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 
 			lvgMp := cache.GetAllLVG()
 			for lvgName := range lvgMp {
-				_, err := cache.GetAllPVCForLVG(lvgName)
+				_, err := cache.GetAllThickPVCForLVG(lvgName)
 				if err != nil {
 					b.Error(err)
 				}
-				_, err = cache.GetLVGReservedSpace(lvgName)
+				_, err = cache.GetLVGThickReservedSpace(lvgName)
 				if err != nil {
 					b.Error(err)
 				}

@@ -168,7 +168,7 @@ func reconcilePVC(ctx context.Context, mgr manager.Manager, log logger.Logger, s
 	log.Debug(fmt.Sprintf("[reconcilePVC] successfully found common LVMVolumeGroup %s for the selected node %s and PVC %s/%s", commonLVGName, selectedNodeName, pvc.Namespace, pvc.Name))
 	log.Debug(fmt.Sprintf("[reconcilePVC] starts to update PVC %s/%s in the cache", pvc.Namespace, pvc.Name))
 	log.Trace(fmt.Sprintf("[reconcilePVC] PVC %s/%s has status phase: %s", pvc.Namespace, pvc.Name, pvc.Status.Phase))
-	err := schedulerCache.UpdatePVC(commonLVGName, pvc)
+	err := schedulerCache.UpdateThickPVC(commonLVGName, pvc)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[reconcilePVC] unable to update PVC %s/%s in the cache", pvc.Namespace, pvc.Name))
 		return
@@ -178,7 +178,7 @@ func reconcilePVC(ctx context.Context, mgr manager.Manager, log logger.Logger, s
 	log.Cache(fmt.Sprintf("[reconcilePVC] cache state BEFORE the removal space reservation for PVC %s/%s", pvc.Namespace, pvc.Name))
 	schedulerCache.PrintTheCacheLog()
 	log.Debug(fmt.Sprintf("[reconcilePVC] starts to remove space reservation for PVC %s/%s with selected node from the cache", pvc.Namespace, pvc.Name))
-	err = schedulerCache.RemoveSpaceReservationForPVCWithSelectedNode(pvc)
+	err = schedulerCache.RemoveSpaceReservationForThickPVCWithSelectedNode(pvc, false)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[reconcilePVC] unable to remove PVC %s/%s space reservation in the cache", pvc.Namespace, pvc.Name))
 		return
