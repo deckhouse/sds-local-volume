@@ -23,6 +23,7 @@ import (
 	"math"
 	"net/http"
 	"sds-local-volume-scheduler-extender/pkg/cache"
+	"sds-local-volume-scheduler-extender/pkg/consts"
 	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sync"
 
@@ -156,9 +157,9 @@ func scoreNodes(
 				var freeSpace resource.Quantity
 				lvg := lvgs[commonLVG.Name]
 				switch pvcReq.DeviceType {
-				case thick:
+				case consts.Thick:
 					freeSpace = lvg.Status.VGFree
-					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space before PVC reservation: %s", lvg.Name, freeSpace.String()))
+					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free Thick space before PVC reservation: %s", lvg.Name, freeSpace.String()))
 					reserved, err := schedulerCache.GetLVGThickReservedSpace(lvg.Name)
 					if err != nil {
 						log.Error(err, fmt.Sprintf("[scoreNodes] unable to count reserved space for the LVMVolumeGroup %s", lvg.Name))
@@ -167,8 +168,8 @@ func scoreNodes(
 					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s PVC Space reservation: %s", lvg.Name, resource.NewQuantity(reserved, resource.BinarySI)))
 					spaceWithReserved := freeSpace.Value() - reserved
 					freeSpace = *resource.NewQuantity(spaceWithReserved, resource.BinarySI)
-					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free thick space after PVC reservation: %s", lvg.Name, freeSpace.String()))
-				case thin:
+					log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s free Thick space after PVC reservation: %s", lvg.Name, freeSpace.String()))
+				case consts.Thin:
 					thinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 					if thinPool == nil {
 						err = errors.New(fmt.Sprintf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))

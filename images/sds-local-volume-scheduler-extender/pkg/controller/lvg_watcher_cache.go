@@ -6,6 +6,7 @@ import (
 	"fmt"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/workqueue"
+	"reflect"
 	"sds-local-volume-scheduler-extender/api/v1alpha1"
 	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/logger"
@@ -71,7 +72,7 @@ func RunLVGWatcherCacheController(
 			}
 
 			log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] starts to clear the cache for the LVMVolumeGroup %s", lvg.Name))
-			pvcs, err := cache.GetAllThickPVCForLVG(lvg.Name)
+			pvcs, err := cache.GetAllPVCForLVG(lvg.Name)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to get all PVC for the LVMVolumeGroup %s", lvg.Name))
 			}
@@ -116,27 +117,31 @@ func RunLVGWatcherCacheController(
 			log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] old state LVMVolumeGroup %s has size %s", oldLvg.Name, oldLvg.Status.AllocatedSize.String()))
 			log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] new state LVMVolumeGroup %s has size %s", newLvg.Name, newLvg.Status.AllocatedSize.String()))
 
-			if newLvg.DeletionTimestamp != nil ||
-				oldLvg.Status.AllocatedSize.Value() == newLvg.Status.AllocatedSize.Value() {
+			if !shouldReconcileLVG(oldLvg, newLvg) {
 				log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] the LVMVolumeGroup %s should not be reconciled", newLvg.Name))
 				return
 			}
 			log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] the LVMVolumeGroup %s should be reconciled by Update Func", newLvg.Name))
 
-			cachedPVCs, err := cache.GetAllThickPVCForLVG(newLvg.Name)
+			cachedPVCs, err := cache.GetAllPVCForLVG(newLvg.Name)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to get all PVC for the LVMVolumeGroup %s", newLvg.Name))
 			}
+
 			for _, pvc := range cachedPVCs {
 				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s from the cache belongs to LVMVolumeGroup %s", pvc.Namespace, pvc.Name, newLvg.Name))
 				log.Trace(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s has status phase %s", pvc.Namespace, pvc.Name, pvc.Status.Phase))
 				if pvc.Status.Phase == v1.ClaimBound {
 					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s from the cache has Status.Phase Bound. It will be removed from the reserved space in the LVMVolumeGroup %s", pvc.Namespace, pvc.Name, newLvg.Name))
-					err = cache.RemoveBoundedThickPVCSpaceReservation(newLvg.Name, pvc)
-					if err != nil {
-						log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to remove PVC %s/%s from the cache in the LVMVolumeGroup %s", pvc.Namespace, pvc.Name, newLvg.Name))
-						continue
-					}
+					//err = cache.RemoveBoundedThickPVCSpaceReservation(newLvg.Name, pvc)
+					//if err != nil {
+					//	log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to remove PVC %s/%s from the cache in the LVMVolumeGroup %s", pvc.Namespace, pvc.Name, newLvg.Name))
+					//	continue
+					//}
+
+					cache.RemovePVCFromTheCache(pvc)
+
+					//err = cache.RemoveBoundedThinPVCSpaceReservation()
 
 					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] PVC %s/%s was removed from the LVMVolumeGroup %s in the cache", pvc.Namespace, pvc.Name, newLvg.Name))
 				}
@@ -162,4 +167,17 @@ func RunLVGWatcherCacheController(
 	}
 
 	return c, nil
+}
+
+func shouldReconcileLVG(oldLVG, newLVG *v1alpha1.LvmVolumeGroup) bool {
+	if newLVG.DeletionTimestamp != nil {
+		return false
+	}
+
+	if oldLVG.Status.AllocatedSize.Value() == newLVG.Status.AllocatedSize.Value() &&
+		reflect.DeepEqual(oldLVG.Status.ThinPools, newLVG.Status.ThinPools) {
+		return false
+	}
+
+	return true
 }

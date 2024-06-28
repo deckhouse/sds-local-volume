@@ -95,7 +95,7 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 
 	lvgs := s.cache.GetAllLVG()
 	for _, lvg := range lvgs {
-		pvcs, err := s.cache.GetAllThickPVCForLVG(lvg.Name)
+		pvcs, err := s.cache.GetAllPVCForLVG(lvg.Name)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			s.log.Error(err, "something bad")
@@ -168,7 +168,7 @@ func (s *scheduler) getCacheStat(w http.ResponseWriter, r *http.Request) {
 	pvcTotalCount := 0
 	lvgs := s.cache.GetAllLVG()
 	for _, lvg := range lvgs {
-		pvcs, err := s.cache.GetAllThickPVCForLVG(lvg.Name)
+		pvcs, err := s.cache.GetAllPVCForLVG(lvg.Name)
 		if err != nil {
 			s.log.Error(err, "something bad")
 		}

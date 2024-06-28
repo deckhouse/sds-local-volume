@@ -573,7 +573,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 
 			lvgMp := cache.GetAllLVG()
 			for lvgName := range lvgMp {
-				_, err := cache.GetAllThickPVCForLVG(lvgName)
+				_, err := cache.GetAllPVCForLVG(lvgName)
 				if err != nil {
 					b.Error(err)
 				}

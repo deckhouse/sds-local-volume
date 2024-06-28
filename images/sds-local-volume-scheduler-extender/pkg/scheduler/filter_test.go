@@ -20,13 +20,13 @@ func TestFilter(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: sc1,
 				},
-				Provisioner: sdsLocalVolumeProvisioner,
+				Provisioner: SdsLocalVolumeProvisioner,
 			},
 			sc2: {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: sc2,
 				},
-				Provisioner: sdsLocalVolumeProvisioner,
+				Provisioner: SdsLocalVolumeProvisioner,
 			},
 			sc3: {
 				ObjectMeta: metav1.ObjectMeta{

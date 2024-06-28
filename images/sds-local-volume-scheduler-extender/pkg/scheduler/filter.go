@@ -28,20 +28,11 @@ import (
 	"net/http"
 	"sds-local-volume-scheduler-extender/api/v1alpha1"
 	"sds-local-volume-scheduler-extender/pkg/cache"
+	"sds-local-volume-scheduler-extender/pkg/consts"
 	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 	"sync"
-)
-
-const (
-	sdsLocalVolumeProvisioner = "local.csi.storage.deckhouse.io"
-
-	lvmTypeParamKey         = "local.csi.storage.deckhouse.io/lvm-type"
-	lvmVolumeGroupsParamKey = "local.csi.storage.deckhouse.io/lvm-volume-groups"
-
-	thick = "Thick"
-	thin  = "Thin"
 )
 
 func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +137,7 @@ func filterNotManagedPVC(log logger.Logger, pvcs map[string]*corev1.PersistentVo
 	filteredPVCs := make(map[string]*corev1.PersistentVolumeClaim, len(pvcs))
 	for _, pvc := range pvcs {
 		sc := scs[*pvc.Spec.StorageClassName]
-		if sc.Provisioner != sdsLocalVolumeProvisioner {
+		if sc.Provisioner != consts.SdsLocalVolumeProvisioner {
 			log.Debug(fmt.Sprintf("[filterNotManagedPVC] filter out PVC %s/%s due to used Storage class %s is not managed by sds-local-volume-provisioner", pvc.Name, pvc.Namespace, sc.Name))
 			continue
 		}
@@ -167,8 +158,8 @@ func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, sche
 				pvc := pvcs[volume.PersistentVolumeClaim.ClaimName]
 				sc := scs[*pvc.Spec.StorageClassName]
 
-				switch sc.Parameters[lvmTypeParamKey] {
-				case thick:
+				switch sc.Parameters[consts.LvmTypeParamKey] {
+				case consts.Thick:
 					log.Debug(fmt.Sprintf("[populateCache] Storage Class %s has device type Thick, so the cache will be populated by PVC space requests", sc.Name))
 					lvgsForPVC, err := ExtractLVGsFromSC(sc)
 					if err != nil {
@@ -185,7 +176,7 @@ func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, sche
 							}
 						}
 					}
-				case thin:
+				case consts.Thin:
 					log.Debug(fmt.Sprintf("[populateCache] Storage Class %s has device type Thin, so the cache will be populated by PVC space requests", sc.Name))
 					lvgsForPVC, err := ExtractLVGsFromSC(sc)
 					if err != nil {
@@ -233,30 +224,30 @@ func extractRequestedSize(
 		log.Debug(fmt.Sprintf("[extractRequestedSize] PVC %s/%s has status phase: %s", pvc.Namespace, pvc.Name, pvc.Status.Phase))
 		switch pvc.Status.Phase {
 		case corev1.ClaimPending:
-			switch sc.Parameters[lvmTypeParamKey] {
-			case thick:
+			switch sc.Parameters[consts.LvmTypeParamKey] {
+			case consts.Thick:
 				pvcRequests[pvc.Name] = PVCRequest{
-					DeviceType:    thick,
+					DeviceType:    consts.Thick,
 					RequestedSize: pvc.Spec.Resources.Requests.Storage().Value(),
 				}
-			case thin:
+			case consts.Thin:
 				pvcRequests[pvc.Name] = PVCRequest{
-					DeviceType:    thin,
+					DeviceType:    consts.Thin,
 					RequestedSize: pvc.Spec.Resources.Requests.Storage().Value(),
 				}
 			}
 
 		case corev1.ClaimBound:
 			pv := pvs[pvc.Spec.VolumeName]
-			switch sc.Parameters[lvmTypeParamKey] {
-			case thick:
+			switch sc.Parameters[consts.LvmTypeParamKey] {
+			case consts.Thick:
 				pvcRequests[pvc.Name] = PVCRequest{
-					DeviceType:    thick,
+					DeviceType:    consts.Thick,
 					RequestedSize: pvc.Spec.Resources.Requests.Storage().Value() - pv.Spec.Capacity.Storage().Value(),
 				}
-			case thin:
+			case consts.Thin:
 				pvcRequests[pvc.Name] = PVCRequest{
-					DeviceType:    thin,
+					DeviceType:    consts.Thin,
 					RequestedSize: pvc.Spec.Resources.Requests.Storage().Value() - pv.Spec.Capacity.Storage().Value(),
 				}
 			}
@@ -279,7 +270,7 @@ func filterNodes(
 	scs map[string]*v1.StorageClass,
 	pvcRequests map[string]PVCRequest,
 ) (*ExtenderFilterResult, error) {
-	// Param "pvcRequests" is a total amount of the pvcRequests space (both thick and thin) for Pod (i.e. from every PVC)
+	// Param "pvcRequests" is a total amount of the pvcRequests space (both Thick and Thin) for Pod (i.e. from every PVC)
 	if len(pvcRequests) == 0 {
 		return &ExtenderFilterResult{
 			Nodes: nodes,
@@ -400,7 +391,7 @@ func filterNodes(
 
 				// see what kind of space does the PVC need
 				switch pvcReq.DeviceType {
-				case thick:
+				case consts.Thick:
 					lvg := lvgs[commonLVG.Name]
 					thickFreeMtx.RLock()
 					freeSpace := lvgsThickFree[lvg.Name]
@@ -415,13 +406,13 @@ func filterNodes(
 					thickFreeMtx.Lock()
 					lvgsThickFree[lvg.Name] -= pvcReq.RequestedSize
 					thickFreeMtx.Unlock()
-				case thin:
+				case consts.Thin:
 					lvg := lvgs[commonLVG.Name]
 
 					// we try to find specific ThinPool which the PVC can use in the LVMVolumeGroup
 					targetThinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 					if targetThinPool == nil {
-						err = fmt.Errorf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s; node: %s; lvg thin pools: %+v; thin.poolName from StorageClass: %s", *pvc.Spec.StorageClassName, node.Name, lvg.Status.ThinPools, commonLVG.Thin.PoolName)
+						err = fmt.Errorf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s; node: %s; lvg Thin pools: %+v; Thin.poolName from StorageClass: %s", *pvc.Spec.StorageClassName, node.Name, lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 						errs <- err
 						return
 					}
@@ -610,13 +601,13 @@ type LVMVolumeGroup struct {
 	Name string `yaml:"name"`
 	Thin struct {
 		PoolName string `yaml:"poolName"`
-	} `yaml:"thin"`
+	} `yaml:"Thin"`
 }
 type LVMVolumeGroups []LVMVolumeGroup
 
 func ExtractLVGsFromSC(sc *v1.StorageClass) (LVMVolumeGroups, error) {
 	var lvmVolumeGroups LVMVolumeGroups
-	err := yaml.Unmarshal([]byte(sc.Parameters[lvmVolumeGroupsParamKey]), &lvmVolumeGroups)
+	err := yaml.Unmarshal([]byte(sc.Parameters[consts.LvmVolumeGroupsParamKey]), &lvmVolumeGroups)
 	if err != nil {
 		return nil, err
 	}
@@ -633,21 +624,6 @@ func SortLVGsByNodeName(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string][]*
 
 	return sorted
 }
-
-//func getVGFreeSpace(lvg *v1alpha1.LvmVolumeGroup) resource.Quantity {
-//	// notice that .Sub method uses pointer but not a copy of the quantity
-//	free := lvg.Status.VGSize
-//	free.Sub(lvg.Status.AllocatedSize)
-//	return free
-//}
-
-//func getThinPoolFreeSpace(tp *v1alpha1.LvmVolumeGroupThinPoolStatus) resource.Quantity {
-//	// notice that .Sub method uses pointer but not a copy of the quantity
-//	free := tp.ActualSize
-//	free.Sub(tp.UsedSize)
-//
-//	return free
-//}
 
 func getPersistentVolumes(ctx context.Context, cl client.Client) (map[string]corev1.PersistentVolume, error) {
 	pvs := &corev1.PersistentVolumeList{}
