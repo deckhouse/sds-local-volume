@@ -562,9 +562,17 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 					},
 				}
 
-				for _, pvc := range pvcs {
+				for d, pvc := range pvcs {
 					for err != nil {
 						err = cache.UpdateThickPVC(lvg.Name, pvc)
+					}
+
+					for err != nil {
+						err = cache.AddThinPVC(lvg.Name, fmt.Sprintf("test-thin-%d", d), pvc)
+					}
+
+					for err != nil {
+						err = cache.UpdateThinPVC(lvg.Name, fmt.Sprintf("test-thin-%d", d), pvc)
 					}
 
 					cache.GetLVGNamesForPVC(pvc)
@@ -578,6 +586,10 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 					b.Error(err)
 				}
 				_, err = cache.GetLVGThickReservedSpace(lvgName)
+				if err != nil {
+					b.Error(err)
+				}
+				_, err = cache.GetLVGThinReservedSpace(lvgName, "test-thin")
 				if err != nil {
 					b.Error(err)
 				}

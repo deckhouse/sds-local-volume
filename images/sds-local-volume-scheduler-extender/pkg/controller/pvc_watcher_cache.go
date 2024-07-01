@@ -118,12 +118,6 @@ func RunPVCWatcherCacheController(
 }
 
 func reconcilePVC(ctx context.Context, mgr manager.Manager, log logger.Logger, schedulerCache *cache.Cache, pvc *v1.PersistentVolumeClaim, selectedNodeName string) {
-	log.Debug(fmt.Sprintf("[reconcilePVC] starts to find common LVMVolumeGroup for the selected node %s and PVC %s/%s", selectedNodeName, pvc.Namespace, pvc.Name))
-	lvgsOnTheNode := schedulerCache.GetLVGNamesByNodeName(selectedNodeName)
-	for _, lvgName := range lvgsOnTheNode {
-		log.Trace(fmt.Sprintf("[reconcilePVC] LVMVolumeGroup %s belongs to the node %s", lvgName, selectedNodeName))
-	}
-
 	sc := &v12.StorageClass{}
 	err := mgr.GetClient().Get(ctx, client.ObjectKey{
 		Name: *pvc.Spec.StorageClassName,
@@ -138,10 +132,12 @@ func reconcilePVC(ctx context.Context, mgr manager.Manager, log logger.Logger, s
 		return
 	}
 
+	log.Debug(fmt.Sprintf("[reconcilePVC] tries to extract LVGs from the Storage Class %s for PVC %s/%s", sc.Name, pvc.Namespace, pvc.Name))
 	lvgsFromSc, err := scheduler.ExtractLVGsFromSC(sc)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[reconcilePVC] unable to extract LVMVolumeGroups from the Storage Class %s", sc.Name))
 	}
+	log.Debug(fmt.Sprintf("[reconcilePVC] successfully extracted LVGs from the Storage Class %s for PVC %s/%s", sc.Name, pvc.Namespace, pvc.Name))
 
 	lvgsForPVC := schedulerCache.GetLVGNamesForPVC(pvc)
 	if lvgsForPVC == nil || len(lvgsForPVC) == 0 {
@@ -153,6 +149,12 @@ func reconcilePVC(ctx context.Context, mgr manager.Manager, log logger.Logger, s
 	}
 	for _, lvgName := range lvgsForPVC {
 		log.Trace(fmt.Sprintf("[reconcilePVC] LVMVolumeGroup %s belongs to PVC %s/%s", lvgName, pvc.Namespace, pvc.Name))
+	}
+
+	log.Debug(fmt.Sprintf("[reconcilePVC] starts to find common LVMVolumeGroup for the selected node %s and PVC %s/%s", selectedNodeName, pvc.Namespace, pvc.Name))
+	lvgsOnTheNode := schedulerCache.GetLVGNamesByNodeName(selectedNodeName)
+	for _, lvgName := range lvgsOnTheNode {
+		log.Trace(fmt.Sprintf("[reconcilePVC] LVMVolumeGroup %s belongs to the node %s", lvgName, selectedNodeName))
 	}
 
 	var commonLVGName string
@@ -181,7 +183,7 @@ func reconcilePVC(ctx context.Context, mgr manager.Manager, log logger.Logger, s
 	case consts.Thin:
 		for _, lvg := range lvgsFromSc {
 			if lvg.Name == commonLVGName {
-				err = schedulerCache.UpdateThinPVC(commonLVGName, pvc, lvg.Thin.PoolName)
+				err = schedulerCache.UpdateThinPVC(commonLVGName, lvg.Thin.PoolName, pvc)
 				if err != nil {
 					log.Error(err, fmt.Sprintf("[reconcilePVC] unable to update Thin PVC %s/%s in the cache", pvc.Namespace, pvc.Name))
 					return
