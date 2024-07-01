@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-// TODO: сделать поддержку расчета свободного места при Immediate
 func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	d.log.Info("method CreateVolume")
 

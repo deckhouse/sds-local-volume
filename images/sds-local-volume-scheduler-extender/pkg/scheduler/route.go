@@ -73,7 +73,7 @@ func NewHandler(ctx context.Context, cl client.Client, log logger.Logger, lvgCac
 	}, nil
 }
 
-func status(w http.ResponseWriter, r *http.Request) {
+func status(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write([]byte("ok"))
 	if err != nil {
@@ -81,45 +81,14 @@ func status(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
+func (s *scheduler) getCache(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	s.cache.PrintTheCacheLog()
 
-	result := make(map[string][]struct {
-		pvcName      string
-		selectedNode string
-		status       string
-		size         string
-	})
-
 	lvgs := s.cache.GetAllLVG()
 	for _, lvg := range lvgs {
-		pvcs, err := s.cache.GetAllPVCForLVG(lvg.Name)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			s.log.Error(err, "something bad")
-		}
-
-		result[lvg.Name] = make([]struct {
-			pvcName      string
-			selectedNode string
-			status       string
-			size         string
-		}, 0)
-
-		for _, pvc := range pvcs {
-			result[lvg.Name] = append(result[lvg.Name], struct {
-				pvcName      string
-				selectedNode string
-				status       string
-				size         string
-			}{pvcName: pvc.Name, selectedNode: pvc.Annotations[cache.SelectedNodeAnnotation], status: string(pvc.Status.Phase), size: pvc.Spec.Resources.Requests.Storage().String()})
-		}
-	}
-
-	for lvgName, pvcs := range result {
-		reserved, err := s.cache.GetLVGThickReservedSpace(lvgName)
+		reserved, err := s.cache.GetLVGThickReservedSpace(lvg.Name)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, err = w.Write([]byte("unable to write the cache"))
@@ -128,7 +97,7 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		_, err = w.Write([]byte(fmt.Sprintf("LVMVolumeGroup: %s Reserved: %s\n", lvgName, resource.NewQuantity(reserved, resource.BinarySI))))
+		_, err = w.Write([]byte(fmt.Sprintf("LVMVolumeGroup: %s Thick Reserved: %s\n", lvg.Name, resource.NewQuantity(reserved, resource.BinarySI).String())))
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, err = w.Write([]byte("unable to write the cache"))
@@ -137,32 +106,45 @@ func (s *scheduler) getCache(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		for _, pvc := range pvcs {
-			_, err = w.Write([]byte(fmt.Sprintf("\tPVC: %s\n", pvc.pvcName)))
+		thickPvcs, err := s.cache.GetAllThickPVCLVG(lvg.Name)
+		for _, pvc := range thickPvcs {
+			_, err = w.Write([]byte(fmt.Sprintf("\t\tThick PVC: %s, reserved: %s, selected node: %s\n", pvc.Name, pvc.Spec.Resources.Requests.Storage().String(), pvc.Annotations[cache.SelectedNodeAnnotation])))
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				s.log.Error(err, "error write response")
 			}
-			_, err = w.Write([]byte(fmt.Sprintf("\t\tNodeName: %s\n", pvc.selectedNode)))
+		}
+
+		for _, tp := range lvg.Status.ThinPools {
+			thinReserved, err := s.cache.GetLVGThinReservedSpace(lvg.Name, tp.Name)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				s.log.Error(err, "error write response")
 			}
-			_, err = w.Write([]byte(fmt.Sprintf("\t\tStatus: %s\n", pvc.status)))
+			_, err = w.Write([]byte(fmt.Sprintf("\tThinPool: %s, reserved: %s\n", tp.Name, resource.NewQuantity(thinReserved, resource.BinarySI).String())))
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				s.log.Error(err, "error write response")
 			}
-			_, err = w.Write([]byte(fmt.Sprintf("\t\tSize: %s\n", pvc.size)))
+
+			thinPvcs, err := s.cache.GetAllPVCFromLVGThinPool(lvg.Name, tp.Name)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				s.log.Error(err, "error write response")
+			}
+
+			for _, pvc := range thinPvcs {
+				_, err = w.Write([]byte(fmt.Sprintf("\t\tThin PVC: %s, reserved: %s, selected node:%s\n", pvc.Name, pvc.Spec.Resources.Requests.Storage().String(), pvc.Annotations[cache.SelectedNodeAnnotation])))
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					s.log.Error(err, "error write response")
+				}
 			}
 		}
 	}
 }
 
-func (s *scheduler) getCacheStat(w http.ResponseWriter, r *http.Request) {
+func (s *scheduler) getCacheStat(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	pvcTotalCount := 0

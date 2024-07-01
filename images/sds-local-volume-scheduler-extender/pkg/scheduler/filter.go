@@ -92,6 +92,11 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 		s.log.Trace(fmt.Sprintf("[filter] filtered managed PVC %s/%s", pvc.Namespace, pvc.Name))
 	}
 
+	if len(managedPVCs) == 0 {
+		s.log.Warning(fmt.Sprintf("[filter] Pod %s/%s uses PVCs which are not managed by the module. Unable to filter and score the nodes", input.Pod.Namespace, input.Pod.Name))
+		return
+	}
+
 	s.log.Debug(fmt.Sprintf("[filter] starts to extract PVC requested sizes for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
 	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, managedPVCs, scs)
 	if err != nil {
@@ -158,14 +163,14 @@ func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, sche
 				pvc := pvcs[volume.PersistentVolumeClaim.ClaimName]
 				sc := scs[*pvc.Spec.StorageClassName]
 
+				lvgsForPVC, err := ExtractLVGsFromSC(sc)
+				if err != nil {
+					return err
+				}
+
 				switch sc.Parameters[consts.LvmTypeParamKey] {
 				case consts.Thick:
 					log.Debug(fmt.Sprintf("[populateCache] Storage Class %s has device type Thick, so the cache will be populated by PVC space requests", sc.Name))
-					lvgsForPVC, err := ExtractLVGsFromSC(sc)
-					if err != nil {
-						return err
-					}
-
 					log.Trace(fmt.Sprintf("[populateCache] LVMVolumeGroups from Storage Class %s for PVC %s/%s: %+v", sc.Name, pvc.Namespace, pvc.Name, lvgsForPVC))
 					for _, lvg := range lvgsForPVC {
 						if slices.Contains(lvgNamesForTheNode, lvg.Name) {
@@ -178,11 +183,6 @@ func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, sche
 					}
 				case consts.Thin:
 					log.Debug(fmt.Sprintf("[populateCache] Storage Class %s has device type Thin, so the cache will be populated by PVC space requests", sc.Name))
-					lvgsForPVC, err := ExtractLVGsFromSC(sc)
-					if err != nil {
-						return err
-					}
-
 					log.Trace(fmt.Sprintf("[populateCache] LVMVolumeGroups from Storage Class %s for PVC %s/%s: %+v", sc.Name, pvc.Namespace, pvc.Name, lvgsForPVC))
 					for _, lvg := range lvgsForPVC {
 						if slices.Contains(lvgNamesForTheNode, lvg.Name) {
@@ -335,7 +335,12 @@ func filterNodes(
 		}
 	}
 
+	// these are the nodes which might store every PVC from the Pod
 	commonNodes, err := getCommonNodesByStorageClasses(scs, nodeLVGs)
+	if err != nil {
+		log.Error(err, fmt.Sprintf("[filterNodes] unable to get common nodes for PVCs from the Pod %s/%s", pod.Namespace, pod.Name))
+		return nil, err
+	}
 	for nodeName := range commonNodes {
 		log.Trace(fmt.Sprintf("[filterNodes] Node %s is a common for every storage class", nodeName))
 	}
@@ -345,9 +350,9 @@ func filterNodes(
 		FailedNodes: FailedNodesMap{},
 	}
 
-	thickFreeMtx := &sync.RWMutex{}
-	thinFreeMtx := &sync.RWMutex{}
-	failedNodesMutex := &sync.Mutex{}
+	thickMapMtx := &sync.RWMutex{}
+	thinMapMtx := &sync.RWMutex{}
+	failedNodesMapMtx := &sync.Mutex{}
 
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodes.Items))
@@ -363,9 +368,9 @@ func filterNodes(
 
 			if _, common := commonNodes[node.Name]; !common {
 				log.Debug(fmt.Sprintf("[filterNodes] node %s is not common for used Storage Classes", node.Name))
-				failedNodesMutex.Lock()
+				failedNodesMapMtx.Lock()
 				result.FailedNodes[node.Name] = "node is not common for used Storage Classes"
-				failedNodesMutex.Unlock()
+				failedNodesMapMtx.Unlock()
 				return
 			}
 
@@ -373,14 +378,14 @@ func filterNodes(
 			lvgsFromNode := commonNodes[node.Name]
 			hasEnoughSpace := true
 
-			// now we iterate all over the PVCs to get if we can place all of them on the node (does the node have enough space)
+			// now we iterate all over the PVCs to see if we can place all of them on the node (does the node have enough space)
 			for _, pvc := range pvcs {
 				pvcReq := pvcRequests[pvc.Name]
 
 				// we get LVGs which might be used by the PVC
 				lvgsFromSC := scLVGs[*pvc.Spec.StorageClassName]
 
-				// we get the specific LVG which the PVC can use on the node
+				// we get the specific LVG which the PVC can use on the node as we support only one specified LVG in the Storage Class on each node
 				commonLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
 				if commonLVG == nil {
 					err = errors.New(fmt.Sprintf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
@@ -392,20 +397,19 @@ func filterNodes(
 				// see what kind of space does the PVC need
 				switch pvcReq.DeviceType {
 				case consts.Thick:
-					lvg := lvgs[commonLVG.Name]
-					thickFreeMtx.RLock()
-					freeSpace := lvgsThickFree[lvg.Name]
-					thickFreeMtx.RUnlock()
+					thickMapMtx.RLock()
+					freeSpace := lvgsThickFree[commonLVG.Name]
+					thickMapMtx.RUnlock()
 
-					log.Trace(fmt.Sprintf("[filterNodes] LVMVolumeGroup %s Thick free space: %s, PVC requested space: %s", lvg.Name, resource.NewQuantity(freeSpace, resource.BinarySI), resource.NewQuantity(pvcReq.RequestedSize, resource.BinarySI)))
+					log.Trace(fmt.Sprintf("[filterNodes] LVMVolumeGroup %s Thick free space: %s, PVC requested space: %s", commonLVG.Name, resource.NewQuantity(freeSpace, resource.BinarySI), resource.NewQuantity(pvcReq.RequestedSize, resource.BinarySI)))
 					if freeSpace < pvcReq.RequestedSize {
 						hasEnoughSpace = false
 						break
 					}
 
-					thickFreeMtx.Lock()
-					lvgsThickFree[lvg.Name] -= pvcReq.RequestedSize
-					thickFreeMtx.Unlock()
+					thickMapMtx.Lock()
+					lvgsThickFree[commonLVG.Name] -= pvcReq.RequestedSize
+					thickMapMtx.Unlock()
 				case consts.Thin:
 					lvg := lvgs[commonLVG.Name]
 
@@ -417,9 +421,9 @@ func filterNodes(
 						return
 					}
 
-					thinFreeMtx.RLock()
+					thinMapMtx.RLock()
 					freeSpace := lvgsThinFree[lvg.Name][targetThinPool.Name]
-					thinFreeMtx.RUnlock()
+					thinMapMtx.RUnlock()
 
 					log.Trace(fmt.Sprintf("[filterNodes] LVMVolumeGroup %s Thin Pool %s free space: %s, PVC requested space: %s", lvg.Name, targetThinPool.Name, resource.NewQuantity(freeSpace, resource.BinarySI), resource.NewQuantity(pvcReq.RequestedSize, resource.BinarySI)))
 
@@ -428,9 +432,9 @@ func filterNodes(
 						break
 					}
 
-					thinFreeMtx.Lock()
+					thinMapMtx.Lock()
 					lvgsThinFree[lvg.Name][targetThinPool.Name] -= pvcReq.RequestedSize
-					thinFreeMtx.Unlock()
+					thinMapMtx.Unlock()
 				}
 
 				if !hasEnoughSpace {
@@ -440,9 +444,9 @@ func filterNodes(
 			}
 
 			if !hasEnoughSpace {
-				failedNodesMutex.Lock()
+				failedNodesMapMtx.Lock()
 				result.FailedNodes[node.Name] = "not enough space"
-				failedNodesMutex.Unlock()
+				failedNodesMapMtx.Unlock()
 				return
 			}
 
@@ -458,6 +462,7 @@ func filterNodes(
 	}
 	close(errs)
 	if err != nil {
+		log.Error(err, fmt.Sprintf("[filterNodes] unable to filter nodes for the Pod %s/%s, last error: %s", pod.Namespace, pod.Name, err.Error()))
 		return nil, err
 	}
 

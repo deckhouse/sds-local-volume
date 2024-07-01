@@ -74,8 +74,8 @@ func (c *Cache) AddLVG(lvg *v1alpha1.LvmVolumeGroup) {
 
 // UpdateLVG updated selected LVMVolumeGroup resource in the cache. If such LVMVolumeGroup is not stored, returns an error.
 func (c *Cache) UpdateLVG(lvg *v1alpha1.LvmVolumeGroup) error {
-	if cache, found := c.lvgs.Load(lvg.Name); found {
-		cache.(*lvgCache).lvg = lvg
+	if lvgCh, found := c.lvgs.Load(lvg.Name); found {
+		lvgCh.(*lvgCache).lvg = lvg
 
 		c.log.Trace(fmt.Sprintf("[UpdateLVG] the LVMVolumeGroup %s nodes: %v", lvg.Name, lvg.Status.Nodes))
 		for _, node := range lvg.Status.Nodes {
@@ -96,7 +96,7 @@ func (c *Cache) UpdateLVG(lvg *v1alpha1.LvmVolumeGroup) error {
 		return nil
 	}
 
-	return fmt.Errorf("the LVMVolumeGroup %s was not found in the cache", lvg.Name)
+	return fmt.Errorf("the LVMVolumeGroup %s was not found in the lvgCh", lvg.Name)
 }
 
 // TryGetLVG returns selected LVMVolumeGroup resource if it is stored in the cache, otherwise returns nil.
@@ -231,29 +231,6 @@ func (c *Cache) AddThickPVC(lvgName string, pvc *v1.PersistentVolumeClaim) error
 		c.log.Debug(fmt.Sprintf("[AddThickPVC] PVC %s should not be added", pvcKey))
 		return nil
 	}
-	//if pvc.Annotations[SelectedNodeAnnotation] != "" {
-	//	c.log.Debug(fmt.Sprintf("[AddThickPVC] PVC %s/%s has selected node anotation, selected node: %s", pvc.Namespace, pvc.Name, pvc.Annotations[SelectedNodeAnnotation]))
-	//
-	//	lvgsOnTheNode, found := c.nodeLVGs.Load(pvc.Annotations[SelectedNodeAnnotation])
-	//	if !found {
-	//		err := fmt.Errorf("no LVMVolumeGroups found for the node %s", pvc.Annotations[SelectedNodeAnnotation])
-	//		c.log.Error(err, fmt.Sprintf("[AddThickPVC] an error occured while trying to add PVC %s to the cache", pvcKey))
-	//		return err
-	//	}
-	//
-	//	if !slices2.Contains(lvgsOnTheNode.([]string), lvgName) {
-	//		c.log.Debug(fmt.Sprintf("[AddThickPVC] LVMVolumeGroup %s does not belong to PVC %s/%s selected node %s. It will be skipped", lvgName, pvc.Namespace, pvc.Name, pvc.Annotations[SelectedNodeAnnotation]))
-	//		return nil
-	//	}
-	//
-	//	c.log.Debug(fmt.Sprintf("[AddThickPVC] LVMVolumeGroup %s belongs to PVC %s/%s selected node %s", lvgName, pvc.Namespace, pvc.Name, pvc.Annotations[SelectedNodeAnnotation]))
-	//
-	//	_, found = lvgCh.(*lvgCache).thickPVCs.Load(pvcKey)
-	//	if found {
-	//		c.log.Warning(fmt.Sprintf("[AddThickPVC] PVC %s cache has been already added to the LVMVolumeGroup %s", pvcKey, lvgName))
-	//		return nil
-	//	}
-	//}
 
 	c.log.Debug(fmt.Sprintf("[AddThickPVC] new PVC %s cache will be added to the LVMVolumeGroup %s", pvcKey, lvgName))
 	c.addNewThickPVC(lvgCh.(*lvgCache), pvc)
@@ -279,12 +256,14 @@ func (c *Cache) shouldAddPVC(pvc *v1.PersistentVolumeClaim, lvgCh *lvgCache, pvc
 
 		c.log.Debug(fmt.Sprintf("[shouldAddPVC] LVMVolumeGroup %s belongs to PVC %s/%s selected node %s", lvgName, pvc.Namespace, pvc.Name, pvc.Annotations[SelectedNodeAnnotation]))
 
+		// if pvc is thick
 		_, found = lvgCh.thickPVCs.Load(pvcKey)
 		if found {
 			c.log.Debug(fmt.Sprintf("[shouldAddPVC] PVC %s was found in the cache of the LVMVolumeGroup %s", pvcKey, lvgName))
 			return false, nil
 		}
 
+		// if pvc is thin
 		if thinPoolName != "" {
 			thinPoolCh, found := lvgCh.thinPools.Load(thinPoolName)
 			if !found {
@@ -324,7 +303,7 @@ func (c *Cache) AddThinPVC(lvgName, thinPoolName string, pvc *v1.PersistentVolum
 		return err
 	}
 
-	// this case might be triggered if the extender recovers after fail and finds some pending thickPVCs with selected nodes
+	// this case might be triggered if the extender recovers after fail and finds some pending thin PVCs with selected nodes
 	c.log.Trace(fmt.Sprintf("[AddThinPVC] PVC %s/%s annotations: %v", pvc.Namespace, pvc.Name, pvc.Annotations))
 	shouldAdd, err := c.shouldAddPVC(pvc, lvgCh.(*lvgCache), pvcKey, lvgName, thinPoolName)
 	if err != nil {
@@ -366,13 +345,7 @@ func (c *Cache) addNewThickPVC(lvgCh *lvgCache, pvc *v1.PersistentVolumeClaim) {
 func (c *Cache) addNewThinPVC(lvgCh *lvgCache, pvc *v1.PersistentVolumeClaim, thinPoolName string) error {
 	pvcKey := configurePVCKey(pvc)
 
-	if thinPoolName == "" {
-		err := errors.New("no thin pool specified")
-		c.log.Error(err, fmt.Sprintf("[addNewThinPVC] unable to add Thin PVC %s to the cache", pvcKey))
-		return err
-	}
-
-	err := c.addNewThinPool(lvgCh, pvc, thinPoolName)
+	err := c.addThinPoolIfNotExists(lvgCh, thinPoolName)
 	if err != nil {
 		c.log.Error(err, fmt.Sprintf("[addNewThinPVC] unable to add Thin pool %s in the LVMVolumeGroup %s cache for PVC %s", thinPoolName, lvgCh.lvg.Name, pvc.Name))
 		return err
@@ -431,7 +404,7 @@ func (c *Cache) UpdateThickPVC(lvgName string, pvc *v1.PersistentVolumeClaim) er
 	return nil
 }
 
-func (c *Cache) UpdateThinPVC(lvgName string, pvc *v1.PersistentVolumeClaim, thinPoolName string) error {
+func (c *Cache) UpdateThinPVC(lvgName, thinPoolName string, pvc *v1.PersistentVolumeClaim) error {
 	pvcKey := configurePVCKey(pvc)
 
 	lvgCh, found := c.lvgs.Load(lvgName)
@@ -442,7 +415,7 @@ func (c *Cache) UpdateThinPVC(lvgName string, pvc *v1.PersistentVolumeClaim, thi
 	thinPoolCh, found := lvgCh.(*lvgCache).thinPools.Load(thinPoolName)
 	if !found {
 		c.log.Debug(fmt.Sprintf("[UpdateThinPVC] Thin Pool %s was not found in the LVMVolumeGroup %s, add it.", thinPoolName, lvgName))
-		err := c.addNewThinPool(lvgCh.(*lvgCache), pvc, thinPoolName)
+		err := c.addThinPoolIfNotExists(lvgCh.(*lvgCache), thinPoolName)
 		if err != nil {
 			return err
 		}
@@ -467,20 +440,17 @@ func (c *Cache) UpdateThinPVC(lvgName string, pvc *v1.PersistentVolumeClaim, thi
 	return nil
 }
 
-func (c *Cache) addNewThinPool(lvgCh *lvgCache, pvc *v1.PersistentVolumeClaim, thinPoolName string) error {
-	pvcKey := configurePVCKey(pvc)
-
+func (c *Cache) addThinPoolIfNotExists(lvgCh *lvgCache, thinPoolName string) error {
 	if len(thinPoolName) == 0 {
 		err := errors.New("no thin pool name specified")
-		c.log.Error(err, fmt.Sprintf("[addNewThinPool] unable to add thin pool for PVC %s in the LVMVolumeGroup %s", pvc.Name, lvgCh.lvg.Name))
+		c.log.Error(err, fmt.Sprintf("[addThinPoolIfNotExists] unable to add thin pool in the LVMVolumeGroup %s", lvgCh.lvg.Name))
 		return err
 	}
 
 	_, found := lvgCh.thinPools.Load(thinPoolName)
 	if found {
-		err := fmt.Errorf("thin pool %s is already created", thinPoolName)
-		c.log.Error(err, fmt.Sprintf("[addNewThinPool] unable to add new Thin pool %s to the LVMVolumeGroup %s for PVC %s", thinPoolName, lvgCh.lvg.Name, pvcKey))
-		return err
+		c.log.Debug(fmt.Sprintf("[addThinPoolIfNotExists] Thin pool %s is already created in the LVMVolumeGroup %s. No need to add a new one", thinPoolName, lvgCh.lvg.Name))
+		return nil
 	}
 
 	lvgCh.thinPools.Store(thinPoolName, &thinPoolCache{})
@@ -496,6 +466,7 @@ func (c *Cache) GetAllPVCForLVG(lvgName string) ([]*v1.PersistentVolumeClaim, er
 		return nil, err
 	}
 
+	// TODO: fix this to struct size field after refactoring
 	size := 0
 	lvgCh.(*lvgCache).thickPVCs.Range(func(key, value any) bool {
 		size++
@@ -510,11 +481,13 @@ func (c *Cache) GetAllPVCForLVG(lvgName string) ([]*v1.PersistentVolumeClaim, er
 	})
 
 	result := make([]*v1.PersistentVolumeClaim, 0, size)
+	// collect Thick PVC for the LVG
 	lvgCh.(*lvgCache).thickPVCs.Range(func(pvcName, pvcCh any) bool {
 		result = append(result, pvcCh.(*pvcCache).pvc)
 		return true
 	})
 
+	// collect Thin PVC for the LVG
 	lvgCh.(*lvgCache).thinPools.Range(func(tpName, tpCh any) bool {
 		tpCh.(*thinPoolCache).pvcs.Range(func(pvcName, pvcCh any) bool {
 			result = append(result, pvcCh.(*pvcCache).pvc)
@@ -526,18 +499,37 @@ func (c *Cache) GetAllPVCForLVG(lvgName string) ([]*v1.PersistentVolumeClaim, er
 	return result, nil
 }
 
-// GetAllThinPVCForLVGThinPool returns slice of PVC belonging to selected LVMVolumeGroup resource. If such LVMVolumeGroup is not stored in the cache, returns an error.
-func (c *Cache) GetAllThinPVCForLVGThinPool(lvgName, thinPoolName string) ([]*v1.PersistentVolumeClaim, error) {
+// GetAllThickPVCLVG returns slice of PVC belonging to selected LVMVolumeGroup resource. If such LVMVolumeGroup is not stored in the cache, returns an error.
+func (c *Cache) GetAllThickPVCLVG(lvgName string) ([]*v1.PersistentVolumeClaim, error) {
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("cache was not found for the LVMVolumeGroup %s", lvgName)
-		c.log.Error(err, fmt.Sprintf("[GetAllThinPVCForLVGThinPool] an error occured while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
+		c.log.Error(err, fmt.Sprintf("[GetAllPVCForLVG] an error occured while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
+		return nil, err
+	}
+
+	result := make([]*v1.PersistentVolumeClaim, 0, pvcPerLVGCount)
+	// collect Thick PVC for the LVG
+	lvgCh.(*lvgCache).thickPVCs.Range(func(pvcName, pvcCh any) bool {
+		result = append(result, pvcCh.(*pvcCache).pvc)
+		return true
+	})
+
+	return result, nil
+}
+
+// GetAllPVCFromLVGThinPool returns slice of PVC belonging to selected LVMVolumeGroup resource. If such LVMVolumeGroup is not stored in the cache, returns an error.
+func (c *Cache) GetAllPVCFromLVGThinPool(lvgName, thinPoolName string) ([]*v1.PersistentVolumeClaim, error) {
+	lvgCh, found := c.lvgs.Load(lvgName)
+	if !found {
+		err := fmt.Errorf("cache was not found for the LVMVolumeGroup %s", lvgName)
+		c.log.Error(err, fmt.Sprintf("[GetAllPVCFromLVGThinPool] an error occured while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
 		return nil, err
 	}
 
 	thinPoolCh, found := lvgCh.(*lvgCache).thinPools.Load(thinPoolName)
 	if !found || thinPoolCh == nil {
-		c.log.Debug(fmt.Sprintf("[GetAllThinPVCForLVGThinPool] no Thin pool %s in the LVMVolumeGroup %s was found. Returns nil slice", thinPoolName, lvgName))
+		c.log.Debug(fmt.Sprintf("[GetAllPVCFromLVGThinPool] no Thin pool %s in the LVMVolumeGroup %s was found. Returns nil slice", thinPoolName, lvgName))
 		return nil, nil
 	}
 
@@ -562,68 +554,6 @@ func (c *Cache) GetLVGNamesForPVC(pvc *v1.PersistentVolumeClaim) []string {
 	return lvgNames.([]string)
 }
 
-// RemoveBoundedThickPVCSpaceReservation removes selected bounded PVC space reservation from a target LVMVolumeGroup resource. If no such LVMVolumeGroup found or PVC
-// is not in a Status Bound, returns an error.
-func (c *Cache) RemoveBoundedThickPVCSpaceReservation(lvgName string, pvc *v1.PersistentVolumeClaim) error {
-	if pvc.Status.Phase != v1.ClaimBound {
-		return fmt.Errorf("PVC %s/%s not in a Status.Phase Bound", pvc.Namespace, pvc.Name)
-	}
-
-	pvcKey := configurePVCKey(pvc)
-	lvgCh, found := c.lvgs.Load(lvgName)
-	if !found {
-		err := fmt.Errorf("LVMVolumeGroup %s was not found in the cache", lvgName)
-		c.log.Error(err, fmt.Sprintf("[RemoveBoundedThickPVCSpaceReservation] an error occured while trying to remove space reservation for PVC %s in the LVMVolumeGroup %s", pvcKey, lvgName))
-		return err
-	}
-
-	pvcCh, found := lvgCh.(*lvgCache).thickPVCs.Load(pvcKey)
-	if !found || pvcCh == nil {
-		err := fmt.Errorf("cache for PVC %s was not found", pvcKey)
-		c.log.Error(err, fmt.Sprintf("[RemoveBoundedThickPVCSpaceReservation] an error occured while trying to remove space reservation for PVC %s in the LVMVolumeGroup %s", pvcKey, lvgName))
-		return err
-	}
-
-	lvgCh.(*lvgCache).thickPVCs.Delete(pvcKey)
-	c.pvcLVGs.Delete(pvcKey)
-
-	return nil
-}
-
-// RemoveBoundedThinPVCSpaceReservation removes selected bounded PVC space reservation from a target LVMVolumeGroup resource. If no such LVMVolumeGroup found or PVC
-// is not in a Status Bound, returns an error.
-func (c *Cache) RemoveBoundedThinPVCSpaceReservation(lvgName, thinPoolName string, pvc *v1.PersistentVolumeClaim) error {
-	if pvc.Status.Phase != v1.ClaimBound {
-		return fmt.Errorf("PVC %s/%s not in a Status.Phase Bound", pvc.Namespace, pvc.Name)
-	}
-
-	pvcKey := configurePVCKey(pvc)
-	lvgCh, found := c.lvgs.Load(lvgName)
-	if !found {
-		err := fmt.Errorf("LVMVolumeGroup %s was not found in the cache", lvgName)
-		c.log.Error(err, fmt.Sprintf("[RemoveBoundedThinPVCSpaceReservation] an error occured while trying to remove space reservation for PVC %s in the LVMVolumeGroup %s", pvcKey, lvgName))
-		return err
-	}
-
-	thinPoolCh, found := lvgCh.(*lvgCache).thinPools.Load(thinPoolName)
-	if !found {
-		c.log.Warning(fmt.Sprintf("[RemoveBoundedThinPVCSpaceReservation] no Thin Pool %s was found in the cache for the LVMVolumeGroup %s", thinPoolName, lvgName))
-		return nil
-	}
-
-	pvcCh, found := thinPoolCh.(*thinPoolCache).pvcs.Load(pvcKey)
-	if !found || pvcCh == nil {
-		err := fmt.Errorf("cache for PVC %s was not found", pvcKey)
-		c.log.Error(err, fmt.Sprintf("[RemoveBoundedThinPVCSpaceReservation] an error occured while trying to remove space reservation for PVC %s in the LVMVolumeGroup %s", pvcKey, lvgName))
-		return err
-	}
-
-	thinPoolCh.(*thinPoolCache).pvcs.Delete(pvcKey)
-	c.pvcLVGs.Delete(pvcKey)
-
-	return nil
-}
-
 // CheckIsPVCStored checks if selected PVC has been already stored in the cache.
 func (c *Cache) CheckIsPVCStored(pvc *v1.PersistentVolumeClaim) bool {
 	pvcKey := configurePVCKey(pvc)
@@ -637,6 +567,7 @@ func (c *Cache) CheckIsPVCStored(pvc *v1.PersistentVolumeClaim) bool {
 // RemoveSpaceReservationForPVCWithSelectedNode removes space reservation for selected PVC for every LVMVolumeGroup resource, which is not bound to the PVC selected node.
 func (c *Cache) RemoveSpaceReservationForPVCWithSelectedNode(pvc *v1.PersistentVolumeClaim, deviceType string) error {
 	pvcKey := configurePVCKey(pvc)
+	// the LVG which is used to store PVC
 	selectedLVGName := ""
 
 	lvgNamesForPVC, found := c.pvcLVGs.Load(pvcKey)
