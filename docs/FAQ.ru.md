@@ -252,3 +252,72 @@ kubectl label node %node-name% my-custom-label-key=my-custom-label-value
 kubectl -n d8-sds-local-volume get po -l app=sds-local-volume-controller
 kubectl -n d8-sds-local-volume logs -l app=sds-local-volume-controller
 ```
+
+## Как переместить данные между PVC?
+
+Скопируйте следующий скрипт в файл migrate.sh на любом master узле.
+Использование: migrate.sh NAMESPACE SOURCE_PVC_NAME DESTINATION_PVC_NAME
+
+```shell
+#!/bin/bash
+
+ns=$1
+src=$2
+dst=$3
+
+if [[ -z $3 ]]; then
+  echo "You must give as args: namespace source_pvc_name destination_pvc_name"
+  exit 1
+fi
+
+echo "Creating job yaml"
+cat > migrate-job.yaml << EOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate-pv-$src
+  namespace: $ns
+spec:
+  template:
+    spec:
+      containers:
+      - name: migrate
+        image: debian
+        command: [ "/bin/bash", "-c" ]
+        args:
+          -
+            apt-get update && apt-get install -y rsync &&
+            ls -lah /src_vol /dst_vol &&
+            df -h &&
+            rsync -avPS --delete /src_vol/ /dst_vol/ &&
+            ls -lah /dst_vol/ &&
+            du -shxc /src_vol/ /dst_vol/
+        volumeMounts:
+        - mountPath: /src_vol
+          name: src
+          readOnly: true
+        - mountPath: /dst_vol
+          name: dst
+      restartPolicy: Never
+      volumes:
+      - name: src
+        persistentVolumeClaim:
+          claimName: $src
+      - name: dst
+        persistentVolumeClaim:
+          claimName: $dst
+  backoffLimit: 1
+EOF
+
+kubectl create -f migrate-job.yaml
+kubectl -n $ns get jobs -o wide
+kubectl_completed_check=0
+
+echo "Waiting for data migration to be completed"
+while [[ $kubectl_completed_check -eq 0 ]]; do
+   kubectl -n $ns get pods | grep migrate-pv-$src
+   sleep 5
+   kubectl_completed_check=`kubectl -n $ns get pods | grep migrate-pv-$src | grep "Completed" | wc -l`
+done
+echo "Data migration completed"
+```
