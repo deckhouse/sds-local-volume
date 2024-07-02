@@ -5,6 +5,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	v12 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sds-local-volume-scheduler-extender/pkg/consts"
 	"sds-local-volume-scheduler-extender/pkg/logger"
 	"testing"
 )
@@ -20,13 +21,13 @@ func TestFilter(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: sc1,
 				},
-				Provisioner: sdsLocalVolumeProvisioner,
+				Provisioner: consts.SdsLocalVolumeProvisioner,
 			},
 			sc2: {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: sc2,
 				},
-				Provisioner: sdsLocalVolumeProvisioner,
+				Provisioner: consts.SdsLocalVolumeProvisioner,
 			},
 			sc3: {
 				ObjectMeta: metav1.ObjectMeta{

@@ -178,7 +178,7 @@ func GetNodeWithMaxFreeSpace(lvgs []v1alpha1.LvmVolumeGroup, storageClassLVGPara
 
 		switch lvmType {
 		case internal.LVMTypeThick:
-			freeSpace = GetLVMVolumeGroupFreeSpace(lvg)
+			freeSpace = lvg.Status.VGFree
 		case internal.LVMTypeThin:
 			thinPoolName, ok := storageClassLVGParametersMap[lvg.Name]
 			if !ok {
@@ -199,6 +199,7 @@ func GetNodeWithMaxFreeSpace(lvgs []v1alpha1.LvmVolumeGroup, storageClassLVGPara
 	return nodeName, *resource.NewQuantity(maxFreeSpace, resource.BinarySI), nil
 }
 
+// TODO: delete the method below?
 func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.Logger, lvmVG map[string]string, nodeName, LvmType string) (lvgName, vgName string, err error) {
 	listLvgs := &v1alpha1.LvmVolumeGroupList{
 		TypeMeta: metav1.TypeMeta{
@@ -273,7 +274,7 @@ func GetLVMVolumeGroupFreeSpace(lvg v1alpha1.LvmVolumeGroup) (vgFreeSpace resour
 }
 
 func GetLVMThinPoolFreeSpace(lvg v1alpha1.LvmVolumeGroup, thinPoolName string) (thinPoolFreeSpace resource.Quantity, err error) {
-	var storagePoolThinPool *v1alpha1.StatusThinPool
+	var storagePoolThinPool *v1alpha1.LvmVolumeGroupThinPoolStatus
 	for _, thinPool := range lvg.Status.ThinPools {
 		if thinPool.Name == thinPoolName {
 			storagePoolThinPool = &thinPool
@@ -285,11 +286,7 @@ func GetLVMThinPoolFreeSpace(lvg v1alpha1.LvmVolumeGroup, thinPoolName string) (
 		return thinPoolFreeSpace, fmt.Errorf("[GetLVMThinPoolFreeSpace] thin pool %s not found in lvg %+v", thinPoolName, lvg)
 	}
 
-	thinPoolActualSize := storagePoolThinPool.ActualSize
-
-	thinPoolFreeSpace = thinPoolActualSize.DeepCopy()
-	thinPoolFreeSpace.Sub(storagePoolThinPool.UsedSize)
-	return thinPoolFreeSpace, nil
+	return storagePoolThinPool.AvailableSpace, nil
 }
 
 func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *v1alpha1.LVMLogicalVolume) error {
