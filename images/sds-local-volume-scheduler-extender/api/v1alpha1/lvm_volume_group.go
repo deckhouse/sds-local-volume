@@ -1,9 +1,12 @@
 /*
 Copyright 2024 Flant JSC
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -33,16 +36,24 @@ type LvmVolumeGroup struct {
 	Status LvmVolumeGroupStatus `json:"status,omitempty"`
 }
 
-type SpecThinPool struct {
-	Name string            `json:"name"`
-	Size resource.Quantity `json:"size"`
+type LvmVolumeGroupSpec struct {
+	ActualVGNameOnTheNode string                       `json:"actualVGNameOnTheNode"`
+	BlockDeviceNames      []string                     `json:"blockDeviceNames"`
+	ThinPools             []LvmVolumeGroupThinPoolSpec `json:"thinPools"`
+	Type                  string                       `json:"type"`
 }
 
-type LvmVolumeGroupSpec struct {
-	ActualVGNameOnTheNode string         `json:"actualVGNameOnTheNode"`
-	BlockDeviceNames      []string       `json:"blockDeviceNames"`
-	ThinPools             []SpecThinPool `json:"thinPools"`
-	Type                  string         `json:"type"`
+type LvmVolumeGroupStatus struct {
+	AllocatedSize        resource.Quantity              `json:"allocatedSize"`
+	Nodes                []LvmVolumeGroupNode           `json:"nodes"`
+	ThinPools            []LvmVolumeGroupThinPoolStatus `json:"thinPools"`
+	VGSize               resource.Quantity              `json:"vgSize"`
+	VGUuid               string                         `json:"vgUUID"`
+	Phase                string                         `json:"phase"`
+	Conditions           []metav1.Condition             `json:"conditions"`
+	ThinPoolReady        string                         `json:"thinPoolReady"`
+	ConfigurationApplied string                         `json:"configurationApplied"`
+	VGFree               resource.Quantity              `json:"vgFree"`
 }
 
 type LvmVolumeGroupDevice struct {
@@ -58,18 +69,19 @@ type LvmVolumeGroupNode struct {
 	Name    string                 `json:"name"`
 }
 
-type StatusThinPool struct {
-	Name       string            `json:"name"`
-	ActualSize resource.Quantity `json:"actualSize"`
-	UsedSize   resource.Quantity `json:"usedSize"`
+type LvmVolumeGroupThinPoolStatus struct {
+	Name            string            `json:"name"`
+	ActualSize      resource.Quantity `json:"actualSize"`
+	UsedSize        resource.Quantity `json:"usedSize"`
+	AllocatedSize   resource.Quantity `json:"allocatedSize"`
+	AvailableSpace  resource.Quantity `json:"availableSpace"`
+	AllocationLimit string            `json:"allocationLimit"`
+	Ready           bool              `json:"ready"`
+	Message         string            `json:"message"`
 }
 
-type LvmVolumeGroupStatus struct {
-	AllocatedSize resource.Quantity    `json:"allocatedSize"`
-	Health        string               `json:"health"`
-	Message       string               `json:"message"`
-	Nodes         []LvmVolumeGroupNode `json:"nodes"`
-	ThinPools     []StatusThinPool     `json:"thinPools"`
-	VGSize        resource.Quantity    `json:"vgSize"`
-	VGUuid        string               `json:"vgUUID"`
+type LvmVolumeGroupThinPoolSpec struct {
+	Name            string            `json:"name"`
+	Size            resource.Quantity `json:"size"`
+	AllocationLimit string            `json:"allocationLimit"`
 }

@@ -56,7 +56,7 @@ func main() {
 
 	cfgParams, err := config.NewConfig()
 	if err != nil {
-		klog.Fatal("unable to create NewConfig")
+		klog.Fatalf("unable to create NewConfig, err: %s", err.Error())
 	}
 
 	var (
