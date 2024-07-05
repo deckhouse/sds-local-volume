@@ -19,10 +19,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"net/http"
 	"os"
 	"webhooks/handlers"
-	"webhooks/v1alpha1"
 
 	"github.com/sirupsen/logrus"
 	kwhlogrus "github.com/slok/kubewebhook/v2/pkg/log/logrus"
@@ -71,7 +71,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	lscValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LSCValidate, LSCValidatorId, &v1alpha1.LocalStorageClass{}, logger)
+	lscValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LSCValidate, LSCValidatorId, &slv.LocalStorageClass{}, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating lscValidatingWebhookHandler: %s", err)
 		os.Exit(1)

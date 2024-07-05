@@ -18,8 +18,9 @@ package controller_test
 
 import (
 	"fmt"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"os"
-	v1alpha1 "sds-local-volume-controller/api/v1alpha1"
 	"testing"
 
 	v1 "k8s.io/api/apps/v1"
@@ -43,7 +44,8 @@ func TestController(t *testing.T) {
 
 func NewFakeClient() client.Client {
 	resourcesSchemeFuncs := []func(*apiruntime.Scheme) error{
-		v1alpha1.AddToScheme,
+		slv.AddToScheme,
+		snc.AddToScheme,
 		clientgoscheme.AddToScheme,
 		extv1.AddToScheme,
 		v1.AddToScheme,
@@ -58,8 +60,6 @@ func NewFakeClient() client.Client {
 		}
 	}
 
-	// See https://github.com/kubernetes-sigs/controller-runtime/issues/2362#issuecomment-1837270195
-	// builder := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1alpha1.NFSStorageClass{})
 	builder := fake.NewClientBuilder().WithScheme(scheme)
 	cl := builder.Build()
 	return cl

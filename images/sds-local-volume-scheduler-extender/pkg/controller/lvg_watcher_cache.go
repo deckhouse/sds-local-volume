@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/workqueue"
 	"reflect"
-	"sds-local-volume-scheduler-extender/api/v1alpha1"
 	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -39,11 +39,11 @@ func RunLVGWatcherCacheController(
 		return nil, err
 	}
 
-	err = c.Watch(source.Kind(mgr.GetCache(), &v1alpha1.LvmVolumeGroup{}), handler.Funcs{
+	err = c.Watch(source.Kind(mgr.GetCache(), &snc.LvmVolumeGroup{}), handler.Funcs{
 		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] CreateFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.Object.GetName()))
 
-			lvg, ok := e.Object.(*v1alpha1.LvmVolumeGroup)
+			lvg, ok := e.Object.(*snc.LvmVolumeGroup)
 			if !ok {
 				err = errors.New("unable to cast event object to a given type")
 				log.Error(err, "[RunLVGWatcherCacheController] an error occurred while handling create event")
@@ -92,14 +92,14 @@ func RunLVGWatcherCacheController(
 		},
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[RunCacheWatcherController] UpdateFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.ObjectNew.GetName()))
-			oldLvg, ok := e.ObjectOld.(*v1alpha1.LvmVolumeGroup)
+			oldLvg, ok := e.ObjectOld.(*snc.LvmVolumeGroup)
 			if !ok {
 				err = errors.New("unable to cast event object to a given type")
 				log.Error(err, "[RunLVGWatcherCacheController] an error occurred while handling create event")
 				return
 			}
 
-			newLvg, ok := e.ObjectNew.(*v1alpha1.LvmVolumeGroup)
+			newLvg, ok := e.ObjectNew.(*snc.LvmVolumeGroup)
 			if !ok {
 				err = errors.New("unable to cast event object to a given type")
 				log.Error(err, "[RunLVGWatcherCacheController] an error occurred while handling create event")
@@ -142,7 +142,7 @@ func RunLVGWatcherCacheController(
 		},
 		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[RunCacheWatcherController] DeleteFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.Object.GetName()))
-			lvg, ok := e.Object.(*v1alpha1.LvmVolumeGroup)
+			lvg, ok := e.Object.(*snc.LvmVolumeGroup)
 			if !ok {
 				err = errors.New("unable to cast event object to a given type")
 				log.Error(err, "[RunLVGWatcherCacheController] an error occurred while handling create event")
@@ -160,7 +160,7 @@ func RunLVGWatcherCacheController(
 	return c, nil
 }
 
-func shouldReconcileLVG(oldLVG, newLVG *v1alpha1.LvmVolumeGroup) bool {
+func shouldReconcileLVG(oldLVG, newLVG *snc.LvmVolumeGroup) bool {
 	if newLVG.DeletionTimestamp != nil {
 		return false
 	}

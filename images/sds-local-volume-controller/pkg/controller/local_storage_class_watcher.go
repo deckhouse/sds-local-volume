@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"reflect"
-	v1alpha1 "sds-local-volume-controller/api/v1alpha1"
 	"sds-local-volume-controller/pkg/config"
 	"sds-local-volume-controller/pkg/logger"
 	"time"
@@ -88,7 +88,7 @@ func RunLocalStorageClassWatcherController(
 	c, err := controller.New(LocalStorageClassCtrlName, mgr, controller.Options{
 		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 			log.Info("[LocalStorageClassReconciler] starts Reconcile for the LocalStorageClass %q", request.Name)
-			lsc := &v1alpha1.LocalStorageClass{}
+			lsc := &slv.LocalStorageClass{}
 			err := cl.Get(ctx, request.NamespacedName, lsc)
 			if err != nil && !errors2.IsNotFound(err) {
 				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] unable to get LocalStorageClass, name: %s", request.Name))
@@ -128,7 +128,7 @@ func RunLocalStorageClassWatcherController(
 		return nil, err
 	}
 
-	err = c.Watch(source.Kind(mgr.GetCache(), &v1alpha1.LocalStorageClass{}), handler.Funcs{
+	err = c.Watch(source.Kind(mgr.GetCache(), &slv.LocalStorageClass{}), handler.Funcs{
 		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[CreateFunc] get event for LocalStorageClass %q. Add to the queue", e.Object.GetName()))
 			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: e.Object.GetNamespace(), Name: e.Object.GetName()}}
@@ -137,13 +137,13 @@ func RunLocalStorageClassWatcherController(
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[UpdateFunc] get event for LocalStorageClass %q. Check if it should be reconciled", e.ObjectNew.GetName()))
 
-			oldLsc, ok := e.ObjectOld.(*v1alpha1.LocalStorageClass)
+			oldLsc, ok := e.ObjectOld.(*slv.LocalStorageClass)
 			if !ok {
 				err = errors.New("unable to cast event object to a given type")
 				log.Error(err, "[UpdateFunc] an error occurred while handling create event")
 				return
 			}
-			newLsc, ok := e.ObjectNew.(*v1alpha1.LocalStorageClass)
+			newLsc, ok := e.ObjectNew.(*slv.LocalStorageClass)
 			if !ok {
 				err = errors.New("unable to cast event object to a given type")
 				log.Error(err, "[UpdateFunc] an error occurred while handling create event")
@@ -168,7 +168,7 @@ func RunLocalStorageClassWatcherController(
 	return c, nil
 }
 
-func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger, scList *v1.StorageClassList, lsc *v1alpha1.LocalStorageClass) (bool, error) {
+func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger, scList *v1.StorageClassList, lsc *slv.LocalStorageClass) (bool, error) {
 	recType, err := identifyReconcileFunc(scList, lsc)
 	if err != nil {
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())

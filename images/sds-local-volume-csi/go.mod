@@ -1,9 +1,11 @@
 module sds-local-volume-csi
 
-go 1.21
+go 1.22.2
 
 require (
 	github.com/container-storage-interface/spec v1.9.0
+	github.com/deckhouse/sds-local-volume/api v0.0.0-20240704080736-a027a963cc2c
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20240705070320-a7a740787b36
 	github.com/go-logr/logr v1.4.1
 	github.com/golang/protobuf v1.5.4
 	golang.org/x/sync v0.6.0
@@ -11,7 +13,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.29.3
 	k8s.io/apiextensions-apiserver v0.29.3
-	k8s.io/apimachinery v0.29.3
+	k8s.io/apimachinery v0.30.2
 	k8s.io/client-go v0.29.3
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/mount-utils v0.29.3
@@ -40,7 +42,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/oauth2 v0.18.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/term v0.18.0 // indirect
