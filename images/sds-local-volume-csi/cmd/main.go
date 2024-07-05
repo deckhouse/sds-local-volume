@@ -20,9 +20,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"os"
 	"os/signal"
-	"sds-local-volume-csi/api/v1alpha1"
 	"sds-local-volume-csi/config"
 	"sds-local-volume-csi/driver"
 	"sds-local-volume-csi/pkg/kubutils"
@@ -42,7 +43,8 @@ import (
 
 var (
 	resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
-		v1alpha1.AddToScheme,
+		snc.AddToScheme,
+		slv.AddToScheme,
 		clientgoscheme.AddToScheme,
 		extv1.AddToScheme,
 		v1.AddToScheme,

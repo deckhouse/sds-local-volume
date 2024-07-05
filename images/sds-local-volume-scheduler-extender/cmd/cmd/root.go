@@ -20,10 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"net/http"
 	"os"
 	"os/signal"
-	"sds-local-volume-scheduler-extender/api/v1alpha1"
 	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/controller"
 	"sds-local-volume-scheduler-extender/pkg/kubutils"
@@ -47,7 +48,8 @@ import (
 var cfgFilePath string
 
 var resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
-	v1alpha1.AddToScheme,
+	slv.AddToScheme,
+	snc.AddToScheme,
 	v1.AddToScheme,
 	sv1.AddToScheme,
 }

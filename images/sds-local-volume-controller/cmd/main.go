@@ -19,9 +19,10 @@ package main
 import (
 	"context"
 	"fmt"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"os"
 	goruntime "runtime"
-	"sds-local-volume-controller/api/v1alpha1"
 	"sds-local-volume-controller/pkg/config"
 	"sds-local-volume-controller/pkg/controller"
 	"sds-local-volume-controller/pkg/kubutils"
@@ -41,7 +42,8 @@ import (
 
 var (
 	resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
-		v1alpha1.AddToScheme,
+		snc.AddToScheme,
+		slv.AddToScheme,
 		clientgoscheme.AddToScheme,
 		extv1.AddToScheme,
 		v1.AddToScheme,

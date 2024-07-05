@@ -1,14 +1,13 @@
 module webhooks
 
-go 1.22.1
-
-toolchain go1.22.2
+go 1.22.2
 
 require (
+	github.com/deckhouse/sds-local-volume/api v0.0.0-20240704080736-a027a963cc2c
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slok/kubewebhook/v2 v2.6.0
 	k8s.io/api v0.30.0
-	k8s.io/apimachinery v0.30.0
+	k8s.io/apimachinery v0.30.2
 	k8s.io/client-go v0.30.0
 	k8s.io/klog/v2 v2.120.1
 )

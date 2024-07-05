@@ -2,7 +2,8 @@ package controller
 
 import (
 	"context"
-	"sds-local-volume-controller/api/v1alpha1"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"sds-local-volume-controller/pkg/logger"
 	"testing"
 
@@ -61,12 +62,12 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			t.Error(err)
 		}
 
-		lvgOnNode4 := &v1alpha1.LvmVolumeGroup{
+		lvgOnNode4 := &snc.LvmVolumeGroup{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "lvgOnNode4",
 			},
-			Status: v1alpha1.LvmVolumeGroupStatus{
-				Nodes: []v1alpha1.LvmVolumeGroupNode{
+			Status: snc.LvmVolumeGroupStatus{
+				Nodes: []snc.LvmVolumeGroupNode{
 					{
 						Name: "test-node4",
 					},
@@ -78,13 +79,13 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			t.Error(err)
 		}
 
-		lsc := &v1alpha1.LocalStorageClass{
+		lsc := &slv.LocalStorageClass{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-lsc",
 			},
-			Spec: v1alpha1.LocalStorageClassSpec{
-				LVM: &v1alpha1.LocalStorageClassLVMSpec{
-					LVMVolumeGroups: []v1alpha1.LocalStorageClassLVG{
+			Spec: slv.LocalStorageClassSpec{
+				LVM: &slv.LocalStorageClassLVMSpec{
+					LVMVolumeGroups: []slv.LocalStorageClassLVG{
 						{
 							Name: "lvgOnNode4",
 						},
@@ -188,7 +189,7 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			_, exist = node4.Labels[localCsiNodeSelectorLabel]
 			assert.True(t, exist)
 
-			updateLvg := &v1alpha1.LvmVolumeGroup{}
+			updateLvg := &snc.LvmVolumeGroup{}
 			err = cl.Get(ctx,
 				client.ObjectKey{
 					Name: "lvgOnNode4",
@@ -199,7 +200,7 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			_, exist = updateLvg.Labels[candidateManualEvictionLabel]
 			assert.True(t, exist)
 
-			updatedLsc := &v1alpha1.LocalStorageClass{}
+			updatedLsc := &slv.LocalStorageClass{}
 			err = cl.Get(ctx,
 				client.ObjectKey{
 					Name: "test-lsc",
@@ -225,7 +226,8 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 func NewFakeClient() client.WithWatch {
 	s := scheme.Scheme
 	_ = metav1.AddMetaToScheme(s)
-	_ = v1alpha1.AddToScheme(s)
+	_ = slv.AddToScheme(s)
+	_ = snc.AddToScheme(s)
 
 	builder := fake.NewClientBuilder().WithScheme(s)
 

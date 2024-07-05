@@ -67,3 +67,7 @@ func NewConfig() *Options {
 
 	return &opts
 }
+
+type SdsLocalVolumeConfig struct {
+	NodeSelector map[string]string `yaml:"nodeSelector"`
+}

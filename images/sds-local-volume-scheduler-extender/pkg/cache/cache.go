@@ -3,9 +3,9 @@ package cache
 import (
 	"errors"
 	"fmt"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	slices2 "k8s.io/utils/strings/slices"
-	"sds-local-volume-scheduler-extender/api/v1alpha1"
 	"sds-local-volume-scheduler-extender/pkg/consts"
 	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sync"
@@ -26,7 +26,7 @@ type Cache struct {
 }
 
 type lvgCache struct {
-	lvg       *v1alpha1.LvmVolumeGroup
+	lvg       *snc.LvmVolumeGroup
 	thickPVCs sync.Map //map[string]*pvcCache
 	thinPools sync.Map //map[string]*thinPoolCache
 }
@@ -48,7 +48,7 @@ func NewCache(logger logger.Logger) *Cache {
 }
 
 // AddLVG adds selected LVMVolumeGroup resource to the cache. If it is already stored, does nothing.
-func (c *Cache) AddLVG(lvg *v1alpha1.LvmVolumeGroup) {
+func (c *Cache) AddLVG(lvg *snc.LvmVolumeGroup) {
 	_, loaded := c.lvgs.LoadOrStore(lvg.Name, &lvgCache{
 		lvg:       lvg,
 		thickPVCs: sync.Map{},
@@ -73,7 +73,7 @@ func (c *Cache) AddLVG(lvg *v1alpha1.LvmVolumeGroup) {
 }
 
 // UpdateLVG updated selected LVMVolumeGroup resource in the cache. If such LVMVolumeGroup is not stored, returns an error.
-func (c *Cache) UpdateLVG(lvg *v1alpha1.LvmVolumeGroup) error {
+func (c *Cache) UpdateLVG(lvg *snc.LvmVolumeGroup) error {
 	if lvgCh, found := c.lvgs.Load(lvg.Name); found {
 		lvgCh.(*lvgCache).lvg = lvg
 
@@ -100,7 +100,7 @@ func (c *Cache) UpdateLVG(lvg *v1alpha1.LvmVolumeGroup) error {
 }
 
 // TryGetLVG returns selected LVMVolumeGroup resource if it is stored in the cache, otherwise returns nil.
-func (c *Cache) TryGetLVG(name string) *v1alpha1.LvmVolumeGroup {
+func (c *Cache) TryGetLVG(name string) *snc.LvmVolumeGroup {
 	lvgCh, found := c.lvgs.Load(name)
 	if !found {
 		c.log.Debug(fmt.Sprintf("[TryGetLVG] the LVMVolumeGroup %s was not found in the cache. Return nil", name))
@@ -122,8 +122,8 @@ func (c *Cache) GetLVGNamesByNodeName(nodeName string) []string {
 }
 
 // GetAllLVG returns all the LVMVolumeGroups resources stored in the cache.
-func (c *Cache) GetAllLVG() map[string]*v1alpha1.LvmVolumeGroup {
-	lvgs := make(map[string]*v1alpha1.LvmVolumeGroup)
+func (c *Cache) GetAllLVG() map[string]*snc.LvmVolumeGroup {
+	lvgs := make(map[string]*snc.LvmVolumeGroup)
 	c.lvgs.Range(func(lvgName, lvgCh any) bool {
 		if lvgCh.(*lvgCache).lvg == nil {
 			c.log.Error(fmt.Errorf("LVMVolumeGroup %s is not initialized", lvgName), fmt.Sprintf("[GetAllLVG] an error occurs while iterating the LVMVolumeGroups"))

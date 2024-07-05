@@ -19,14 +19,12 @@ package controller
 import (
 	"context"
 	"fmt"
-	"sds-local-volume-controller/api/v1alpha1"
-	"sds-local-volume-controller/pkg/config"
-	"sds-local-volume-controller/pkg/logger"
-	"strings"
-	"time"
-
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"sds-local-volume-controller/pkg/config"
+	"sds-local-volume-controller/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -34,6 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/yaml"
+	"strings"
+	"time"
 )
 
 const (
@@ -233,7 +233,7 @@ func reconcileLocalCSILabels(ctx context.Context, cl client.Client, log logger.L
 	}
 }
 
-func addLabelOnTheLSCIfNotExist(ctx context.Context, cl client.Client, lsc v1alpha1.LocalStorageClass, label string) (bool, error) {
+func addLabelOnTheLSCIfNotExist(ctx context.Context, cl client.Client, lsc slv.LocalStorageClass, label string) (bool, error) {
 	if _, exist := lsc.Labels[label]; exist {
 		return false, nil
 	}
@@ -251,7 +251,7 @@ func addLabelOnTheLSCIfNotExist(ctx context.Context, cl client.Client, lsc v1alp
 	return true, nil
 }
 
-func addLabelOnTheLVGIfNotExist(ctx context.Context, cl client.Client, lvg v1alpha1.LvmVolumeGroup, label string) (bool, error) {
+func addLabelOnTheLVGIfNotExist(ctx context.Context, cl client.Client, lvg snc.LvmVolumeGroup, label string) (bool, error) {
 	if _, exist := lvg.Labels[label]; exist {
 		return false, nil
 	}
@@ -301,12 +301,12 @@ func clearManualEvictionLabelsIfNeeded(ctx context.Context, cl client.Client, lo
 		return err
 	}
 
-	lvgs := make(map[string]v1alpha1.LvmVolumeGroup, len(lvgList.Items))
+	lvgs := make(map[string]snc.LvmVolumeGroup, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		lvgs[lvg.Name] = lvg
 	}
 
-	usedLvgs := make(map[string]v1alpha1.LvmVolumeGroup, len(lvgList.Items))
+	usedLvgs := make(map[string]snc.LvmVolumeGroup, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		for _, n := range lvg.Status.Nodes {
 			if n.Name == node.Name {
@@ -373,13 +373,13 @@ func clearManualEvictionLabelsIfNeeded(ctx context.Context, cl client.Client, lo
 	return nil
 }
 
-func getManuallyEvictedLVGsAndLSCs(ctx context.Context, cl client.Client, node v1.Node) (map[string]v1alpha1.LvmVolumeGroup, map[string]v1alpha1.LocalStorageClass, error) {
+func getManuallyEvictedLVGsAndLSCs(ctx context.Context, cl client.Client, node v1.Node) (map[string]snc.LvmVolumeGroup, map[string]slv.LocalStorageClass, error) {
 	lvgList, err := getLVMVolumeGroups(ctx, cl)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	usedLvgs := make(map[string]v1alpha1.LvmVolumeGroup, len(lvgList.Items))
+	usedLvgs := make(map[string]snc.LvmVolumeGroup, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		for _, n := range lvg.Status.Nodes {
 			if n.Name == node.Name {
@@ -393,8 +393,8 @@ func getManuallyEvictedLVGsAndLSCs(ctx context.Context, cl client.Client, node v
 		return nil, nil, err
 	}
 
-	unhealthyLscs := make(map[string]v1alpha1.LocalStorageClass, len(lscList.Items))
-	unhealthyLvgs := make(map[string]v1alpha1.LvmVolumeGroup, len(usedLvgs))
+	unhealthyLscs := make(map[string]slv.LocalStorageClass, len(lscList.Items))
+	unhealthyLvgs := make(map[string]snc.LvmVolumeGroup, len(usedLvgs))
 
 	// This case is a base case, when the controller did not label any resource.
 	for _, lsc := range lscList.Items {
@@ -416,15 +416,15 @@ func getManuallyEvictedLVGsAndLSCs(ctx context.Context, cl client.Client, node v
 	return unhealthyLvgs, unhealthyLscs, nil
 }
 
-func getLVMVolumeGroups(ctx context.Context, cl client.Client) (*v1alpha1.LvmVolumeGroupList, error) {
-	lvgList := &v1alpha1.LvmVolumeGroupList{}
+func getLVMVolumeGroups(ctx context.Context, cl client.Client) (*snc.LvmVolumeGroupList, error) {
+	lvgList := &snc.LvmVolumeGroupList{}
 	err := cl.List(ctx, lvgList)
 
 	return lvgList, err
 }
 
-func getLocalStorageClasses(ctx context.Context, cl client.Client) (*v1alpha1.LocalStorageClassList, error) {
-	lscList := &v1alpha1.LocalStorageClassList{}
+func getLocalStorageClasses(ctx context.Context, cl client.Client) (*slv.LocalStorageClassList, error) {
+	lscList := &slv.LocalStorageClassList{}
 	err := cl.List(ctx, lscList)
 	return lscList, err
 }
@@ -436,7 +436,7 @@ func getKubeNodes(ctx context.Context, cl client.Client) (*v1.NodeList, error) {
 }
 
 func getNodeSelectorFromConfig(secret *v1.Secret) (map[string]string, error) {
-	var sdsConfig v1alpha1.SdsLocalVolumeConfig
+	var sdsConfig config.SdsLocalVolumeConfig
 	err := yaml.Unmarshal(secret.Data["config"], &sdsConfig)
 	if err != nil {
 		return nil, err

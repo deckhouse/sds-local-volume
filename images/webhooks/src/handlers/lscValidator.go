@@ -18,7 +18,7 @@ package handlers
 
 import (
 	"context"
-	"webhooks/v1alpha1"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
@@ -26,7 +26,7 @@ import (
 )
 
 func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhvalidating.ValidatorResult, error) {
-	lsc, ok := obj.(*v1alpha1.LocalStorageClass)
+	lsc, ok := obj.(*slv.LocalStorageClass)
 	if !ok {
 		// If not a storage class just continue the validation chain(if there is one) and do nothing.
 		return &kwhvalidating.ValidatorResult{}, nil

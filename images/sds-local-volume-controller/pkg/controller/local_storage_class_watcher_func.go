@@ -19,7 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
-	v1alpha1 "sds-local-volume-controller/api/v1alpha1"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"sds-local-volume-controller/pkg/logger"
 	"strings"
 
@@ -36,7 +37,7 @@ func reconcileLSCDeleteFunc(
 	cl client.Client,
 	log logger.Logger,
 	scList *v1.StorageClassList,
-	lsc *v1alpha1.LocalStorageClass,
+	lsc *slv.LocalStorageClass,
 ) (bool, error) {
 	log.Debug(fmt.Sprintf("[reconcileLSCDeleteFunc] tries to find a storage class for the LocalStorageClass %s", lsc.Name))
 	var sc *v1.StorageClass
@@ -93,7 +94,7 @@ func reconcileLSCUpdateFunc(
 	cl client.Client,
 	log logger.Logger,
 	scList *v1.StorageClassList,
-	lsc *v1alpha1.LocalStorageClass,
+	lsc *slv.LocalStorageClass,
 ) (bool, error) {
 	log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] starts the LocalStorageClass %s validation", lsc.Name))
 	valid, msg := validateLocalStorageClass(ctx, cl, scList, lsc)
@@ -176,7 +177,7 @@ func reconcileLSCUpdateFunc(
 	return false, nil
 }
 
-func identifyReconcileFunc(scList *v1.StorageClassList, lsc *v1alpha1.LocalStorageClass) (reconcileType, error) {
+func identifyReconcileFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass) (reconcileType, error) {
 	if shouldReconcileByDeleteFunc(lsc) {
 		return DeleteReconcile, nil
 	}
@@ -196,7 +197,7 @@ func identifyReconcileFunc(scList *v1.StorageClassList, lsc *v1alpha1.LocalStora
 	return "none", nil
 }
 
-func shouldReconcileByDeleteFunc(lsc *v1alpha1.LocalStorageClass) bool {
+func shouldReconcileByDeleteFunc(lsc *slv.LocalStorageClass) bool {
 	if lsc.DeletionTimestamp != nil {
 		return true
 	}
@@ -204,7 +205,7 @@ func shouldReconcileByDeleteFunc(lsc *v1alpha1.LocalStorageClass) bool {
 	return false
 }
 
-func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *v1alpha1.LocalStorageClass) (bool, error) {
+func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass) (bool, error) {
 	if lsc.DeletionTimestamp != nil {
 		return false, nil
 	}
@@ -239,7 +240,7 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *v1alpha1.Loca
 
 }
 
-func hasLVGDiff(sc *v1.StorageClass, lsc *v1alpha1.LocalStorageClass) (bool, error) {
+func hasLVGDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 	currentLVGs, err := getLVGFromSCParams(sc)
 	if err != nil {
 		return false, err
@@ -270,9 +271,9 @@ func hasLVGDiff(sc *v1.StorageClass, lsc *v1alpha1.LocalStorageClass) (bool, err
 	return false, nil
 }
 
-func getLVGFromSCParams(sc *v1.StorageClass) ([]v1alpha1.LocalStorageClassLVG, error) {
+func getLVGFromSCParams(sc *v1.StorageClass) ([]slv.LocalStorageClassLVG, error) {
 	lvgsFromParams := sc.Parameters[LVMVolumeGroupsParamKey]
-	var currentLVGs []v1alpha1.LocalStorageClassLVG
+	var currentLVGs []slv.LocalStorageClassLVG
 
 	err := yaml.Unmarshal([]byte(lvgsFromParams), &currentLVGs)
 	if err != nil {
@@ -282,7 +283,7 @@ func getLVGFromSCParams(sc *v1.StorageClass) ([]v1alpha1.LocalStorageClassLVG, e
 	return currentLVGs, nil
 }
 
-func shouldReconcileByCreateFunc(scList *v1.StorageClassList, lsc *v1alpha1.LocalStorageClass) bool {
+func shouldReconcileByCreateFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass) bool {
 	if lsc.DeletionTimestamp != nil {
 		return false
 	}
@@ -301,7 +302,7 @@ func reconcileLSCCreateFunc(
 	cl client.Client,
 	log logger.Logger,
 	scList *v1.StorageClassList,
-	lsc *v1alpha1.LocalStorageClass,
+	lsc *slv.LocalStorageClass,
 ) (bool, error) {
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] starts the LocalStorageClass %s validation", lsc.Name))
 	added, err := addFinalizerIfNotExistsForLSC(ctx, cl, lsc)
@@ -392,7 +393,7 @@ func createStorageClassIfNotExists(
 	return true, err
 }
 
-func addFinalizerIfNotExistsForLSC(ctx context.Context, cl client.Client, lsc *v1alpha1.LocalStorageClass) (bool, error) {
+func addFinalizerIfNotExistsForLSC(ctx context.Context, cl client.Client, lsc *slv.LocalStorageClass) (bool, error) {
 	if !slices.Contains(lsc.Finalizers, LocalStorageClassFinalizerName) {
 		lsc.Finalizers = append(lsc.Finalizers, LocalStorageClassFinalizerName)
 	}
@@ -418,7 +419,7 @@ func addFinalizerIfNotExistsForSC(ctx context.Context, cl client.Client, sc *v1.
 	return true, nil
 }
 
-func configureStorageClass(lsc *v1alpha1.LocalStorageClass) (*v1.StorageClass, error) {
+func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error) {
 	reclaimPolicy := corev1.PersistentVolumeReclaimPolicy(lsc.Spec.ReclaimPolicy)
 	volumeBindingMode := v1.VolumeBindingMode(lsc.Spec.VolumeBindingMode)
 	AllowVolumeExpansion := AllowVolumeExpansionDefaultValue
@@ -469,12 +470,12 @@ func configureStorageClass(lsc *v1alpha1.LocalStorageClass) (*v1.StorageClass, e
 func updateLocalStorageClassPhase(
 	ctx context.Context,
 	cl client.Client,
-	lsc *v1alpha1.LocalStorageClass,
+	lsc *slv.LocalStorageClass,
 	phase,
 	reason string,
 ) error {
 	if lsc.Status == nil {
-		lsc.Status = new(v1alpha1.LocalStorageClassStatus)
+		lsc.Status = new(slv.LocalStorageClassStatus)
 	}
 	lsc.Status.Phase = phase
 	lsc.Status.Reason = reason
@@ -496,7 +497,7 @@ func validateLocalStorageClass(
 	ctx context.Context,
 	cl client.Client,
 	scList *v1.StorageClassList,
-	lsc *v1alpha1.LocalStorageClass,
+	lsc *slv.LocalStorageClass,
 ) (bool, string) {
 	var (
 		failedMsgBuilder strings.Builder
@@ -509,7 +510,7 @@ func validateLocalStorageClass(
 		failedMsgBuilder.WriteString(fmt.Sprintf("There already is a storage class with the same name: %s but it is not managed by the LocalStorageClass controller\n", unmanagedScName))
 	}
 
-	lvgList := &v1alpha1.LvmVolumeGroupList{}
+	lvgList := &snc.LvmVolumeGroupList{}
 	err := cl.List(ctx, lvgList)
 	if err != nil {
 		valid = false
@@ -552,7 +553,7 @@ func validateLocalStorageClass(
 	return valid, failedMsgBuilder.String()
 }
 
-func findUnmanagedDuplicatedSC(scList *v1.StorageClassList, lsc *v1alpha1.LocalStorageClass) string {
+func findUnmanagedDuplicatedSC(scList *v1.StorageClassList, lsc *slv.LocalStorageClass) string {
 	for _, sc := range scList.Items {
 		if sc.Name == lsc.Name && sc.Provisioner != LocalStorageClassProvisioner {
 			return sc.Name
@@ -562,7 +563,7 @@ func findUnmanagedDuplicatedSC(scList *v1.StorageClassList, lsc *v1alpha1.LocalS
 	return ""
 }
 
-func findAnyThinPool(lsc *v1alpha1.LocalStorageClass) []string {
+func findAnyThinPool(lsc *slv.LocalStorageClass) []string {
 	badLvgs := make([]string, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
 	for _, lvs := range lsc.Spec.LVM.LVMVolumeGroups {
 		if lvs.Thin != nil {
@@ -573,8 +574,8 @@ func findAnyThinPool(lsc *v1alpha1.LocalStorageClass) []string {
 	return badLvgs
 }
 
-func findNonexistentThinPools(lvgList *v1alpha1.LvmVolumeGroupList, lsc *v1alpha1.LocalStorageClass) []string {
-	lvgs := make(map[string]v1alpha1.LvmVolumeGroup, len(lvgList.Items))
+func findNonexistentThinPools(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageClass) []string {
+	lvgs := make(map[string]snc.LvmVolumeGroup, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		lvgs[lvg.Name] = lvg
 	}
@@ -604,7 +605,7 @@ func findNonexistentThinPools(lvgList *v1alpha1.LvmVolumeGroupList, lsc *v1alpha
 	return badLvgs
 }
 
-func findNonexistentLVGs(lvgList *v1alpha1.LvmVolumeGroupList, lsc *v1alpha1.LocalStorageClass) []string {
+func findNonexistentLVGs(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageClass) []string {
 	lvgs := make(map[string]struct{}, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		lvgs[lvg.Name] = struct{}{}
@@ -620,7 +621,7 @@ func findNonexistentLVGs(lvgList *v1alpha1.LvmVolumeGroupList, lsc *v1alpha1.Loc
 	return nonexistent
 }
 
-func findLVMVolumeGroupsOnTheSameNode(lvgList *v1alpha1.LvmVolumeGroupList, lsc *v1alpha1.LocalStorageClass) []string {
+func findLVMVolumeGroupsOnTheSameNode(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageClass) []string {
 	nodesWithLVGs := make(map[string][]string, len(lsc.Spec.LVM.LVMVolumeGroups))
 	usedLVGs := make(map[string]struct{}, len(lsc.Spec.LVM.LVMVolumeGroups))
 	for _, lvg := range lsc.Spec.LVM.LVMVolumeGroups {
@@ -710,7 +711,7 @@ func removeFinalizerIfExists(ctx context.Context, cl client.Client, obj metav1.O
 	return removed, nil
 }
 
-func updateStorageClass(lsc *v1alpha1.LocalStorageClass, oldSC *v1.StorageClass) (*v1.StorageClass, error) {
+func updateStorageClass(lsc *slv.LocalStorageClass, oldSC *v1.StorageClass) (*v1.StorageClass, error) {
 	newSC, err := configureStorageClass(lsc)
 	if err != nil {
 		return nil, err

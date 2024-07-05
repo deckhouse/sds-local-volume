@@ -21,12 +21,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/strings/slices"
 	"net/http"
-	"sds-local-volume-scheduler-extender/api/v1alpha1"
 	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/consts"
 	"sds-local-volume-scheduler-extender/pkg/logger"
@@ -477,7 +477,7 @@ func filterNodes(
 	return result, nil
 }
 
-func getLVGThinFreeSpaces(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string]map[string]int64 {
+func getLVGThinFreeSpaces(lvgs map[string]*snc.LvmVolumeGroup) map[string]map[string]int64 {
 	result := make(map[string]map[string]int64, len(lvgs))
 
 	for _, lvg := range lvgs {
@@ -493,7 +493,7 @@ func getLVGThinFreeSpaces(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string]m
 	return result
 }
 
-func getLVGThickFreeSpaces(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string]int64 {
+func getLVGThickFreeSpaces(lvgs map[string]*snc.LvmVolumeGroup) map[string]int64 {
 	result := make(map[string]int64, len(lvgs))
 
 	for _, lvg := range lvgs {
@@ -503,7 +503,7 @@ func getLVGThickFreeSpaces(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string]
 	return result
 }
 
-func findMatchedThinPool(thinPools []v1alpha1.LvmVolumeGroupThinPoolStatus, name string) *v1alpha1.LvmVolumeGroupThinPoolStatus {
+func findMatchedThinPool(thinPools []snc.LvmVolumeGroupThinPoolStatus, name string) *snc.LvmVolumeGroupThinPoolStatus {
 	for _, tp := range thinPools {
 		if tp.Name == name {
 			return &tp
@@ -513,7 +513,7 @@ func findMatchedThinPool(thinPools []v1alpha1.LvmVolumeGroupThinPoolStatus, name
 	return nil
 }
 
-func findMatchedLVG(nodeLVGs []*v1alpha1.LvmVolumeGroup, scLVGs LVMVolumeGroups) *LVMVolumeGroup {
+func findMatchedLVG(nodeLVGs []*snc.LvmVolumeGroup, scLVGs LVMVolumeGroups) *LVMVolumeGroup {
 	nodeLVGNames := make(map[string]struct{}, len(nodeLVGs))
 	for _, lvg := range nodeLVGs {
 		nodeLVGNames[lvg.Name] = struct{}{}
@@ -528,8 +528,8 @@ func findMatchedLVG(nodeLVGs []*v1alpha1.LvmVolumeGroup, scLVGs LVMVolumeGroups)
 	return nil
 }
 
-func getCommonNodesByStorageClasses(scs map[string]*v1.StorageClass, nodesWithLVGs map[string][]*v1alpha1.LvmVolumeGroup) (map[string][]*v1alpha1.LvmVolumeGroup, error) {
-	result := make(map[string][]*v1alpha1.LvmVolumeGroup, len(nodesWithLVGs))
+func getCommonNodesByStorageClasses(scs map[string]*v1.StorageClass, nodesWithLVGs map[string][]*snc.LvmVolumeGroup) (map[string][]*snc.LvmVolumeGroup, error) {
+	result := make(map[string][]*snc.LvmVolumeGroup, len(nodesWithLVGs))
 
 	for nodeName, lvgs := range nodesWithLVGs {
 		lvgNames := make(map[string]struct{}, len(lvgs))
@@ -566,8 +566,8 @@ func getCommonNodesByStorageClasses(scs map[string]*v1.StorageClass, nodesWithLV
 	return result, nil
 }
 
-func RemoveUnusedLVGs(lvgs map[string]*v1alpha1.LvmVolumeGroup, scsLVGs map[string]LVMVolumeGroups) map[string]*v1alpha1.LvmVolumeGroup {
-	result := make(map[string]*v1alpha1.LvmVolumeGroup, len(lvgs))
+func RemoveUnusedLVGs(lvgs map[string]*snc.LvmVolumeGroup, scsLVGs map[string]LVMVolumeGroups) map[string]*snc.LvmVolumeGroup {
+	result := make(map[string]*snc.LvmVolumeGroup, len(lvgs))
 	usedLvgs := make(map[string]struct{}, len(lvgs))
 
 	for _, scLvgs := range scsLVGs {
@@ -619,8 +619,8 @@ func ExtractLVGsFromSC(sc *v1.StorageClass) (LVMVolumeGroups, error) {
 	return lvmVolumeGroups, nil
 }
 
-func SortLVGsByNodeName(lvgs map[string]*v1alpha1.LvmVolumeGroup) map[string][]*v1alpha1.LvmVolumeGroup {
-	sorted := make(map[string][]*v1alpha1.LvmVolumeGroup, len(lvgs))
+func SortLVGsByNodeName(lvgs map[string]*snc.LvmVolumeGroup) map[string][]*snc.LvmVolumeGroup {
+	sorted := make(map[string][]*snc.LvmVolumeGroup, len(lvgs))
 	for _, lvg := range lvgs {
 		for _, node := range lvg.Status.Nodes {
 			sorted[node.Name] = append(sorted[node.Name], lvg)
