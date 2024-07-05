@@ -143,7 +143,6 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 				return attemptCounter, nil
 			}
 		}
-
 	}
 }
 
@@ -377,9 +376,12 @@ func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG v1alpha1.LvmVolum
 		}
 		log.Info(fmt.Sprintf("[GetLLVSpec] Thin pool name: %s", lvmLogicalVolumeSpec.Thin.PoolName))
 	case internal.LVMTypeThick:
-		lvmLogicalVolumeSpec.Thick = &v1alpha1.LVMLogicalVolumeThickSpec{
-			Contiguous: contiguous,
+		if contiguous {
+			lvmLogicalVolumeSpec.Thick = &v1alpha1.LVMLogicalVolumeThickSpec{
+				Contiguous: &contiguous,
+			}
 		}
+
 		log.Info(fmt.Sprintf("[GetLLVSpec] Thick contiguous: %t", contiguous))
 	}
 
