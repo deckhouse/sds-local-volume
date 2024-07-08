@@ -211,7 +211,7 @@ kubectl get lsc local-storage-class -w
 kubectl get sc local-storage-class
 ```
 
-- Если `StorageClass` с именем `local-storage-class` появился, значит настройка модуля `sds-local-volume` завершена. Теперь пользователи могут создавать PV, указывая `StorageClass` с именем `local-storage-class`. При указанных выше настройках будет создаваться том с 3-мя репликами на разных узлах.
+- Если `StorageClass` с именем `local-storage-class` появился, значит настройка модуля `sds-local-volume` завершена. Теперь пользователи могут создавать PV, указывая `StorageClass` с именем `local-storage-class`.
 
 ## Системные требования и рекомендации
 
