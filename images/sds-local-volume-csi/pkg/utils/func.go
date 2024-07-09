@@ -365,7 +365,7 @@ func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG snc.LvmVolumeGrou
 	lvmLogicalVolumeSpec := snc.LVMLogicalVolumeSpec{
 		ActualLVNameOnTheNode: lvName,
 		Type:                  lvmType,
-		Size:                  llvSize,
+		Size:                  llvSize.String(),
 		LvmVolumeGroupName:    selectedLVG.Name,
 	}
 
