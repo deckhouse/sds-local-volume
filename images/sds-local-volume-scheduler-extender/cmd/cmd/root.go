@@ -61,10 +61,11 @@ const (
 )
 
 type Config struct {
-	ListenAddr     string  `json:"listen"`
-	DefaultDivisor float64 `json:"default-divisor"`
-	LogLevel       string  `json:"log-level"`
-	CacheSize      int     `json:"cache-size"`
+	ListenAddr             string  `json:"listen"`
+	DefaultDivisor         float64 `json:"default-divisor"`
+	LogLevel               string  `json:"log-level"`
+	CacheSize              int     `json:"cache-size"`
+	HealthProbeBindAddress string  `json:"health-probe-bind-address"`
 }
 
 var config = &Config{
@@ -130,8 +131,9 @@ func subMain(parentCtx context.Context) error {
 	log.Info("[subMain] successfully read scheme CR")
 
 	managerOpts := manager.Options{
-		Scheme: scheme,
-		Logger: log.GetLogger(),
+		Scheme:                 scheme,
+		Logger:                 log.GetLogger(),
+		HealthProbeBindAddress: config.HealthProbeBindAddress,
 	}
 
 	mgr, err := manager.New(kConfig, managerOpts)

@@ -97,6 +97,7 @@ func main() {
 		LeaderElectionNamespace: cfgParams.ControllerNamespace,
 		LeaderElectionID:        config.ControllerName,
 		Logger:                  log.GetLogger(),
+		HealthProbeBindAddress:  cfgParams.HealthProbeBindAddress,
 	}
 
 	mgr, err := manager.New(kConfig, managerOpts)

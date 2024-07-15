@@ -21,12 +21,14 @@ import (
 )
 
 const (
-	LogLevel               = "LOG_LEVEL"
-	RequeueInterval        = "REQUEUE_INTERVAL"
-	ConfigSecretName       = "d8-sds-local-volume-controller-config"
-	ControllerNamespaceEnv = "CONTROLLER_NAMESPACE"
-	HardcodedControllerNS  = "d8-sds-local-volume"
-	ControllerName         = "sds-local-volume-controller"
+	LogLevel                             = "LOG_LEVEL"
+	RequeueInterval                      = "REQUEUE_INTERVAL"
+	ConfigSecretName                     = "d8-sds-local-volume-controller-config"
+	ControllerNamespaceEnv               = "CONTROLLER_NAMESPACE"
+	HardcodedControllerNS                = "d8-sds-local-volume"
+	ControllerName                       = "sds-local-volume-controller"
+	DefaultHealthProbeBindAddressEnvName = "HEALTH_PROBE_BIND_ADDRESS"
+	DefaultHealthProbeBindAddress        = ":8081"
 )
 
 type Options struct {
@@ -35,6 +37,7 @@ type Options struct {
 	RequeueSecretInterval       time.Duration
 	ConfigSecretName            string
 	ControllerNamespace         string
+	HealthProbeBindAddress      string
 }
 
 func NewConfig() *Options {
@@ -45,6 +48,11 @@ func NewConfig() *Options {
 		opts.Loglevel = logger.DebugLevel
 	} else {
 		opts.Loglevel = logger.Verbosity(loglevel)
+	}
+
+	opts.HealthProbeBindAddress = os.Getenv(DefaultHealthProbeBindAddressEnvName)
+	if opts.HealthProbeBindAddress == "" {
+		opts.HealthProbeBindAddress = DefaultHealthProbeBindAddress
 	}
 
 	opts.ControllerNamespace = os.Getenv(ControllerNamespaceEnv)

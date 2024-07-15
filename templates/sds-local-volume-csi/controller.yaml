@@ -253,11 +253,21 @@ spec:
           failureThreshold: 3
           httpGet:
             path: /healthz
-            port: 9808
+            port: 8081
             scheme: HTTP
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 1
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: 8081
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+          initialDelaySeconds: 10
         name: sds-local-volume-csi-plugin
         ports:
           - containerPort: 9808
@@ -543,11 +553,21 @@ spec:
           failureThreshold: 3
           httpGet:
             path: /healthz
-            port: 9808
+            port: 8081
             scheme: HTTP
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 1
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: 8081
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+          initialDelaySeconds: 10
         name: sds-local-volume-csi-plugin
         ports:
           - containerPort: 9808

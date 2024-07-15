@@ -19,14 +19,17 @@ import (
 )
 
 const (
-	NodeName = "KUBE_NODE_NAME"
-	LogLevel = "LOG_LEVEL"
+	NodeName                             = "KUBE_NODE_NAME"
+	LogLevel                             = "LOG_LEVEL"
+	DefaultHealthProbeBindAddressEnvName = "HEALTH_PROBE_BIND_ADDRESS"
+	DefaultHealthProbeBindAddress        = ":8081"
 )
 
 type Options struct {
-	NodeName string
-	Version  string
-	Loglevel logger.Verbosity
+	NodeName               string
+	Version                string
+	Loglevel               logger.Verbosity
+	HealthProbeBindAddress string
 }
 
 func NewConfig() *Options {
@@ -37,6 +40,11 @@ func NewConfig() *Options {
 		opts.Loglevel = logger.DebugLevel
 	} else {
 		opts.Loglevel = logger.Verbosity(loglevel)
+	}
+
+	opts.HealthProbeBindAddress = os.Getenv(DefaultHealthProbeBindAddressEnvName)
+	if opts.HealthProbeBindAddress == "" {
+		opts.HealthProbeBindAddress = DefaultHealthProbeBindAddress
 	}
 
 	opts.Version = "dev"
