@@ -22,6 +22,7 @@ import (
 	"fmt"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
+	"net/http"
 	"os"
 	"os/signal"
 	"sds-local-volume-csi/config"
@@ -51,6 +52,11 @@ var (
 		sv1.AddToScheme,
 	}
 )
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, "OK")
+}
 
 func main() {
 
@@ -95,6 +101,15 @@ func main() {
 		Scheme:         scheme,
 		WarningHandler: client.WarningHandlerOptions{},
 	})
+
+	http.HandleFunc("/healthz", healthHandler)
+	http.HandleFunc("/readyz", healthHandler)
+	go func() {
+		err = http.ListenAndServe(cfgParams.HealthProbeBindAddress, nil)
+		if err != nil {
+			log.Error(err, "[main] create probes")
+		}
+	}()
 
 	drv, err := driver.NewDriver(*endpoint, *driverName, *address, &cfgParams.NodeName, log, cl)
 	if err != nil {

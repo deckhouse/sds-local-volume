@@ -81,13 +81,7 @@ spec:
           {{- include "helm_lib_module_container_security_context_read_only_root_filesystem_capabilities_drop_all" . | nindent 10 }}
           command:
           - kube-scheduler
-          {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
           - --config=/etc/kubernetes/scheduler-config.yaml
-          {{- else }}
-          - --scheduler-name=sds-local-volume
-          - --policy-configmap=sds-local-volume-scheduler
-          - --policy-configmap-namespace=d8-{{ .Chart.Name }}
-          {{- end }}
           - --leader-elect=true
           - --leader-elect-resource-name=sds-local-volume-scheduler
           - --leader-elect-resource-namespace=$(NAMESPACE)
@@ -99,31 +93,25 @@ spec:
           {{- /* Here we use kube-scheduler image from control-plane-manager module */}}
           image: {{ include "helm_lib_module_image" (list (dict "Chart" (dict "Name" "control-plane-manager") "Values" .Values) (list "kubeScheduler" $kubeVersion.Major $kubeVersion.Minor | join "")) }}
           imagePullPolicy: IfNotPresent
-          startupProbe:
-            failureThreshold: 24
-            httpGet:
-              path: /healthz
-              port: 10259
-              scheme: HTTPS
           livenessProbe:
             failureThreshold: 8
             httpGet:
               path: /healthz
-              port: 10259
-              scheme: HTTPS
+              port: 8081
+              scheme: HTTP
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 15
           readinessProbe:
             httpGet:
-              path: /healthz
-              port: 10259
-              scheme: HTTPS
-          {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
+              path: /readyz
+              port: 8081
+              scheme: HTTP
+            periodSeconds: 1
+            failureThreshold: 3
           volumeMounts:
           - mountPath: /etc/kubernetes
             name: scheduler-config
-          {{- end }}
           resources:
             requests:
               {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 14 }}
@@ -146,11 +134,9 @@ spec:
               {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
               {{- include "sds_local_volume_scheduler_extender_resources" . | nindent 14 }}
               {{- end }}
-      {{- if semverCompare ">= 1.22" .Values.global.discovery.kubernetesVersion }}
       volumes:
       - configMap:
           defaultMode: 420
           name: sds-local-volume-scheduler
         name: scheduler-config
-      {{- end }}
       serviceAccountName: sds-local-volume-scheduler

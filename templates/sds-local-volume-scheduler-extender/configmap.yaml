@@ -8,6 +8,7 @@ metadata:
 data:
   scheduler-extender-config.yaml: |-
     listen: "localhost:8099"
+    health-probe-bind-address: ":8081"
     default-divisor: 1
 {{- if eq .Values.sdsLocalVolume.logLevel "ERROR" }}
     log-level: "0"
@@ -19,7 +20,7 @@ data:
     log-level: "3"
 {{- else if eq .Values.sdsLocalVolume.logLevel "TRACE" }}
     log-level: "4"
-{{- end }}
+    {{- end }}
   scheduler-config.yaml: |-
     {{- if semverCompare ">= 1.26" .Values.global.discovery.kubernetesVersion }}
     apiVersion: kubescheduler.config.k8s.io/v1

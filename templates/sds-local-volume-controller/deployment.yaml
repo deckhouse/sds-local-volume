@@ -82,6 +82,21 @@ spec:
         - name: sds-local-volume-controller
           image: {{ include "helm_lib_module_image" (list . "sdsLocalVolumeController") }}
           imagePullPolicy: IfNotPresent
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+              scheme: HTTP
+            periodSeconds: 1
+            failureThreshold: 3
           resources:
             requests:
               {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 14 }}
