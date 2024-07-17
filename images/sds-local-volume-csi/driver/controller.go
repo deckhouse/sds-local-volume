@@ -320,7 +320,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 
 	d.log.Info("start resize LVMLogicalVolume")
 	d.log.Info(fmt.Sprintf("requested size: %s, actual size: %s", requestCapacity.String(), llv.Status.ActualSize.String()))
-	llv.Spec.Size = *requestCapacity
+	llv.Spec.Size = requestCapacity.String()
 	err = utils.UpdateLVMLogicalVolume(ctx, d.cl, llv)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "error updating LVMLogicalVolume: %v", err)
