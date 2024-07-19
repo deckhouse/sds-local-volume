@@ -7,7 +7,7 @@ from: {{ $.BASE_GOLANG_22_ALPINE }}
 final: false
 
 git:
-  - add: /images/webhooks/src
+  - add: /images/sds-local-volume-controller/src
     to: /src
     stageDependencies:
       setup:
@@ -17,19 +17,20 @@ mount:
     to: /go/pkg
 shell:
   setup:
-    - cd /src
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o webhooks
-    - mv webhooks /webhooks
-    - chmod +x /webhooks
+    - cd /src/cmd
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o sds-local-volume-controller
+    - mv sds-local-volume-controller /sds-local-volume-controller
+    - chmod +x /sds-local-volume-controller
+
 ---
 image: {{ $.ImageName }}
 from: {{ $.BASE_SCRATCH }}
 
 import:
   - image: {{ $.ImageName }}-golang-artifact
-    add: /webhooks
-    to: /webhooks
+    add: /sds-local-volume-controller
+    to: /sds-local-volume-controller
     before: setup
 
 docker:
-  ENTRYPOINT: ["/webhooks"]
+  ENTRYPOINT: ["/sds-local-volume-controller"]
