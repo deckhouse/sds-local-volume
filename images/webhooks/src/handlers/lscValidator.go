@@ -18,7 +18,11 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
+	"k8s.io/klog/v2"
+	"slices"
 
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
@@ -32,9 +36,56 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 		return &kwhvalidating.ValidatorResult{}, nil
 	}
 
+	cl, err := NewKubeClient("")
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	listDevice := &snc.LvmVolumeGroupList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       snc.BlockDeviceKind,
+			APIVersion: snc.TypeMediaAPIVersion,
+		},
+		ListMeta: metav1.ListMeta{},
+		Items:    []snc.LvmVolumeGroup{},
+	}
+
+	err = cl.List(ctx, listDevice)
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	errMsg := ""
+	var lvmVolumeGroupUnique []string
+
 	thickExists := false
 	thinExists := false
 	for _, lvmGroup := range lsc.Spec.LVM.LVMVolumeGroups {
+		lvgExists := false
+
+		if slices.Contains(lvmVolumeGroupUnique, lvmGroup.Name) {
+			errMsg = fmt.Sprintf("There must be unique LVMVolumeGroup names (%s duplicates)", lvmGroup.Name)
+			klog.Info(errMsg)
+			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
+				nil
+		}
+
+		lvmVolumeGroupUnique = append(lvmVolumeGroupUnique, lvmGroup.Name)
+
+		for _, lvmVG := range listDevice.Items {
+			if lvmVG.Name == lvmGroup.Name {
+				lvgExists = true
+				break
+			}
+		}
+
+		if !lvgExists {
+			errMsg = fmt.Sprintf("LVMVolumeGroup %s not found; ", lvmGroup.Name)
+			klog.Info(errMsg)
+			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
+				nil
+		}
+
 		if lvmGroup.Thin == nil {
 			thickExists = true
 		} else {
@@ -43,17 +94,23 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 	}
 
 	if thinExists && lsc.Spec.LVM.Type == "Thick" {
-		return &kwhvalidating.ValidatorResult{Valid: false, Message: "there must be only thick pools with Thick LVM type"},
+		errMsg = "There must be only thick pools with Thick LVM type"
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
 			nil
 	}
 
 	if thickExists && lsc.Spec.LVM.Type == "Thin" {
-		return &kwhvalidating.ValidatorResult{Valid: false, Message: "there must be only thin pools with Thin LVM type"},
+		errMsg = "There must be only thin pools with Thin LVM type"
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
 			nil
 	}
 
 	if thickExists == true && thinExists == true {
-		return &kwhvalidating.ValidatorResult{Valid: false, Message: "there must be only thin or thick pools simultaneously"},
+		errMsg = "There must be only thin or thick pools simultaneously"
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
 			nil
 	} else {
 		return &kwhvalidating.ValidatorResult{Valid: true},
