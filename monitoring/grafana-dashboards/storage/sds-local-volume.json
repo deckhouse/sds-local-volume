@@ -33,11 +33,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        <<<<<<< HEAD
         "uid": "${ds_prometheus}"
-        =======
-        "uid": "P0D6E4079E36703EB"
-        >>>>>>> 5b1d60853d248bb5dc8e34590aaff5715ba3f97b
       },
       "fieldConfig": {
         "defaults": {
@@ -116,11 +112,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            <<<<<<< HEAD
             "uid": "${ds_prometheus}"
-            =======
-            "uid": "P0D6E4079E36703EB"
-            >>>>>>> 5b1d60853d248bb5dc8e34590aaff5715ba3f97b
           },
           "editorMode": "code",
           "expr": "rate(go_memstats_sys_bytes{job=~\"sds.*\"}[$__rate_interval])",
@@ -131,11 +123,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            <<<<<<< HEAD
             "uid": "${ds_prometheus}"
-            =======
-            "uid": "P0D6E4079E36703EB"
-            >>>>>>> 5b1d60853d248bb5dc8e34590aaff5715ba3f97b
           },
           "editorMode": "code",
           "expr": "rate(go_memstats_alloc_bytes_total{job=~\"sds.*\"}[$__rate_interval])",
@@ -370,11 +358,7 @@
       "dashes": false,
       "datasource": {
         "type": "prometheus",
-        <<<<<<< HEAD
         "uid": "${ds_prometheus}"
-        =======
-        "uid": "P0D6E4079E36703EB"
-        >>>>>>> 5b1d60853d248bb5dc8e34590aaff5715ba3f97b
       },
       "editable": true,
       "error": false,
