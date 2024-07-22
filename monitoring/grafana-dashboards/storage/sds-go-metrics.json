@@ -83,7 +83,7 @@
       ],
       "spaceLength": 10,
       "stack": false,
-      "steppedLine": false,
+      "steppedLine": true,
       "targets": [
         {
           "datasource": {
@@ -93,7 +93,7 @@
           "editorMode": "code",
           "expr": "sum(rate(process_resident_memory_bytes{job=~\"sds.*\"}[5m])) by (app, node)",
           "format": "time_series",
-          "intervalFactor": 2,
+          "intervalFactor": 1,
           "legendFormat": "{{app}} ({{node}}) - resident",
           "metric": "process_resident_memory_bytes",
           "range": true,
@@ -108,7 +108,7 @@
           "editorMode": "code",
           "expr": "sum(rate(process_virtual_memory_bytes{job=~\"sds.*\"}[5m])) by (app, node)",
           "format": "time_series",
-          "intervalFactor": 2,
+          "intervalFactor": 1,
           "legendFormat": "{{app}} ({{node}}) - virtual",
           "metric": "process_virtual_memory_bytes",
           "range": true,
@@ -200,7 +200,7 @@
       ],
       "spaceLength": 10,
       "stack": false,
-      "steppedLine": false,
+      "steppedLine": true,
       "targets": [
         {
           "datasource": {
@@ -304,7 +304,7 @@
       ],
       "spaceLength": 10,
       "stack": false,
-      "steppedLine": false,
+      "steppedLine": true,
       "targets": [
         {
           "datasource": {
@@ -314,7 +314,7 @@
           "editorMode": "code",
           "expr": "rate(go_memstats_alloc_bytes_total{job=~\"sds.*\"}[5m])",
           "format": "time_series",
-          "intervalFactor": 2,
+          "intervalFactor": 1,
           "legendFormat": "{{app}} ({{node}}) - total alloc rate",
           "metric": "go_memstats_alloc_bytes_total",
           "range": true,
@@ -330,7 +330,7 @@
           "expr": "rate(go_memstats_heap_alloc_bytes{job=~\"sds.*\"}[5m])",
           "format": "time_series",
           "hide": false,
-          "intervalFactor": 2,
+          "intervalFactor": 1,
           "legendFormat": "{{app}} ({{node}}) - heap alloc rate",
           "metric": "go_memstats_stack_inuse_bytes",
           "range": true,
@@ -417,7 +417,7 @@
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
-      "steppedLine": false,
+      "steppedLine": true,
       "targets": [
         {
           "datasource": {
@@ -427,7 +427,7 @@
           "editorMode": "code",
           "expr": "rate(go_gc_duration_seconds_count{job=~\"sds.*\"}[5m])",
           "format": "time_series",
-          "intervalFactor": 2,
+          "intervalFactor": 1,
           "legendFormat": "{{app}}: {{node}}",
           "metric": "go_gc_duration_seconds",
           "range": true,
@@ -514,7 +514,7 @@
       "seriesOverrides": [],
       "spaceLength": 10,
       "stack": false,
-      "steppedLine": false,
+      "steppedLine": true,
       "targets": [
         {
           "datasource": {
@@ -524,7 +524,7 @@
           "editorMode": "code",
           "expr": "go_goroutines{job=~\"sds.*\"}",
           "format": "time_series",
-          "intervalFactor": 2,
+          "intervalFactor": 1,
           "legendFormat": "{{app}} ({{node}})",
           "metric": "go_goroutines",
           "range": true,
