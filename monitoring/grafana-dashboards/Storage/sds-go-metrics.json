@@ -720,7 +720,7 @@
       "30d"
     ]
   },
-  "timezone": "",
+  "timezone": "UTC",
   "title": "Go Processes",
   "uid": "ypF2Fgvmz",
   "version": 1,
