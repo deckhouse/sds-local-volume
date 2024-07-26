@@ -5,7 +5,7 @@ moduleStatus: preview
 ---
 
 Модуль управляет локальным блочным хранилищем на базе `LVM`. Модуль позволяет создавать `StorageClass` в `Kubernetes` через создание [пользовательских ресурсов Kubernetes](./cr.html) `LocalStorageClass` (пример создания ниже).
-Для создания `Storage Class` потребуются настроенные на узлах кластера `LVMVolumeGroup`. Настройка `LVM` осуществляется модулем [sds-node-configurator](../../sds-node-configurator/).
+Для создания `Storage Class` потребуются настроенные на узлах кластера `LvmVolumeGroup`. Настройка `LVM` осуществляется модулем [sds-node-configurator](../../sds-node-configurator/).
 > **Внимание!** Перед включением модуля `sds-local-volume` необходимо включить модуль `sds-node-configurator`.
 >
 После включения модуля `sds-local-volume` необходимо создать StorageClass'ы.
@@ -80,9 +80,9 @@ kubectl -n d8-sds-node-configurator get pod -o wide -w
 > Расположение данных pod-ов определяется специальными метками (nodeSelector), которые указываются в поле `spec.settings.dataNodes.nodeSelector` в настройках модуля. Для получения более подробной информации о настройке, пожалуйста, перейдите по [ссылке](./faq.html#я-не-хочу-чтобы-модуль-использовался-на-всех-узлах-кластера-как-мне-выбрать-желаемые-узлы)
 
 ### Настройка хранилища на узлах
-Необходимо на этих узлах создать группы томов `LVM` с помощью пользовательских ресурсов `LVMVolumeGroup`. В быстром старте будем создавать обычное `Thick` хранилище.
+Необходимо на этих узлах создать группы томов `LVM` с помощью пользовательских ресурсов `LvmVolumeGroup`. В быстром старте будем создавать обычное `Thick` хранилище.
 
-> Пожалуйста, перед созданием `LVMVolumeGroup` убедитесь, что на данном узле запущен pod `sds-local-volume-csi-node`. Это можно сделать командой:
+> Пожалуйста, перед созданием `LvmVolumeGroup` убедитесь, что на данном узле запущен pod `sds-local-volume-csi-node`. Это можно сделать командой:
 > 
 > ```shell
 > kubectl -n d8-sds-local-volume get pod -owide
@@ -104,14 +104,14 @@ kubectl -n d8-sds-node-configurator get pod -o wide -w
   dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1   worker-2   false        894006140416   /dev/nvme0n1p6
   ```
 
-- Создать ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-0`:
+- Создать ресурс [LvmVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-0`:
 
 ```yaml
 kubectl apply -f - <<EOF
 apiVersion: storage.deckhouse.io/v1alpha1
-kind: LVMVolumeGroup
+kind: LvmVolumeGroup
 metadata:
-  name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LVMVolumeGroup resource name will be used to create LocalStorageClass in the future
+  name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LvmVolumeGroup resource name will be used to create LocalStorageClass in the future
 spec:
   type: Local
   blockDeviceNames:  # specify the names of the BlockDevice resources that are located on the target node and whose CONSUMABLE is set to true. Note that the node name is not specified anywhere since it is derived from BlockDevice resources.
@@ -121,7 +121,7 @@ spec:
 EOF
 ```
 
-- Дождаться, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Operational`:
+- Дождаться, когда созданный ресурс `LvmVolumeGroup` перейдет в состояние `Operational`:
 
 ```shell
 kubectl get lvg vg-1-on-worker-0 -w
@@ -129,12 +129,12 @@ kubectl get lvg vg-1-on-worker-0 -w
 
 - Если ресурс перешел в состояние `Operational`, то это значит, что на узле `worker-0` из блочных устройств `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
 
-- Далее создать ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-1`:
+- Далее создать ресурс [LvmVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-1`:
 
 ```yaml
 kubectl apply -f - <<EOF
 apiVersion: storage.deckhouse.io/v1alpha1
-kind: LVMVolumeGroup
+kind: LvmVolumeGroup
 metadata:
   name: "vg-1-on-worker-1"
 spec:
@@ -146,7 +146,7 @@ spec:
 EOF
 ```
 
-- Дождаться, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Operational`:
+- Дождаться, когда созданный ресурс `LvmVolumeGroup` перейдет в состояние `Operational`:
 
 ```shell
 kubectl get lvg vg-1-on-worker-1 -w
@@ -154,12 +154,12 @@ kubectl get lvg vg-1-on-worker-1 -w
 
 - Если ресурс перешел в состояние `Operational`, то это значит, что на узле `worker-1` из блочного устройства `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
 
-- Далее создать ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-2`:
+- Далее создать ресурс [LvmVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-2`:
 
 ```yaml
 kubectl apply -f - <<EOF
 apiVersion: storage.deckhouse.io/v1alpha1
-kind: LVMVolumeGroup
+kind: LvmVolumeGroup
 metadata:
   name: "vg-1-on-worker-2"
 spec:
@@ -171,7 +171,7 @@ spec:
 EOF
 ```
 
-- Дождаться, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Operational`:
+- Дождаться, когда созданный ресурс `LvmVolumeGroup` перейдет в состояние `Operational`:
 
 ```shell
 kubectl get lvg vg-1-on-worker-2 -w
