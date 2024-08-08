@@ -26,15 +26,15 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sds-local-volume-csi/internal"
-	"sds-local-volume-csi/pkg/logger"
-	"sds-local-volume-csi/pkg/utils"
 	"sync"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"sds-local-volume-csi/internal"
+	"sds-local-volume-csi/pkg/logger"
+	"sds-local-volume-csi/pkg/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -76,7 +76,6 @@ type Driver struct {
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing  disks
 func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Logger, cl client.Client) (*Driver, error) {
-
 	if driverName == "" {
 		driverName = DefaultDriverName
 	}
@@ -144,7 +143,7 @@ func (d *Driver) Run(ctx context.Context) error {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
