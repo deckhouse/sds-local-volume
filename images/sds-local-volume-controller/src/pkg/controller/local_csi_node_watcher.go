@@ -19,6 +19,9 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
@@ -32,8 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/yaml"
-	"strings"
-	"time"
 )
 
 const (
@@ -128,7 +129,7 @@ func reconcileLocalCSINodes(ctx context.Context, cl client.Client, log logger.Lo
 	log.Debug("[reconcileLocalCSINodes] tries to get all kubernetes nodes")
 	nodes, err := getKubeNodes(ctx, cl)
 	if err != nil {
-		log.Error(err, fmt.Sprintf("[reconcileLocalCSINodes] unable to get nodes"))
+		log.Error(err, "[reconcileLocalCSINodes] unable to get nodes")
 		return err
 	}
 	for _, n := range nodes.Items {

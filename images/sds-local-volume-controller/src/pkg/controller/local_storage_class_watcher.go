@@ -20,24 +20,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"reflect"
-	"sds-local-volume-controller/pkg/config"
-	"sds-local-volume-controller/pkg/logger"
 	"time"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	v1 "k8s.io/api/storage/v1"
 	errors2 "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
+	"sds-local-volume-controller/pkg/config"
+	"sds-local-volume-controller/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 const (
@@ -109,7 +108,7 @@ func RunLocalStorageClassWatcherController(
 
 			shouldRequeue, err := RunEventReconcile(ctx, cl, log, scList, lsc)
 			if err != nil {
-				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] an error occured while reconciles the LocalStorageClass, name: %s", lsc.Name))
+				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] an error occurred while reconciles the LocalStorageClass, name: %s", lsc.Name))
 			}
 
 			if shouldRequeue {
@@ -129,12 +128,12 @@ func RunLocalStorageClassWatcherController(
 	}
 
 	err = c.Watch(source.Kind(mgr.GetCache(), &slv.LocalStorageClass{}), handler.Funcs{
-		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+		CreateFunc: func(_ context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[CreateFunc] get event for LocalStorageClass %q. Add to the queue", e.Object.GetName()))
 			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: e.Object.GetNamespace(), Name: e.Object.GetName()}}
 			q.Add(request)
 		},
-		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+		UpdateFunc: func(_ context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[UpdateFunc] get event for LocalStorageClass %q. Check if it should be reconciled", e.ObjectNew.GetName()))
 
 			oldLsc, ok := e.ObjectOld.(*slv.LocalStorageClass)

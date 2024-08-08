@@ -215,7 +215,7 @@ func (c *Cache) AddThickPVC(lvgName string, pvc *v1.PersistentVolumeClaim) error
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("the LVMVolumeGroup %s was not found in the cache", lvgName)
-		c.log.Error(err, fmt.Sprintf("[AddThickPVC] an error occured while trying to add PVC %s to the cache", pvcKey))
+		c.log.Error(err, fmt.Sprintf("[AddThickPVC] an error occurred while trying to add PVC %s to the cache", pvcKey))
 		return err
 	}
 
@@ -245,7 +245,7 @@ func (c *Cache) shouldAddPVC(pvc *v1.PersistentVolumeClaim, lvgCh *lvgCache, pvc
 		lvgsOnTheNode, found := c.nodeLVGs.Load(pvc.Annotations[SelectedNodeAnnotation])
 		if !found {
 			err := fmt.Errorf("no LVMVolumeGroups found for the node %s", pvc.Annotations[SelectedNodeAnnotation])
-			c.log.Error(err, fmt.Sprintf("[shouldAddPVC] an error occured while trying to add PVC %s to the cache", pvcKey))
+			c.log.Error(err, fmt.Sprintf("[shouldAddPVC] an error occurred while trying to add PVC %s to the cache", pvcKey))
 			return false, err
 		}
 
@@ -292,7 +292,7 @@ func (c *Cache) AddThinPVC(lvgName, thinPoolName string, pvc *v1.PersistentVolum
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("the LVMVolumeGroup %s was not found in the cache", lvgName)
-		c.log.Error(err, fmt.Sprintf("[AddThinPVC] an error occured while trying to add PVC %s to the cache", pvcKey))
+		c.log.Error(err, fmt.Sprintf("[AddThinPVC] an error occurred while trying to add PVC %s to the cache", pvcKey))
 		return err
 	}
 
@@ -462,7 +462,7 @@ func (c *Cache) GetAllPVCForLVG(lvgName string) ([]*v1.PersistentVolumeClaim, er
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("cache was not found for the LVMVolumeGroup %s", lvgName)
-		c.log.Error(err, fmt.Sprintf("[GetAllPVCForLVG] an error occured while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
+		c.log.Error(err, fmt.Sprintf("[GetAllPVCForLVG] an error occurred while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
 		return nil, err
 	}
 
@@ -504,7 +504,7 @@ func (c *Cache) GetAllThickPVCLVG(lvgName string) ([]*v1.PersistentVolumeClaim, 
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("cache was not found for the LVMVolumeGroup %s", lvgName)
-		c.log.Error(err, fmt.Sprintf("[GetAllPVCForLVG] an error occured while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
+		c.log.Error(err, fmt.Sprintf("[GetAllPVCForLVG] an error occurred while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
 		return nil, err
 	}
 
@@ -523,7 +523,7 @@ func (c *Cache) GetAllPVCFromLVGThinPool(lvgName, thinPoolName string) ([]*v1.Pe
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("cache was not found for the LVMVolumeGroup %s", lvgName)
-		c.log.Error(err, fmt.Sprintf("[GetAllPVCFromLVGThinPool] an error occured while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
+		c.log.Error(err, fmt.Sprintf("[GetAllPVCFromLVGThinPool] an error occurred while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
 		return nil, err
 	}
 
@@ -580,7 +580,7 @@ func (c *Cache) RemoveSpaceReservationForPVCWithSelectedNode(pvc *v1.PersistentV
 		lvgCh, found := c.lvgs.Load(lvgName)
 		if !found || lvgCh == nil {
 			err := fmt.Errorf("no cache found for the LVMVolumeGroup %s", lvgName)
-			c.log.Error(err, fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] an error occured while trying to remove space reservation for PVC %s", pvcKey))
+			c.log.Error(err, fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] an error occurred while trying to remove space reservation for PVC %s", pvcKey))
 			return err
 		}
 
