@@ -47,10 +47,6 @@ const (
 func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, lvmLogicalVolumeSpec snc.LVMLogicalVolumeSpec) (*snc.LVMLogicalVolume, error) {
 	var err error
 	llv := &snc.LVMLogicalVolume{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       snc.LVMLogicalVolumeKind,
-			APIVersion: snc.TypeMediaAPIVersion,
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            name,
 			OwnerReferences: []metav1.OwnerReference{},
@@ -198,10 +194,6 @@ func GetNodeWithMaxFreeSpace(lvgs []snc.LvmVolumeGroup, storageClassLVGParameter
 // TODO: delete the method below?
 func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.Logger, lvmVG map[string]string, nodeName, lvmType string) (lvgName, vgName string, err error) {
 	listLvgs := &snc.LvmVolumeGroupList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       snc.LVMVolumeGroupKind,
-			APIVersion: snc.TypeMediaAPIVersion,
-		},
 		ListMeta: metav1.ListMeta{},
 		Items:    []snc.LvmVolumeGroup{},
 	}
@@ -336,14 +328,7 @@ func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log
 
 func GetLVGList(ctx context.Context, kc client.Client) (*snc.LvmVolumeGroupList, error) {
 	var err error
-	listLvgs := &snc.LvmVolumeGroupList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       snc.LVMVolumeGroupKind,
-			APIVersion: snc.TypeMediaAPIVersion,
-		},
-		ListMeta: metav1.ListMeta{},
-		Items:    []snc.LvmVolumeGroup{},
-	}
+	listLvgs := &snc.LvmVolumeGroupList{}
 
 	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
 		err = kc.List(ctx, listLvgs)

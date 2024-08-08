@@ -23,9 +23,8 @@ import (
 )
 
 const (
-	LocalStorageClassKind = "LocalStorageClass"
-	APIGroup              = "storage.deckhouse.io"
-	APIVersion            = "v1alpha1"
+	APIGroup   = "storage.deckhouse.io"
+	APIVersion = "v1alpha1"
 )
 
 // SchemeGroupVersion is group version used to register these objects

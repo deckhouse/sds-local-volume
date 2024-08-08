@@ -19,15 +19,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"net/http"
 	"os"
-	"webhooks/handlers"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/sirupsen/logrus"
 	kwhlogrus "github.com/slok/kubewebhook/v2/pkg/log/logrus"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
+	"webhooks/handlers"
 )
 
 type config struct {
@@ -36,26 +36,32 @@ type config struct {
 }
 
 //goland:noinspection SpellCheckingInspection
-func httpHandlerHealthz(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "Ok.")
+func httpHandlerHealthz(w http.ResponseWriter, _ *http.Request) {
+	_, err := fmt.Fprint(w, "Ok.")
+	if err != nil {
+		w.WriteHeader(500)
+	}
 }
 
-func initFlags() config {
+func initFlags() (config, error) {
 	cfg := config{}
 
 	fl := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fl.StringVar(&cfg.certFile, "tls-cert-file", "", "TLS certificate file")
 	fl.StringVar(&cfg.keyFile, "tls-key-file", "", "TLS key file")
 
-	fl.Parse(os.Args[1:])
-	return cfg
+	err := fl.Parse(os.Args[1:])
+	if err != nil {
+		return cfg, err
+	}
+	return cfg, nil
 }
 
 const (
 	port                  = ":8443"
 	PodSchedulerMutatorID = "PodSchedulerMutation"
-	LSCValidatorId        = "LSCValidator"
-	SCValidatorId         = "SCValidator"
+	LSCValidatorID        = "LSCValidator"
+	SCValidatorID         = "SCValidator"
 )
 
 func main() {
@@ -63,7 +69,11 @@ func main() {
 	logrusLogEntry.Logger.SetLevel(logrus.DebugLevel)
 	logger := kwhlogrus.NewLogrus(logrusLogEntry)
 
-	cfg := initFlags()
+	cfg, err := initFlags()
+	if err != nil {
+		fmt.Printf("unable to parse config: err: %s", err.Error())
+		os.Exit(1)
+	}
 
 	podSchedulerMutatingWebHookHandler, err := handlers.GetMutatingWebhookHandler(handlers.PodSchedulerMutate, PodSchedulerMutatorID, &corev1.Pod{}, logger)
 	if err != nil {
@@ -71,13 +81,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	lscValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LSCValidate, LSCValidatorId, &slv.LocalStorageClass{}, logger)
+	lscValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LSCValidate, LSCValidatorID, &slv.LocalStorageClass{}, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating lscValidatingWebhookHandler: %s", err)
 		os.Exit(1)
 	}
 
-	scValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.SCValidate, SCValidatorId, &storagev1.StorageClass{}, logger)
+	scValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.SCValidate, SCValidatorID, &storagev1.StorageClass{}, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating scValidatingWebhookHandler: %s", err)
 		os.Exit(1)

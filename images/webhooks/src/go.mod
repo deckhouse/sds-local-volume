@@ -4,7 +4,7 @@ go 1.22.3
 
 require (
 	github.com/deckhouse/deckhouse v1.62.2
-	github.com/deckhouse/sds-local-volume/api v0.0.0-20240803013556-f24060c022de
+	github.com/deckhouse/sds-local-volume/api v0.0.0-20240704080736-a027a963cc2c
 	github.com/deckhouse/sds-node-configurator/api v0.0.0-20240805103635-969dc811217b
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slok/kubewebhook/v2 v2.6.0

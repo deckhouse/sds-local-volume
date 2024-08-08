@@ -20,17 +20,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"slices"
 
 	dh "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -145,13 +145,10 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 			nil
 	}
 
-	if thickExists == true && thinExists == true {
+	if thickExists && thinExists {
 		errMsg = "There must be only thin or thick pools simultaneously"
 		klog.Info(errMsg)
-		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
-			nil
-	} else {
-		return &kwhvalidating.ValidatorResult{Valid: true},
-			nil
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
 	}
+	return &kwhvalidating.ValidatorResult{Valid: true}, nil
 }
