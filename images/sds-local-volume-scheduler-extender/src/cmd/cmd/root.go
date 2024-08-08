@@ -20,28 +20,28 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"net/http"
 	"os"
 	"os/signal"
-	"sds-local-volume-scheduler-extender/pkg/cache"
-	"sds-local-volume-scheduler-extender/pkg/controller"
-	"sds-local-volume-scheduler-extender/pkg/kubutils"
-	"sds-local-volume-scheduler-extender/pkg/logger"
-	"sds-local-volume-scheduler-extender/pkg/scheduler"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sync"
 	"syscall"
 	"time"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	sv1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
+	"sds-local-volume-scheduler-extender/pkg/cache"
+	"sds-local-volume-scheduler-extender/pkg/controller"
+	"sds-local-volume-scheduler-extender/pkg/kubutils"
+	"sds-local-volume-scheduler-extender/pkg/logger"
+	"sds-local-volume-scheduler-extender/pkg/scheduler"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/yaml"
 )
 
@@ -88,7 +88,7 @@ It scores nodes with this formula:
     min(10, max(0, log2(capacity >> 30 / divisor)))
 The default divisor is 1.  It can be changed with a command-line option.
 `,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		cmd.SilenceUsage = true
 		return subMain(cmd.Context())
 	},
@@ -109,7 +109,7 @@ func subMain(parentCtx context.Context) error {
 	ctx := context.Background()
 	log, err := logger.NewLogger(logger.Verbosity(config.LogLevel))
 	if err != nil {
-		fmt.Println(fmt.Sprintf("[subMain] unable to initialize logger, err: %s", err.Error()))
+		fmt.Printf("[subMain] unable to initialize logger, err: %s\n", err.Error())
 	}
 	log.Info(fmt.Sprintf("[subMain] logger has been initialized, log level: %s", config.LogLevel))
 	ctrl.SetLogger(log.GetLogger())

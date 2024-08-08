@@ -3,12 +3,13 @@ package cache
 import (
 	"errors"
 	"fmt"
+	"sync"
+
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	slices2 "k8s.io/utils/strings/slices"
 	"sds-local-volume-scheduler-extender/pkg/consts"
 	"sds-local-volume-scheduler-extender/pkg/logger"
-	"sync"
 )
 
 const (
@@ -19,20 +20,20 @@ const (
 )
 
 type Cache struct {
-	lvgs     sync.Map //map[string]*lvgCache
-	pvcLVGs  sync.Map //map[string][]string
-	nodeLVGs sync.Map //map[string][]string
+	lvgs     sync.Map // map[string]*lvgCache
+	pvcLVGs  sync.Map // map[string][]string
+	nodeLVGs sync.Map // map[string][]string
 	log      logger.Logger
 }
 
 type lvgCache struct {
 	lvg       *snc.LvmVolumeGroup
-	thickPVCs sync.Map //map[string]*pvcCache
-	thinPools sync.Map //map[string]*thinPoolCache
+	thickPVCs sync.Map // map[string]*pvcCache
+	thinPools sync.Map // map[string]*thinPoolCache
 }
 
 type thinPoolCache struct {
-	pvcs sync.Map //map[string]*pvcCache
+	pvcs sync.Map // map[string]*pvcCache
 }
 
 type pvcCache struct {
@@ -126,7 +127,7 @@ func (c *Cache) GetAllLVG() map[string]*snc.LvmVolumeGroup {
 	lvgs := make(map[string]*snc.LvmVolumeGroup)
 	c.lvgs.Range(func(lvgName, lvgCh any) bool {
 		if lvgCh.(*lvgCache).lvg == nil {
-			c.log.Error(fmt.Errorf("LVMVolumeGroup %s is not initialized", lvgName), fmt.Sprintf("[GetAllLVG] an error occurs while iterating the LVMVolumeGroups"))
+			c.log.Error(fmt.Errorf("LVMVolumeGroup %s is not initialized", lvgName), "[GetAllLVG] an error occurs while iterating the LVMVolumeGroups")
 			return true
 		}
 
@@ -146,7 +147,7 @@ func (c *Cache) GetLVGThickReservedSpace(lvgName string) (int64, error) {
 	}
 
 	var space int64
-	lvg.(*lvgCache).thickPVCs.Range(func(pvcName, pvcCh any) bool {
+	lvg.(*lvgCache).thickPVCs.Range(func(_, pvcCh any) bool {
 		space += pvcCh.(*pvcCache).pvc.Spec.Resources.Requests.Storage().Value()
 		return true
 	})
@@ -169,7 +170,7 @@ func (c *Cache) GetLVGThinReservedSpace(lvgName string, thinPoolName string) (in
 	}
 
 	var space int64
-	thinPool.(*thinPoolCache).pvcs.Range(func(pvcName, pvcCh any) bool {
+	thinPool.(*thinPoolCache).pvcs.Range(func(_, pvcCh any) bool {
 		space += pvcCh.(*pvcCache).pvc.Spec.Resources.Requests.Storage().Value()
 		return true
 	})
@@ -181,9 +182,10 @@ func (c *Cache) GetLVGThinReservedSpace(lvgName string, thinPoolName string) (in
 func (c *Cache) DeleteLVG(lvgName string) {
 	c.lvgs.Delete(lvgName)
 
-	c.nodeLVGs.Range(func(nodeName, lvgNames any) bool {
+	c.nodeLVGs.Range(func(_, lvgNames any) bool {
 		for i, lvg := range lvgNames.([]string) {
 			if lvg == lvgName {
+				//nolint:gocritic
 				lvgNames = append(lvgNames.([]string)[:i], lvgNames.([]string)[i+1:]...)
 			}
 		}
@@ -191,9 +193,10 @@ func (c *Cache) DeleteLVG(lvgName string) {
 		return true
 	})
 
-	c.pvcLVGs.Range(func(pvcName, lvgNames any) bool {
+	c.pvcLVGs.Range(func(_, lvgNames any) bool {
 		for i, lvg := range lvgNames.([]string) {
 			if lvg == lvgName {
+				//nolint:gocritic
 				lvgNames = append(lvgNames.([]string)[:i], lvgNames.([]string)[i+1:]...)
 			}
 		}
@@ -468,12 +471,12 @@ func (c *Cache) GetAllPVCForLVG(lvgName string) ([]*v1.PersistentVolumeClaim, er
 
 	// TODO: fix this to struct size field after refactoring
 	size := 0
-	lvgCh.(*lvgCache).thickPVCs.Range(func(key, value any) bool {
+	lvgCh.(*lvgCache).thickPVCs.Range(func(_, _ any) bool {
 		size++
 		return true
 	})
-	lvgCh.(*lvgCache).thinPools.Range(func(tpName, tpCh any) bool {
-		tpCh.(*thinPoolCache).pvcs.Range(func(key, value any) bool {
+	lvgCh.(*lvgCache).thinPools.Range(func(_, tpCh any) bool {
+		tpCh.(*thinPoolCache).pvcs.Range(func(_, _ any) bool {
 			size++
 			return true
 		})
@@ -482,14 +485,14 @@ func (c *Cache) GetAllPVCForLVG(lvgName string) ([]*v1.PersistentVolumeClaim, er
 
 	result := make([]*v1.PersistentVolumeClaim, 0, size)
 	// collect Thick PVC for the LVG
-	lvgCh.(*lvgCache).thickPVCs.Range(func(pvcName, pvcCh any) bool {
+	lvgCh.(*lvgCache).thickPVCs.Range(func(_, pvcCh any) bool {
 		result = append(result, pvcCh.(*pvcCache).pvc)
 		return true
 	})
 
 	// collect Thin PVC for the LVG
-	lvgCh.(*lvgCache).thinPools.Range(func(tpName, tpCh any) bool {
-		tpCh.(*thinPoolCache).pvcs.Range(func(pvcName, pvcCh any) bool {
+	lvgCh.(*lvgCache).thinPools.Range(func(_, tpCh any) bool {
+		tpCh.(*thinPoolCache).pvcs.Range(func(_, pvcCh any) bool {
 			result = append(result, pvcCh.(*pvcCache).pvc)
 			return true
 		})
@@ -510,7 +513,7 @@ func (c *Cache) GetAllThickPVCLVG(lvgName string) ([]*v1.PersistentVolumeClaim, 
 
 	result := make([]*v1.PersistentVolumeClaim, 0, pvcPerLVGCount)
 	// collect Thick PVC for the LVG
-	lvgCh.(*lvgCache).thickPVCs.Range(func(pvcName, pvcCh any) bool {
+	lvgCh.(*lvgCache).thickPVCs.Range(func(_, pvcCh any) bool {
 		result = append(result, pvcCh.(*pvcCache).pvc)
 		return true
 	})
@@ -534,7 +537,7 @@ func (c *Cache) GetAllPVCFromLVGThinPool(lvgName, thinPoolName string) ([]*v1.Pe
 	}
 
 	result := make([]*v1.PersistentVolumeClaim, 0, pvcPerLVGCount)
-	thinPoolCh.(*thinPoolCache).pvcs.Range(func(pvcName, pvcCh any) bool {
+	thinPoolCh.(*thinPoolCache).pvcs.Range(func(_, pvcCh any) bool {
 		result = append(result, pvcCh.(*pvcCache).pvc)
 		return true
 	})
@@ -650,7 +653,7 @@ func (c *Cache) RemovePVCFromTheCache(pvc *v1.PersistentVolumeClaim) {
 				lvgCh, found := c.lvgs.Load(lvgName)
 				if found {
 					lvgCh.(*lvgCache).thickPVCs.Delete(pvcKey.(string))
-					lvgCh.(*lvgCache).thinPools.Range(func(tpName, tpCh any) bool {
+					lvgCh.(*lvgCache).thinPools.Range(func(_, tpCh any) bool {
 						tpCh.(*thinPoolCache).pvcs.Delete(pvcKey)
 						return true
 					})

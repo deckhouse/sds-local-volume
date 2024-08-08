@@ -52,7 +52,7 @@ func TestAccessLogHandler(t *testing.T) {
 	ctrl.SetLogger(zapr.NewLogger(zap.New(observer)))
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/hello", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("hello"))
 	})

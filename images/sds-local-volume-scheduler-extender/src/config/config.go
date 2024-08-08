@@ -15,6 +15,7 @@ package config
 
 import (
 	"os"
+
 	"sds-local-volume-scheduler-extender/pkg/logger"
 )
 
