@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/workqueue"
-	"reflect"
 	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -30,7 +31,7 @@ func RunLVGWatcherCacheController(
 	log.Info("[RunLVGWatcherCacheController] starts the work")
 
 	c, err := controller.New(LVGWatcherCacheCtrlName, mgr, controller.Options{
-		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+		Reconciler: reconcile.Func(func(_ context.Context, _ reconcile.Request) (reconcile.Result, error) {
 			return reconcile.Result{}, nil
 		}),
 	})
@@ -40,7 +41,7 @@ func RunLVGWatcherCacheController(
 	}
 
 	err = c.Watch(source.Kind(mgr.GetCache(), &snc.LvmVolumeGroup{}), handler.Funcs{
-		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+		CreateFunc: func(_ context.Context, e event.CreateEvent, _ workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] CreateFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.Object.GetName()))
 
 			lvg, ok := e.Object.(*snc.LvmVolumeGroup)
@@ -90,7 +91,7 @@ func RunLVGWatcherCacheController(
 
 			log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] cache for the LVMVolumeGroup %s was reconciled by CreateFunc", lvg.Name))
 		},
-		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+		UpdateFunc: func(_ context.Context, e event.UpdateEvent, _ workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[RunCacheWatcherController] UpdateFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.ObjectNew.GetName()))
 			oldLvg, ok := e.ObjectOld.(*snc.LvmVolumeGroup)
 			if !ok {
@@ -140,7 +141,7 @@ func RunLVGWatcherCacheController(
 
 			log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] Update Func ends reconciliation the LVMVolumeGroup %s cache", newLvg.Name))
 		},
-		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+		DeleteFunc: func(_ context.Context, e event.DeleteEvent, _ workqueue.RateLimitingInterface) {
 			log.Info(fmt.Sprintf("[RunCacheWatcherController] DeleteFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.Object.GetName()))
 			lvg, ok := e.Object.(*snc.LvmVolumeGroup)
 			if !ok {

@@ -8,7 +8,7 @@ import (
 )
 
 func TestPrioritize(t *testing.T) {
-	t.Run("getFreeSpaceLeftPercent", func(t *testing.T) {
+	t.Run("getFreeSpaceLeftPercent", func(_ *testing.T) {
 		requested := resource.MustParse("1Gi")
 		devisor := 1.0
 
@@ -17,8 +17,6 @@ func TestPrioritize(t *testing.T) {
 		allocated := resource.MustParse("211Gi")
 		freeSize := resource.MustParse(totalSizeString)
 		freeSize.Sub(allocated)
-		// t.Logf("freeSize=%s, requested=%s, totalSize=%s", freeSize.String(), requested.String(), totalSize.String())
-		// t.Logf("freeSize=%d, requested=%d, totalSize=%d", freeSize.Value(), requested.Value(), totalSize.Value())
 
 		percent := getFreeSpaceLeftPercent(freeSize.Value(), requested.Value(), totalSize.Value())
 		t.Logf("First freeSpacePercent %d", percent)
@@ -37,9 +35,5 @@ func TestPrioritize(t *testing.T) {
 
 		rawScore2 := int(math.Round(math.Log2(float64(percent2) / devisor)))
 		t.Logf("rawScore2=%d", rawScore2)
-	})
-
-	t.Run("getNodeScore", func(t *testing.T) {
-
 	})
 }
