@@ -1,6 +1,6 @@
 module sds-local-volume-csi
 
-go 1.22.2
+go 1.22.3
 
 require (
 	github.com/container-storage-interface/spec v1.9.0
@@ -11,14 +11,14 @@ require (
 	golang.org/x/sync v0.6.0
 	google.golang.org/grpc v1.62.1
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.29.3
-	k8s.io/apiextensions-apiserver v0.29.3
+	k8s.io/api v0.30.1
+	k8s.io/apiextensions-apiserver v0.30.1
 	k8s.io/apimachinery v0.30.2
-	k8s.io/client-go v0.29.3
+	k8s.io/client-go v0.30.1
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/mount-utils v0.29.3
 	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
-	sigs.k8s.io/controller-runtime v0.17.2
+	sigs.k8s.io/controller-runtime v0.18.4
 )
 
 require (
