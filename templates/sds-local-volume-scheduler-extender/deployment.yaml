@@ -99,6 +99,6 @@ spec:
       volumes:
       - configMap:
           defaultMode: 420
-          name: sds-local-volume-scheduler
+          name: sds-local-volume-scheduler-extender
         name: scheduler-config
       serviceAccountName: sds-local-volume-scheduler
