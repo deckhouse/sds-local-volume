@@ -66,7 +66,7 @@ func main() {
 	}
 
 	var (
-		endpoint   = flag.String("csi-address", "unix:///var/lib/kubelet/plugins/"+driver.DefaultDriverName+"/csi.sock", "CSI endpoint")
+		csiAddress = flag.String("csi-address", "unix:///var/lib/kubelet/plugins/"+driver.DefaultDriverName+"/csi.sock", "CSI address")
 		driverName = flag.String("driver-name", driver.DefaultDriverName, "Name for the driver")
 		address    = flag.String("address", driver.DefaultAddress, "Address to serve on")
 	)
@@ -109,7 +109,7 @@ func main() {
 		}
 	}()
 
-	drv, err := driver.NewDriver(*endpoint, *driverName, *address, &cfgParams.NodeName, log, cl)
+	drv, err := driver.NewDriver(*csiAddress, *driverName, *address, &cfgParams.NodeName, log, cl)
 	if err != nil {
 		log.Error(err, "[main] create NewDriver")
 	}

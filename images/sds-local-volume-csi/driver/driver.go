@@ -56,7 +56,7 @@ type Driver struct {
 	name                  string
 	publishInfoVolumeName string
 
-	endpoint          string
+	csiAddress        string
 	address           string
 	hostID            string
 	waitActionTimeout time.Duration
@@ -85,7 +85,7 @@ func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Log
 	return &Driver{
 		name:              driverName,
 		hostID:            *nodeName,
-		endpoint:          ep,
+		csiAddress:        ep,
 		address:           address,
 		log:               log,
 		waitActionTimeout: defaultWaitActionTimeout,
@@ -96,7 +96,7 @@ func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Log
 }
 
 func (d *Driver) Run(ctx context.Context) error {
-	u, err := url.Parse(d.endpoint)
+	u, err := url.Parse(d.csiAddress)
 	if err != nil {
 		return fmt.Errorf("unable to parse address: %q", err)
 	}
