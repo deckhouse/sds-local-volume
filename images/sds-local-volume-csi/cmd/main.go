@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -54,7 +53,10 @@ var (
 
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, "OK")
+	_, err := fmt.Fprint(w, "OK")
+	if err != nil {
+		klog.Fatalf("Error while generating healthcheck, err: %s", err.Error())
+	}
 }
 
 func main() {
@@ -64,12 +66,6 @@ func main() {
 	if err != nil {
 		klog.Fatalf("unable to create NewConfig, err: %s", err.Error())
 	}
-
-	var (
-		csiAddress = flag.String("csi-address", "unix:///var/lib/kubelet/plugins/"+driver.DefaultDriverName+"/csi.sock", "CSI address")
-		driverName = flag.String("driver-name", driver.DefaultDriverName, "Name for the driver")
-		address    = flag.String("address", driver.DefaultAddress, "Address to serve on")
-	)
 
 	log, err := logger.NewLogger(cfgParams.Loglevel)
 	if err != nil {
@@ -109,7 +105,7 @@ func main() {
 		}
 	}()
 
-	drv, err := driver.NewDriver(*csiAddress, *driverName, *address, &cfgParams.NodeName, log, cl)
+	drv, err := driver.NewDriver(cfgParams.CsiAddress, cfgParams.DriverName, cfgParams.Address, &cfgParams.NodeName, log, cl)
 	if err != nil {
 		log.Error(err, "[main] create NewDriver")
 	}
