@@ -46,7 +46,7 @@ def main(ctx: hook.Context):
             plural="moduleconfigs",
             version="v1alpha1",
             name="sds-local-volume",
-            body={"spec": {"settings": {"enableThinProvisioning": True}}}
+            body={"spec": {"version": 1,"settings": {"enableThinProvisioning": True}}}
             )
         print(f"Thin pools presents, switching enableThinProvisioning on ({api_response})")
 
