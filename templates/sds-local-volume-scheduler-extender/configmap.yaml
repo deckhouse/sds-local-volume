@@ -21,3 +21,31 @@ data:
 {{- else if eq .Values.sdsLocalVolume.logLevel "TRACE" }}
     log-level: "4"
     {{- end }}
+
+{{- if and (not (eq "dev" .Values.global.deckhouseVersion)) (semverCompare "<1.63" .Values.global.deckhouseVersion) }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sds-local-volume-scheduler
+  namespace: d8-{{ .Chart.Name }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-local-volume-scheduler")) | nindent 2 }}
+data:
+  scheduler-config.yaml: |-
+    {{- if semverCompare ">= 1.26" .Values.global.discovery.kubernetesVersion }}
+    apiVersion: kubescheduler.config.k8s.io/v1
+    {{- else }}
+    apiVersion: kubescheduler.config.k8s.io/v1beta3
+    {{- end }}
+    kind: KubeSchedulerConfiguration
+    profiles:
+      - schedulerName: sds-local-volume
+    extenders:
+      - urlPrefix: http://localhost:8099
+        filterVerb: filter
+        prioritizeVerb: prioritize
+        weight: 5
+        enableHTTPS: false
+        httpTimeout: 300000s
+        nodeCacheCapable: false
+{{- end }}

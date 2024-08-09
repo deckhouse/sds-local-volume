@@ -1,3 +1,4 @@
+{{- if or (eq "dev" .Values.global.deckhouseVersion) (semverCompare ">=1.63" .Values.global.deckhouseVersion) }}
 ---
 apiVersion: v1
 kind: Service
@@ -14,3 +15,4 @@ spec:
       name: http
   selector:
     app: sds-local-volume-scheduler-extender
+{{- end }}
