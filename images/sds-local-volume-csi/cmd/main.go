@@ -66,7 +66,7 @@ func main() {
 	}
 
 	var (
-		endpoint   = flag.String("endpoint", "unix:///var/lib/kubelet/plugins/"+driver.DefaultDriverName+"/csi.sock", "CSI endpoint")
+		endpoint   = flag.String("csi-address", "unix:///var/lib/kubelet/plugins/"+driver.DefaultDriverName+"/csi.sock", "CSI endpoint")
 		driverName = flag.String("driver-name", driver.DefaultDriverName, "Name for the driver")
 		address    = flag.String("address", driver.DefaultAddress, "Address to serve on")
 	)
