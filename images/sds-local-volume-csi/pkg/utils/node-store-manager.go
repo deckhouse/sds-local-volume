@@ -278,8 +278,8 @@ func toMapperPath(devPath string) string {
 	}
 
 	shortPath := strings.TrimPrefix(devPath, "/dev/")
-	mapperPath := strings.ReplaceAll(shortPath, "-", "--")
-	mapperPath = strings.ReplaceAll(mapperPath, "/", "-")
+	mapperPath := strings.Replace(shortPath, "-", "--", -1)
+	mapperPath = strings.Replace(mapperPath, "/", "-", -1)
 	return "/dev/mapper/" + mapperPath
 }
 
