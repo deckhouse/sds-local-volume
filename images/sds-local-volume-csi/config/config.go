@@ -20,8 +20,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sds-local-volume-csi/driver"
 
+	"sds-local-volume-csi/driver"
 	"sds-local-volume-csi/pkg/logger"
 )
 
