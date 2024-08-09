@@ -75,7 +75,7 @@ type Driver struct {
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing  disks
-func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Logger, cl client.Client) (*Driver, error) {
+func NewDriver(csiAddress, driverName, address string, nodeName *string, log *logger.Logger, cl client.Client) (*Driver, error) {
 	if driverName == "" {
 		driverName = DefaultDriverName
 	}
@@ -85,7 +85,7 @@ func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Log
 	return &Driver{
 		name:              driverName,
 		hostID:            *nodeName,
-		csiAddress:        ep,
+		csiAddress:        csiAddress,
 		address:           address,
 		log:               log,
 		waitActionTimeout: defaultWaitActionTimeout,
@@ -101,10 +101,15 @@ func (d *Driver) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to parse address: %q", err)
 	}
 
+	fmt.Print("d.csiAddress", d.csiAddress)
+	fmt.Print("u", u)
+
 	grpcAddr := path.Join(u.Host, filepath.FromSlash(u.Path))
 	if u.Host == "" {
 		grpcAddr = filepath.FromSlash(u.Path)
 	}
+
+	fmt.Print("grpcAddr", grpcAddr)
 
 	// CSI plugins talk only over UNIX sockets currently
 	if u.Scheme != "unix" {
