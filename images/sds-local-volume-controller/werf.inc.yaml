@@ -4,6 +4,7 @@
 ---
 image: {{ $.ImageName }}-golang-artifact
 from: {{ $.BASE_GOLANG_22_ALPINE }}
+fromCache: 202408091334349
 final: false
 
 git:
