@@ -114,6 +114,7 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 			klog.Info("Enabling thin pools support")
 			patchBytes, err := json.Marshal(map[string]interface{}{
 				"spec": map[string]interface{}{
+					"version": 1,
 					"settings": map[string]interface{}{
 						"enableThinProvisioning": true,
 					},
