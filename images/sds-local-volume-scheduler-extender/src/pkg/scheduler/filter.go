@@ -19,20 +19,20 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"net/http"
+	"sync"
+
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/strings/slices"
-	"net/http"
 	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/consts"
 	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
-	"sync"
 )
 
 func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
@@ -388,7 +388,7 @@ func filterNodes(
 				// we get the specific LVG which the PVC can use on the node as we support only one specified LVG in the Storage Class on each node
 				commonLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
 				if commonLVG == nil {
-					err = errors.New(fmt.Sprintf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
+					err = fmt.Errorf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name)
 					errs <- err
 					return
 				}
@@ -594,9 +594,7 @@ func GetSortedLVGsFromStorageClasses(scs map[string]*v1.StorageClass) (map[strin
 			return nil, err
 		}
 
-		for _, lvg := range lvgs {
-			result[sc.Name] = append(result[sc.Name], lvg)
-		}
+		result[sc.Name] = append(result[sc.Name], lvgs...)
 	}
 
 	return result, nil
@@ -660,7 +658,7 @@ func getStorageClassesUsedByPVCs(ctx context.Context, cl client.Client, pvcs map
 	result := make(map[string]*v1.StorageClass, len(pvcs))
 	for _, pvc := range pvcs {
 		if pvc.Spec.StorageClassName == nil {
-			err = errors.New(fmt.Sprintf("not StorageClass specified for PVC %s", pvc.Name))
+			err = fmt.Errorf("not StorageClass specified for PVC %s", pvc.Name)
 			return nil, err
 		}
 

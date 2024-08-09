@@ -2,15 +2,15 @@ package controller
 
 import (
 	"context"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
-	"sds-local-volume-controller/pkg/logger"
 	"testing"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sds-local-volume-controller/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -217,10 +217,8 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			assert.False(t, exist)
 			_, exist = node5.Labels[localCsiNodeSelectorLabel]
 			assert.False(t, exist)
-
 		}
 	})
-
 }
 
 func NewFakeClient() client.WithWatch {

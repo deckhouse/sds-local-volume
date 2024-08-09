@@ -18,20 +18,19 @@ package controller_test
 
 import (
 	"context"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
-	"sds-local-volume-controller/pkg/controller"
-	"sds-local-volume-controller/pkg/logger"
 	"slices"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sds-local-volume-controller/pkg/controller"
+	"sds-local-volume-controller/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -754,7 +753,7 @@ func generateLVMVolumeGroup(name string, devices, thinPoolNames []string) *snc.L
 	for i := 0; i < len(thinPoolNames); i++ {
 		thinPoolsSpec = append(thinPoolsSpec, snc.LvmVolumeGroupThinPoolSpec{
 			Name: thinPoolNames[i],
-			Size: resource.MustParse("10Gi"),
+			Size: "10Gi",
 		})
 		thinPoolsStatus = append(thinPoolsStatus, snc.LvmVolumeGroupThinPoolStatus{
 			Name:       thinPoolNames[i],
@@ -779,8 +778,8 @@ func generateLVMVolumeGroup(name string, devices, thinPoolNames []string) *snc.L
 	}
 }
 
+//nolint:unparam
 func generateLocalStorageClass(lscName, reclaimPolicy, volumeBindingMode, lvmType string, lvgs []slv.LocalStorageClassLVG) *slv.LocalStorageClass {
-
 	return &slv.LocalStorageClass{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: lscName,
@@ -794,10 +793,10 @@ func generateLocalStorageClass(lscName, reclaimPolicy, volumeBindingMode, lvmTyp
 			},
 		},
 	}
-
 }
 
-func performStandartChecksForSC(sc *v1.StorageClass, lvgSpec []slv.LocalStorageClassLVG, nameForLocalStorageClass, LSCType, LVMType, reclaimPolicy, volumeBindingMode string) {
+//nolint:unparam
+func performStandartChecksForSC(sc *v1.StorageClass, lvgSpec []slv.LocalStorageClassLVG, nameForLocalStorageClass, lscType, lvmType, reclaimPolicy, volumeBindingMode string) {
 	expectString := ""
 	for i, lvg := range lvgSpec {
 		if i != 0 {
@@ -817,8 +816,8 @@ func performStandartChecksForSC(sc *v1.StorageClass, lvgSpec []slv.LocalStorageC
 	Expect(sc.Finalizers).To(ContainElement(controller.LocalStorageClassFinalizerName))
 
 	Expect(sc.Parameters).To(HaveLen(4))
-	Expect(sc.Parameters).To(HaveKeyWithValue(controller.TypeParamKey, LSCType))
-	Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMTypeParamKey, LVMType))
+	Expect(sc.Parameters).To(HaveKeyWithValue(controller.TypeParamKey, lscType))
+	Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMTypeParamKey, lvmType))
 	Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMVolumeBindingModeParamKey, volumeBindingMode))
 	Expect(sc.Parameters).To(HaveKey(controller.LVMVolumeGroupsParamKey))
 	Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(Equal(expectString))
@@ -827,7 +826,6 @@ func performStandartChecksForSC(sc *v1.StorageClass, lvgSpec []slv.LocalStorageC
 	Expect(string(*sc.ReclaimPolicy)).To(Equal(reclaimPolicy))
 	Expect(string(*sc.VolumeBindingMode)).To(Equal(volumeBindingMode))
 	Expect(*sc.AllowVolumeExpansion).To(BeTrue())
-
 }
 
 func delFromSlice(slice []slv.LocalStorageClassLVG, name string) []slv.LocalStorageClassLVG {

@@ -16,8 +16,9 @@ package config
 import (
 	"log"
 	"os"
-	"sds-local-volume-controller/pkg/logger"
 	"time"
+
+	"sds-local-volume-controller/pkg/logger"
 )
 
 const (
@@ -57,7 +58,6 @@ func NewConfig() *Options {
 
 	opts.ControllerNamespace = os.Getenv(ControllerNamespaceEnv)
 	if opts.ControllerNamespace == "" {
-
 		namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 		if err != nil {
 			log.Printf("Failed to get namespace from filesystem: %v", err)

@@ -18,18 +18,17 @@ package scheduler
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"net/http"
-	"sds-local-volume-scheduler-extender/pkg/cache"
-	"sds-local-volume-scheduler-extender/pkg/consts"
-	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"sds-local-volume-scheduler-extender/pkg/cache"
+	"sds-local-volume-scheduler-extender/pkg/consts"
+	"sds-local-volume-scheduler-extender/pkg/logger"
 )
 
 func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +147,7 @@ func scoreNodes(
 				lvgsFromSC := scLVGs[*pvc.Spec.StorageClassName]
 				commonLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
 				if commonLVG == nil {
-					err = errors.New(fmt.Sprintf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
+					err = fmt.Errorf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name)
 					errs <- err
 					return
 				}
@@ -172,7 +171,7 @@ func scoreNodes(
 				case consts.Thin:
 					thinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 					if thinPool == nil {
-						err = errors.New(fmt.Sprintf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
+						err = fmt.Errorf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name)
 						log.Error(err, "[scoreNodes] an error occurs while searching for target LVMVolumeGroup")
 						errs <- err
 						return
