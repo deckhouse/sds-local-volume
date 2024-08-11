@@ -6,7 +6,7 @@ webhooks:
 - weight: 5
   failurePolicy: Ignore
   clientConfig:
-  service:
+    service:
       name: {{ .Chart.Name }}-scheduler-extender
       namespace: d8-{{ .Chart.Name }}
       port: 8099
