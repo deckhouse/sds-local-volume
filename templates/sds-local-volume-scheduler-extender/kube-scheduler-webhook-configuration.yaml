@@ -1,16 +1,16 @@
 apiVersion: deckhouse.io/v1alpha1
- type: KubeSchedulerWebhookConfiguration
- metadata:
- name: d8-{{ .Chart.Name }}
+type: KubeSchedulerWebhookConfiguration
+metadata:
+  name: d8-{{ .Chart.Name }}
 webhooks:
- - weight: 5
-   failurePolicy: Ignore
-   clientConfig:
-     service:
-       name: {{ .Chart.Name }}-scheduler-extender
-       namespace: d8-{{ .Chart.Name }}
-       port: 8099
-       path: /scheduler
-     caBundle: |
-        {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca }}
-   timeoutSeconds: 5
+- weight: 5
+  failurePolicy: Ignore
+  clientConfig:
+  service:
+      name: {{ .Chart.Name }}-scheduler-extender
+      namespace: d8-{{ .Chart.Name }}
+      port: 8099
+      path: /scheduler
+    caBundle: |
+      {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca }}
+  timeoutSeconds: 5
