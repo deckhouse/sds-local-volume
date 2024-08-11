@@ -28,10 +28,11 @@ import (
 )
 
 const (
-	annBetaStorageProvisioner = "volume.beta.kubernetes.io/storage-provisioner"
-	annStorageProvisioner     = "volume.kubernetes.io/storage-provisioner"
-	csiEndpoint               = "local.csi.storage.deckhouse.io"
-	schedulerName             = "sds-local-volume"
+	annotationBetaStorageProvisioner = "volume.beta.kubernetes.io/storage-provisioner"
+	annotationStorageProvisioner     = "volume.kubernetes.io/storage-provisioner"
+	labelPrefixForProvisioner        = "storage.deckhouse.io/provisioner/"
+	// csiEndpoint               = "local.csi.storage.deckhouse.io"
+	// schedulerName             = "sds-local-volume"
 )
 
 func PodSchedulerMutate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhmutating.MutatorResult, error) {
@@ -41,67 +42,66 @@ func PodSchedulerMutate(ctx context.Context, _ *model.AdmissionReview, obj metav
 		return &kwhmutating.MutatorResult{}, nil
 	}
 
-	if pod.Spec.SchedulerName == "" || pod.Spec.SchedulerName == "default-scheduler" {
-		config, err := rest.InClusterConfig()
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return &kwhmutating.MutatorResult{}, err
+	}
+
+	staticClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return &kwhmutating.MutatorResult{}, err
+	}
+
+	for _, currentVolume := range pod.Spec.Volumes {
+		var discoveredProvisioner string
+
+		if currentVolume.PersistentVolumeClaim == nil {
+			continue
+		}
+
+		pvc, err := staticClient.CoreV1().PersistentVolumeClaims(pod.Namespace).Get(ctx, currentVolume.PersistentVolumeClaim.ClaimName, metav1.GetOptions{})
 		if err != nil {
 			return &kwhmutating.MutatorResult{}, err
 		}
 
-		staticClient, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			return &kwhmutating.MutatorResult{}, err
-		}
-
-		for _, currentVolume := range pod.Spec.Volumes {
-			var discoveredProvisioner string
-
-			if currentVolume.PersistentVolumeClaim == nil {
-				continue
+		// Try to gather provisioner name from annotations
+		if pvc != nil {
+			if provisioner, ok := pvc.Annotations[annotationStorageProvisioner]; ok {
+				discoveredProvisioner = provisioner
 			}
-
-			pvc, err := staticClient.CoreV1().PersistentVolumeClaims(pod.Namespace).Get(ctx, currentVolume.PersistentVolumeClaim.ClaimName, metav1.GetOptions{})
+			if provisioner, ok := pvc.Annotations[annotationBetaStorageProvisioner]; ok {
+				discoveredProvisioner = provisioner
+			}
+		}
+		// Try to gather provisioner name from associated StorageClass
+		if discoveredProvisioner == "" && pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != "" {
+			sc, err := staticClient.StorageV1().StorageClasses().Get(ctx, *pvc.Spec.StorageClassName, metav1.GetOptions{})
 			if err != nil {
 				return &kwhmutating.MutatorResult{}, err
 			}
 
-			// Try to gather provisioner name from annotations
-			if pvc != nil {
-				if provisioner, ok := pvc.Annotations[annStorageProvisioner]; ok {
-					discoveredProvisioner = provisioner
-				}
-				if provisioner, ok := pvc.Annotations[annBetaStorageProvisioner]; ok {
-					discoveredProvisioner = provisioner
-				}
+			if sc != nil {
+				discoveredProvisioner = sc.Provisioner
 			}
-			// Try to gather provisioner name from associated StorageClass
-			if discoveredProvisioner == "" && pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != "" {
-				sc, err := staticClient.StorageV1().StorageClasses().Get(ctx, *pvc.Spec.StorageClassName, metav1.GetOptions{})
-				if err != nil {
-					return &kwhmutating.MutatorResult{}, err
-				}
+		}
+		// Try to gather provisioner name from associated PV
+		if discoveredProvisioner == "" && pvc.Spec.VolumeName != "" {
+			pv, err := staticClient.CoreV1().PersistentVolumes().Get(ctx, pvc.Spec.VolumeName, metav1.GetOptions{})
+			if err != nil {
+				return &kwhmutating.MutatorResult{}, err
+			}
+			if pv != nil && pv.Spec.CSI != nil {
+				discoveredProvisioner = pv.Spec.CSI.Driver
+			}
+		}
 
-				if sc != nil && sc.Provisioner == csiEndpoint {
-					discoveredProvisioner = sc.Provisioner
-				}
-			}
-			// Try to gather provisioner name from associated PV
-			if discoveredProvisioner == "" && pvc.Spec.VolumeName != "" {
-				pv, err := staticClient.CoreV1().PersistentVolumes().Get(ctx, pvc.Spec.VolumeName, metav1.GetOptions{})
-				if err != nil {
-					return &kwhmutating.MutatorResult{}, err
-				}
-				if pv != nil && pv.Spec.CSI != nil {
-					discoveredProvisioner = pv.Spec.CSI.Driver
-				}
+		// Set label for discovered provisioner
+		if discoveredProvisioner != "" {
+			if pod.Labels == nil {
+				pod.Labels = make(map[string]string)
 			}
 
-			// Overwrite the scheduler name
-			if discoveredProvisioner == csiEndpoint {
-				pod.Spec.SchedulerName = schedulerName
-				return &kwhmutating.MutatorResult{
-					MutatedObject: pod,
-				}, nil
-			}
+			pod.Labels[labelPrefixForProvisioner+discoveredProvisioner] = ""
 		}
 	}
 
