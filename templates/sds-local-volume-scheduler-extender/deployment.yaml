@@ -132,7 +132,7 @@ spec:
             name: scheduler-extender-config
             readOnly: true
           - name: scheduler-extender-certs
-            mountPath: /etc/scheduler-extender/certs
+            mountPath: /etc/sds-local-volume-scheduler-extender/certs
             readOnly: true
           resources:
             requests:
