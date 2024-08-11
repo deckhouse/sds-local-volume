@@ -29,7 +29,8 @@ def main():
             sansGenerator=default_sans([
                 "sds-local-volume-scheduler-extender",
                 f"sds-local-volume-scheduler-extender.{common.NAMESPACE}",
-                f"sds-local-volume-scheduler-extender.{common.NAMESPACE}.svc"]),
+                f"sds-local-volume-scheduler-extender.{common.NAMESPACE}.svc",
+                f"sds-local-volume-scheduler-extender.{common.NAMESPACE}.svc.cluster.local"]),
             values_path_prefix=f"{common.MODULE_NAME}.internal.customSchedulerExtenderCert"
             ),
         cn="sds-local-volume-scheduler-extender",
