@@ -130,6 +130,10 @@ spec:
           volumeMounts:
           - mountPath: /etc/sds-local-volume-scheduler-extender
             name: scheduler-extender-config
+            readOnly: true
+          - name: scheduler-extender-certs
+            mountPath: /etc/scheduler-extender/certs
+            readOnly: true
           resources:
             requests:
               {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 14 }}
@@ -142,10 +146,13 @@ spec:
              protocol: TCP
 {{- end }}
       volumes:
-      - configMap:
+      - name: scheduler-extender-config
+        configMap:
           defaultMode: 420
           name: sds-local-volume-scheduler-extender
-        name: scheduler-extender-config
+      - name: scheduler-extender-certs
+        secret:
+            secretName: scheduler-extender-https-certs
 {{- if and (not (eq "dev" .Values.global.deckhouseVersion)) (semverCompare "<1.63" .Values.global.deckhouseVersion) }}
       - configMap:
           defaultMode: 420

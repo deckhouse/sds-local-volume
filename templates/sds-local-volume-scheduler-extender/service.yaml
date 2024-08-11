@@ -5,7 +5,7 @@ kind: Service
 metadata:
   name: {{ .Chart.Name }}-scheduler-extender
   namespace: d8-{{ .Chart.Name }}
-  {{- include "helm_lib_module_labels" (list . (dict "app" "{{ .Chart.Name }}-scheduler-extender" )) | nindent 2 }}
+  {{- include "helm_lib_module_labels" (list . (dict "app" "sds-local-volume-scheduler-extender" )) | nindent 2 }}
 spec:
   type: ClusterIP
   ports:
