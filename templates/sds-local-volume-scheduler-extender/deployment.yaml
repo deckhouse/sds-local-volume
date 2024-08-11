@@ -128,8 +128,8 @@ spec:
             - sds-local-volume-scheduler-extender
             - --config=/etc/sds-local-volume-scheduler-extender/scheduler-extender-config.yaml
           volumeMounts:
-          - mountPath: /etc/sds-local-volume-scheduler-extender
-            name: scheduler-extender-config
+          - name: scheduler-extender-config
+            mountPath: /etc/sds-local-volume-scheduler-extender
             readOnly: true
           - name: scheduler-extender-certs
             mountPath: /etc/sds-local-volume-scheduler-extender/certs

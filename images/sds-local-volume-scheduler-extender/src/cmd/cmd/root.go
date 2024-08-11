@@ -205,7 +205,7 @@ func subMain(parentCtx context.Context) error {
 	}()
 
 	log.Info(fmt.Sprintf("[subMain] starts serving on: %s", config.ListenAddr))
-	err = serv.ListenAndServe()
+	err = serv.ListenAndServeTLS("/etc/sds-local-volume-scheduler-extender/certs/tls.crt", "/etc/sds-local-volume-scheduler-extender/certs/tls.key")
 	if !errors.Is(err, http.ErrServerClosed) {
 		log.Error(err, "[subMain] unable to run the server")
 		return err
