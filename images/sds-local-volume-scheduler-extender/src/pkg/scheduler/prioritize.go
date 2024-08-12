@@ -34,68 +34,85 @@ import (
 
 func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug("[prioritize] starts serving")
-	var input ExtenderArgs
+	var inputData ExtenderArgs
 	reader := http.MaxBytesReader(w, r.Body, 10<<20)
-	err := json.NewDecoder(reader).Decode(&input)
+	err := json.NewDecoder(reader).Decode(&inputData)
 	if err != nil {
 		s.log.Error(err, "[prioritize] unable to decode a request")
 		http.Error(w, "Bad Request.", http.StatusBadRequest)
 		return
 	}
+	s.log.Trace(fmt.Sprintf("[prioritize] input data: %+v", inputData))
 
-	s.log.Debug(fmt.Sprintf("[prioritize] starts the prioritizing for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+	if inputData.NodeNames == nil || len(*inputData.NodeNames) == 0 {
+		s.log.Error(errors.New("no node names in the request"), "[prioritize] unable to get node names from the request")
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	nodeNames := inputData.NodeNames
+	s.log.Trace(fmt.Sprintf("[prioritize] node names from the request: %v", nodeNames))
 
-	pvcs, err := getUsedPVC(s.ctx, s.client, s.log, input.Pod)
+	if inputData.Pod == nil {
+		s.log.Error(errors.New("no pod in the request"), "[prioritize] unable to get a Pod from the request")
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	pod := inputData.Pod
+	s.log.Debug(fmt.Sprintf("[prioritize] starts the prioritizeing for Pod %s/%s", pod.Namespace, pod.Name))
+
+	s.log.Debug(fmt.Sprintf("[prioritize] starts the prioritizing for Pod %s/%s", pod.Namespace, pod.Name))
+
+	pvcs, err := getUsedPVC(s.ctx, s.client, s.log, pod)
 	if err != nil {
-		s.log.Error(err, fmt.Sprintf("[prioritize] unable to get PVC from the Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+		s.log.Error(err, fmt.Sprintf("[prioritize] unable to get PVC from the Pod %s/%s", pod.Namespace, pod.Name))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	if len(pvcs) == 0 {
-		s.log.Error(fmt.Errorf("no PVC was found for pod %s in namespace %s", input.Pod.Name, input.Pod.Namespace), fmt.Sprintf("[prioritize] unable to get used PVC for Pod %s", input.Pod.Name))
+		s.log.Error(fmt.Errorf("no PVC was found for pod %s in namespace %s", pod.Name, pod.Namespace), fmt.Sprintf("[prioritize] unable to get used PVC for Pod %s", pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	for _, pvc := range pvcs {
-		s.log.Trace(fmt.Sprintf("[prioritize] Pod %s/%s uses PVC: %s", input.Pod.Namespace, input.Pod.Name, pvc.Name))
+		s.log.Trace(fmt.Sprintf("[prioritize] Pod %s/%s uses PVC: %s", pod.Namespace, pod.Name, pvc.Name))
 	}
 
 	scs, err := getStorageClassesUsedByPVCs(s.ctx, s.client, pvcs)
 	if err != nil {
-		s.log.Error(err, fmt.Sprintf("[prioritize] unable to get StorageClasses from the PVC for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+		s.log.Error(err, fmt.Sprintf("[prioritize] unable to get StorageClasses from the PVC for Pod %s/%s", pod.Namespace, pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	for _, sc := range scs {
-		s.log.Trace(fmt.Sprintf("[prioritize] Pod %s/%s uses Storage Class: %s", input.Pod.Namespace, input.Pod.Name, sc.Name))
+		s.log.Trace(fmt.Sprintf("[prioritize] Pod %s/%s uses Storage Class: %s", pod.Namespace, pod.Name, sc.Name))
 	}
 
 	managedPVCs := filterNotManagedPVC(s.log, pvcs, scs)
 	for _, pvc := range managedPVCs {
-		s.log.Trace(fmt.Sprintf("[prioritize] filtered managed PVC %s/%s", pvc.Namespace, pvc.Name))
+		s.log.Trace(fmt.Sprintf("[prioritize] prioritizeed managed PVC %s/%s", pvc.Namespace, pvc.Name))
 	}
 
-	s.log.Debug(fmt.Sprintf("[prioritize] starts to extract pvcRequests size for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+	s.log.Debug(fmt.Sprintf("[prioritize] starts to extract pvcRequests size for Pod %s/%s", pod.Namespace, pod.Name))
 	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, managedPVCs, scs)
 	if err != nil {
-		s.log.Error(err, fmt.Sprintf("[prioritize] unable to extract request size for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+		s.log.Error(err, fmt.Sprintf("[prioritize] unable to extract request size for Pod %s/%s", pod.Namespace, pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
 	}
-	s.log.Debug(fmt.Sprintf("[prioritize] successfully extracted the pvcRequests size for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+	s.log.Debug(fmt.Sprintf("[prioritize] successfully extracted the pvcRequests size for Pod %s/%s", pod.Namespace, pod.Name))
 
-	s.log.Debug(fmt.Sprintf("[prioritize] starts to score the nodes for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
-	result, err := scoreNodes(s.log, s.cache, input.Nodes, managedPVCs, scs, pvcRequests, s.defaultDivisor)
+	s.log.Debug(fmt.Sprintf("[prioritize] starts to score the nodes for Pod %s/%s", pod.Namespace, pod.Name))
+	result, err := scoreNodes(s.log, s.cache, nodeNames, managedPVCs, scs, pvcRequests, s.defaultDivisor)
 	if err != nil {
-		s.log.Error(err, fmt.Sprintf("[prioritize] unable to score nodes for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+		s.log.Error(err, fmt.Sprintf("[prioritize] unable to score nodes for Pod %s/%s", pod.Namespace, pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	s.log.Debug(fmt.Sprintf("[prioritize] successfully scored the nodes for Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+	s.log.Debug(fmt.Sprintf("[prioritize] successfully scored the nodes for Pod %s/%s", pod.Namespace, pod.Name))
 
 	w.Header().Set("content-type", "application/json")
 	err = json.NewEncoder(w).Encode(result)
 	if err != nil {
-		s.log.Error(err, fmt.Sprintf("[prioritize] unable to encode a response for a Pod %s/%s", input.Pod.Namespace, input.Pod.Name))
+		s.log.Error(err, fmt.Sprintf("[prioritize] unable to encode a response for a Pod %s/%s", pod.Namespace, pod.Name))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
 	s.log.Debug("[prioritize] ends serving")
@@ -104,7 +121,7 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 func scoreNodes(
 	log logger.Logger,
 	schedulerCache *cache.Cache,
-	nodes *corev1.NodeList,
+	nodeNames *[]string,
 	pvcs map[string]*corev1.PersistentVolumeClaim,
 	scs map[string]*v1.StorageClass,
 	pvcRequests map[string]PVCRequest,
@@ -128,31 +145,31 @@ func scoreNodes(
 		}
 	}
 
-	result := make([]HostPriority, 0, len(nodes.Items))
+	result := make([]HostPriority, 0, len(*nodeNames))
 	wg := &sync.WaitGroup{}
-	wg.Add(len(nodes.Items))
-	errs := make(chan error, len(pvcs)*len(nodes.Items))
+	wg.Add(len(*nodeNames))
+	errs := make(chan error, len(pvcs)*len(*nodeNames))
 
-	for i, node := range nodes.Items {
-		go func(i int, node corev1.Node) {
-			log.Debug(fmt.Sprintf("[scoreNodes] gourutine %d starts the work", i))
+	for i, nodeName := range *nodeNames {
+		go func(i int, nodeName string) {
+			log.Debug(fmt.Sprintf("[scoreNodes] gourutine %d starts the work for the node %s", i, nodeName))
 			defer func() {
-				log.Debug(fmt.Sprintf("[scoreNodes] gourutine %d ends the work", i))
+				log.Debug(fmt.Sprintf("[scoreNodes] gourutine %d ends the work for the node %s", i, nodeName))
 				wg.Done()
 			}()
 
-			lvgsFromNode := nodeLVGs[node.Name]
+			lvgsFromNode := nodeLVGs[nodeName]
 			var totalFreeSpaceLeft int64
 			for _, pvc := range pvcs {
 				pvcReq := pvcRequests[pvc.Name]
 				lvgsFromSC := scLVGs[*pvc.Spec.StorageClassName]
 				commonLVG := findMatchedLVG(lvgsFromNode, lvgsFromSC)
 				if commonLVG == nil {
-					err = errors.New(fmt.Sprintf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
+					err = fmt.Errorf("unable to match Storage Class's LVMVolumeGroup with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, nodeName)
 					errs <- err
 					return
 				}
-				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s is common for storage class %s and node %s", commonLVG.Name, *pvc.Spec.StorageClassName, node.Name))
+				log.Trace(fmt.Sprintf("[scoreNodes] LVMVolumeGroup %s is common for storage class %s and node %s", commonLVG.Name, *pvc.Spec.StorageClassName, nodeName))
 
 				var freeSpace resource.Quantity
 				lvg := lvgs[commonLVG.Name]
@@ -172,7 +189,7 @@ func scoreNodes(
 				case consts.Thin:
 					thinPool := findMatchedThinPool(lvg.Status.ThinPools, commonLVG.Thin.PoolName)
 					if thinPool == nil {
-						err = errors.New(fmt.Sprintf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, node.Name))
+						err = fmt.Errorf("unable to match Storage Class's ThinPools with the node's one, Storage Class: %s, node: %s", *pvc.Spec.StorageClassName, nodeName)
 						log.Error(err, "[scoreNodes] an error occurs while searching for target LVMVolumeGroup")
 						errs <- err
 						return
@@ -186,15 +203,15 @@ func scoreNodes(
 			}
 
 			averageFreeSpace := totalFreeSpaceLeft / int64(len(pvcs))
-			log.Trace(fmt.Sprintf("[scoreNodes] average free space left for the node: %s", node.Name))
+			log.Trace(fmt.Sprintf("[scoreNodes] average free space left for the node: %s", nodeName))
 			score := getNodeScore(averageFreeSpace, divisor)
-			log.Trace(fmt.Sprintf("[scoreNodes] node %s has score %d with average free space left (after all PVC bounded), percent %d", node.Name, score, averageFreeSpace))
+			log.Trace(fmt.Sprintf("[scoreNodes] node %s has score %d with average free space left (after all PVC bounded), percent %d", nodeName, score, averageFreeSpace))
 
 			result = append(result, HostPriority{
-				Host:  node.Name,
+				Host:  nodeName,
 				Score: score,
 			})
-		}(i, node)
+		}(i, nodeName)
 	}
 	wg.Wait()
 
