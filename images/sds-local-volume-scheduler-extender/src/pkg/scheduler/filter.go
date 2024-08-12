@@ -135,7 +135,7 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug(fmt.Sprintf("[filter] starts to populate the cache for a Pod %s/%s", pod.Namespace, pod.Name))
 	s.log.Cache(fmt.Sprintf("[filter] cache before the PVC reservation for a Pod %s/%s", pod.Namespace, pod.Name))
 	s.cache.PrintTheCacheLog()
-	err = populateCache(s.log, filteredNodes.Nodes.Items, pod, s.cache, managedPVCs, scs)
+	err = populateCache(s.log, filteredNodes.NodeNames, pod, s.cache, managedPVCs, scs)
 	if err != nil {
 		s.log.Error(err, "[filter] unable to populate cache")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -170,13 +170,13 @@ func filterNotManagedPVC(log logger.Logger, pvcs map[string]*corev1.PersistentVo
 	return filteredPVCs
 }
 
-func populateCache(log logger.Logger, nodes []corev1.Node, pod *corev1.Pod, schedulerCache *cache.Cache, pvcs map[string]*corev1.PersistentVolumeClaim, scs map[string]*v1.StorageClass) error {
-	for _, node := range nodes {
+func populateCache(log logger.Logger, nodeNames *[]string, pod *corev1.Pod, schedulerCache *cache.Cache, pvcs map[string]*corev1.PersistentVolumeClaim, scs map[string]*v1.StorageClass) error {
+	for _, nodeName := range *nodeNames {
 		for _, volume := range pod.Spec.Volumes {
 			if volume.PersistentVolumeClaim != nil {
-				log.Debug(fmt.Sprintf("[populateCache] reconcile the PVC %s for Pod %s/%s on node %s", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, pod.Name, node.Name))
-				lvgNamesForTheNode := schedulerCache.GetLVGNamesByNodeName(node.Name)
-				log.Trace(fmt.Sprintf("[populateCache] LVMVolumeGroups from cache for the node %s: %v", node.Name, lvgNamesForTheNode))
+				log.Debug(fmt.Sprintf("[populateCache] reconcile the PVC %s for Pod %s/%s on node %s", volume.PersistentVolumeClaim.ClaimName, pod.Namespace, pod.Name, nodeName))
+				lvgNamesForTheNode := schedulerCache.GetLVGNamesByNodeName(nodeName)
+				log.Trace(fmt.Sprintf("[populateCache] LVMVolumeGroups from cache for the node %s: %v", nodeName, lvgNamesForTheNode))
 				pvc := pvcs[volume.PersistentVolumeClaim.ClaimName]
 				sc := scs[*pvc.Spec.StorageClassName]
 
