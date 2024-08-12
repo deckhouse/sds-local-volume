@@ -59,6 +59,8 @@ const (
 	defaultDivisor    = 1
 	defaultListenAddr = ":8000"
 	defaultCacheSize  = 10
+	defaultcertFile   = "/etc/sds-local-volume-scheduler-extender/certs/tls.crt"
+	defaultkeyFile    = "/etc/sds-local-volume-scheduler-extender/certs/tls.key"
 )
 
 type Config struct {
@@ -67,6 +69,8 @@ type Config struct {
 	LogLevel               string  `json:"log-level"`
 	CacheSize              int     `json:"cache-size"`
 	HealthProbeBindAddress string  `json:"health-probe-bind-address"`
+	CertFile               string  `json:"cert-file"`
+	KeyFile                string  `json:"key-file"`
 }
 
 var config = &Config{
@@ -74,6 +78,8 @@ var config = &Config{
 	DefaultDivisor: defaultDivisor,
 	LogLevel:       "2",
 	CacheSize:      defaultCacheSize,
+	CertFile:       defaultcertFile,
+	KeyFile:        defaultkeyFile,
 }
 
 var rootCmd = &cobra.Command{
@@ -205,7 +211,7 @@ func subMain(parentCtx context.Context) error {
 	}()
 
 	log.Info(fmt.Sprintf("[subMain] starts serving on: %s", config.ListenAddr))
-	err = serv.ListenAndServeTLS("/etc/sds-local-volume-scheduler-extender/certs/tls.crt", "/etc/sds-local-volume-scheduler-extender/certs/tls.key")
+	err = serv.ListenAndServeTLS(config.CertFile, config.KeyFile)
 	if !errors.Is(err, http.ErrServerClosed) {
 		log.Error(err, "[subMain] unable to run the server")
 		return err
