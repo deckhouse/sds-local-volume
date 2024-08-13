@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"testing"
 
+	"sds-local-volume-scheduler-extender/pkg/logger"
+
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sds-local-volume-scheduler-extender/pkg/logger"
 )
 
 func BenchmarkCache_DeleteLVG(b *testing.B) {
