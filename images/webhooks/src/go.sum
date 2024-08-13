@@ -8,6 +8,8 @@ github.com/deckhouse/deckhouse v1.62.2 h1:dbDriDAxxTkI7tWIV1CsJoE7TkmgeW3jfUwL/E
 github.com/deckhouse/deckhouse v1.62.2/go.mod h1:uJICbx/itedld6N9uv3srI6Hdt+m4P6IQyocUrtySVY=
 github.com/deckhouse/sds-local-volume/api v0.0.0-20240704080736-a027a963cc2c h1:1hZBDe3aKqok/jOnbKfa5CMQ6viL/dsnsHujEaq+oxU=
 github.com/deckhouse/sds-local-volume/api v0.0.0-20240704080736-a027a963cc2c/go.mod h1:cYxHYJmIl6g9lXb1etqmLeQL/vsPMgscmact/FObd+U=
+github.com/deckhouse/sds-local-volume/api v0.0.0-20240813100234-cf7ae5802ee1 h1:Q9xCh8Go2sB8nLOyeB/jID2YWCkFtpE1qxMAYacGht4=
+github.com/deckhouse/sds-local-volume/api v0.0.0-20240813100234-cf7ae5802ee1/go.mod h1:cYxHYJmIl6g9lXb1etqmLeQL/vsPMgscmact/FObd+U=
 github.com/deckhouse/sds-node-configurator/api v0.0.0-20240805103635-969dc811217b h1:EYmHWTWcWMpyxJGZK05ZxlIFnh9s66DRrxLw/LNb/xw=
 github.com/deckhouse/sds-node-configurator/api v0.0.0-20240805103635-969dc811217b/go.mod h1:H71+9G0Jr46Qs0BA3z3/xt0h9lbnJnCEYcaCJCWFBf0=
 github.com/emicklei/go-restful/v3 v3.12.0 h1:y2DdzBAURM29NFF94q6RaY4vjIH1rtwDapwQtU84iWk=
