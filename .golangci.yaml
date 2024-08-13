@@ -13,6 +13,7 @@ linters-settings:
     sections:
       - standard
       - default
+      - prefix(sds-local-volume-scheduler-extender)
   errcheck:
     ignore: fmt:.*,[rR]ead|[wW]rite|[cC]lose,io:Copy
 

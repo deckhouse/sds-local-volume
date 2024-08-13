@@ -5,11 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"sds-local-volume-scheduler-extender/pkg/cache"
-	"sds-local-volume-scheduler-extender/pkg/consts"
-	"sds-local-volume-scheduler-extender/pkg/logger"
-	"sds-local-volume-scheduler-extender/pkg/scheduler"
-
 	v1 "k8s.io/api/core/v1"
 	v12 "k8s.io/api/storage/v1"
 	"k8s.io/client-go/util/workqueue"
@@ -21,6 +16,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"sds-local-volume-scheduler-extender/pkg/cache"
+	"sds-local-volume-scheduler-extender/pkg/consts"
+	"sds-local-volume-scheduler-extender/pkg/logger"
+	"sds-local-volume-scheduler-extender/pkg/scheduler"
 )
 
 const (
