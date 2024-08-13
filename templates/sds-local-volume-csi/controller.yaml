@@ -162,10 +162,10 @@ spec:
       containers:
       - args:
           - --v=5
-          - --csi-address=$(CSI_ENDPOINT)
+          - --csi-address=$(CSI_ADDRESS)
           - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
         env:
-          - name: CSI_ENDPOINT
+          - name: CSI_ADDRESS
             value: /csi/csi.sock
           - name: DRIVER_REG_SOCK_PATH
             value: /var/lib/kubelet/plugins/local.csi.storage.deckhouse.io/csi.sock
@@ -204,9 +204,9 @@ spec:
           - mountPath: /registration/
             name: registration-dir
       - args:
-          - --csi-address=$(CSI_ENDPOINT)
+          - --csi-address=$(CSI_ADDRESS)
         env:
-          - name: CSI_ENDPOINT
+          - name: CSI_ADDRESS
             value: /csi/csi.sock
         image: {{ include "helm_lib_module_common_image" (list . (list "csiLivenessprobe" $kubeVersion.Major $kubeVersion.Minor | join "" )) }}
         imagePullPolicy: IfNotPresent
@@ -224,9 +224,9 @@ spec:
             {{- include "csi_livenessprobe_resources" . | nindent 12 }}
 {{- end }}
       - args:
-        - --endpoint=unix://$(CSI_ENDPOINT)
+        - --csi-address=unix://$(CSI_ADDRESS)
         env:
-          - name: CSI_ENDPOINT
+          - name: CSI_ADDRESS
             value: /csi/csi.sock
           - name: DRIVER_REG_SOCK_PATH
             value: /var/lib/kubelet/plugins/local.csi.storage.deckhouse.io/csi.sock
@@ -526,7 +526,7 @@ spec:
           - mountPath: /csi/
             name: socket-dir
       - args:
-        - --endpoint=unix://$(ADDRESS)
+        - --csi-address=unix://$(ADDRESS)
         env:
           - name: ADDRESS
             value: /csi/csi.sock

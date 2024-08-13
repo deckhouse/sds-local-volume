@@ -30,7 +30,7 @@ import (
 const (
 	annBetaStorageProvisioner = "volume.beta.kubernetes.io/storage-provisioner"
 	annStorageProvisioner     = "volume.kubernetes.io/storage-provisioner"
-	csiEndpoint               = "local.csi.storage.deckhouse.io"
+	csiAddress                = "local.csi.storage.deckhouse.io"
 	schedulerName             = "sds-local-volume"
 )
 
@@ -80,7 +80,7 @@ func PodSchedulerMutate(ctx context.Context, _ *model.AdmissionReview, obj metav
 					return &kwhmutating.MutatorResult{}, err
 				}
 
-				if sc != nil && sc.Provisioner == csiEndpoint {
+				if sc != nil && sc.Provisioner == csiAddress {
 					discoveredProvisioner = sc.Provisioner
 				}
 			}
@@ -96,7 +96,7 @@ func PodSchedulerMutate(ctx context.Context, _ *model.AdmissionReview, obj metav
 			}
 
 			// Overwrite the scheduler name
-			if discoveredProvisioner == csiEndpoint {
+			if discoveredProvisioner == csiAddress {
 				pod.Spec.SchedulerName = schedulerName
 				return &kwhmutating.MutatorResult{
 					MutatedObject: pod,

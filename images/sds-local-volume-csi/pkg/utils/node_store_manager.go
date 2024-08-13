@@ -19,13 +19,13 @@ package utils
 import (
 	"fmt"
 	"os"
-	"sds-local-volume-csi/internal"
-	"sds-local-volume-csi/pkg/logger"
 	"slices"
 	"strings"
 
 	mountutils "k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
+	"sds-local-volume-csi/internal"
+	"sds-local-volume-csi/pkg/logger"
 )
 
 type NodeStoreManager interface {
@@ -228,9 +228,9 @@ func (s *Store) Unstage(target string) error {
 	// a read-only root filesystem
 	if err == nil || strings.Contains(fmt.Sprint(err), "not mounted") {
 		return nil
-	} else {
-		return err
 	}
+
+	return err
 }
 
 func (s *Store) IsNotMountPoint(target string) (bool, error) {
@@ -278,8 +278,8 @@ func toMapperPath(devPath string) string {
 	}
 
 	shortPath := strings.TrimPrefix(devPath, "/dev/")
-	mapperPath := strings.Replace(shortPath, "-", "--", -1)
-	mapperPath = strings.Replace(mapperPath, "/", "-", -1)
+	mapperPath := strings.ReplaceAll(shortPath, "-", "--")
+	mapperPath = strings.ReplaceAll(mapperPath, "/", "-")
 	return "/dev/mapper/" + mapperPath
 }
 

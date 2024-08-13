@@ -3,7 +3,7 @@ module sds-local-volume-controller
 go 1.22.2
 
 require (
-	github.com/deckhouse/sds-local-volume/api v0.0.0-20240803013556-f24060c022de
+	github.com/deckhouse/sds-local-volume/api v0.0.0-20240704080736-a027a963cc2c
 	github.com/deckhouse/sds-node-configurator/api v0.0.0-20240805103635-969dc811217b
 	github.com/go-logr/logr v1.4.2
 	github.com/onsi/ginkgo/v2 v2.19.0

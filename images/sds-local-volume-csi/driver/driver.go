@@ -26,15 +26,15 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sds-local-volume-csi/internal"
-	"sds-local-volume-csi/pkg/logger"
-	"sds-local-volume-csi/pkg/utils"
 	"sync"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"sds-local-volume-csi/internal"
+	"sds-local-volume-csi/pkg/logger"
+	"sds-local-volume-csi/pkg/utils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -56,7 +56,7 @@ type Driver struct {
 	name                  string
 	publishInfoVolumeName string
 
-	endpoint          string
+	csiAddress        string
 	address           string
 	hostID            string
 	waitActionTimeout time.Duration
@@ -75,8 +75,7 @@ type Driver struct {
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing  disks
-func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Logger, cl client.Client) (*Driver, error) {
-
+func NewDriver(csiAddress, driverName, address string, nodeName *string, log *logger.Logger, cl client.Client) (*Driver, error) {
 	if driverName == "" {
 		driverName = DefaultDriverName
 	}
@@ -86,7 +85,7 @@ func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Log
 	return &Driver{
 		name:              driverName,
 		hostID:            *nodeName,
-		endpoint:          ep,
+		csiAddress:        csiAddress,
 		address:           address,
 		log:               log,
 		waitActionTimeout: defaultWaitActionTimeout,
@@ -97,15 +96,20 @@ func NewDriver(ep, driverName, address string, nodeName *string, log *logger.Log
 }
 
 func (d *Driver) Run(ctx context.Context) error {
-	u, err := url.Parse(d.endpoint)
+	u, err := url.Parse(d.csiAddress)
 	if err != nil {
 		return fmt.Errorf("unable to parse address: %q", err)
 	}
+
+	fmt.Print("d.csiAddress", d.csiAddress)
+	fmt.Print("u", u)
 
 	grpcAddr := path.Join(u.Host, filepath.FromSlash(u.Path))
 	if u.Host == "" {
 		grpcAddr = filepath.FromSlash(u.Path)
 	}
+
+	fmt.Print("grpcAddr", grpcAddr)
 
 	// CSI plugins talk only over UNIX sockets currently
 	if u.Scheme != "unix" {
@@ -144,7 +148,7 @@ func (d *Driver) Run(ctx context.Context) error {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 

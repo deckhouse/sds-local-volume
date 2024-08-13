@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	v1 "k8s.io/api/core/v1"
 	v12 "k8s.io/api/storage/v1"
 	"k8s.io/client-go/util/workqueue"
@@ -33,7 +34,7 @@ func RunPVCWatcherCacheController(
 	log.Info("[RunPVCWatcherCacheController] starts the work")
 
 	c, err := controller.New("test-pvc-watcher", mgr, controller.Options{
-		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+		Reconciler: reconcile.Func(func(_ context.Context, _ reconcile.Request) (reconcile.Result, error) {
 			return reconcile.Result{}, nil
 		}),
 	})
@@ -43,7 +44,7 @@ func RunPVCWatcherCacheController(
 	}
 
 	err = c.Watch(source.Kind(mgr.GetCache(), &v1.PersistentVolumeClaim{}), handler.Funcs{
-		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+		CreateFunc: func(ctx context.Context, e event.CreateEvent, _ workqueue.RateLimitingInterface) {
 			log.Info("[RunPVCWatcherCacheController] CreateFunc reconciliation starts")
 			pvc, ok := e.Object.(*v1.PersistentVolumeClaim)
 			if !ok {
@@ -70,7 +71,7 @@ func RunPVCWatcherCacheController(
 			reconcilePVC(ctx, mgr, log, schedulerCache, pvc, selectedNodeName)
 			log.Info("[RunPVCWatcherCacheController] CreateFunc reconciliation ends")
 		},
-		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, _ workqueue.RateLimitingInterface) {
 			log.Info("[RunPVCWatcherCacheController] Update Func reconciliation starts")
 			pvc, ok := e.ObjectNew.(*v1.PersistentVolumeClaim)
 			if !ok {
@@ -95,7 +96,7 @@ func RunPVCWatcherCacheController(
 			reconcilePVC(ctx, mgr, log, schedulerCache, pvc, selectedNodeName)
 			log.Info("[RunPVCWatcherCacheController] Update Func reconciliation ends")
 		},
-		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+		DeleteFunc: func(_ context.Context, e event.DeleteEvent, _ workqueue.RateLimitingInterface) {
 			log.Info("[RunPVCWatcherCacheController] Delete Func reconciliation starts")
 			pvc, ok := e.Object.(*v1.PersistentVolumeClaim)
 			if !ok {
@@ -140,7 +141,7 @@ func reconcilePVC(ctx context.Context, mgr manager.Manager, log logger.Logger, s
 	log.Debug(fmt.Sprintf("[reconcilePVC] successfully extracted LVGs from the Storage Class %s for PVC %s/%s", sc.Name, pvc.Namespace, pvc.Name))
 
 	lvgsForPVC := schedulerCache.GetLVGNamesForPVC(pvc)
-	if lvgsForPVC == nil || len(lvgsForPVC) == 0 {
+	if len(lvgsForPVC) == 0 {
 		log.Debug(fmt.Sprintf("[reconcilePVC] no LVMVolumeGroups were found in the cache for PVC %s/%s. Use Storage Class %s instead", pvc.Namespace, pvc.Name, *pvc.Spec.StorageClassName))
 
 		for _, lvg := range lvgsFromSc {

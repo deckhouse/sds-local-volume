@@ -19,23 +19,22 @@ package main
 import (
 	"context"
 	"fmt"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"os"
 	goruntime "runtime"
-	"sds-local-volume-controller/pkg/config"
-	"sds-local-volume-controller/pkg/controller"
-	"sds-local-volume-controller/pkg/kubutils"
-	"sds-local-volume-controller/pkg/logger"
 
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	sv1 "k8s.io/api/storage/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sds-local-volume-controller/pkg/config"
+	"sds-local-volume-controller/pkg/controller"
+	"sds-local-volume-controller/pkg/kubutils"
+	"sds-local-volume-controller/pkg/logger"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -57,7 +56,7 @@ func main() {
 
 	log, err := logger.NewLogger(cfgParams.Loglevel)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("unable to create NewLogger, err: %v", err))
+		fmt.Printf("unable to create NewLogger, err: %v\n", err)
 		os.Exit(1)
 	}
 

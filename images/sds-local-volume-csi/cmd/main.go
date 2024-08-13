@@ -18,20 +18,14 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"net/http"
 	"os"
 	"os/signal"
-	"sds-local-volume-csi/config"
-	"sds-local-volume-csi/driver"
-	"sds-local-volume-csi/pkg/kubutils"
-	"sds-local-volume-csi/pkg/logger"
-
 	"syscall"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	sv1 "k8s.io/api/storage/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -39,6 +33,10 @@ import (
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
+	"sds-local-volume-csi/config"
+	"sds-local-volume-csi/driver"
+	"sds-local-volume-csi/pkg/kubutils"
+	"sds-local-volume-csi/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -53,13 +51,15 @@ var (
 	}
 )
 
-func healthHandler(w http.ResponseWriter, r *http.Request) {
+func healthHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, "OK")
+	_, err := fmt.Fprint(w, "OK")
+	if err != nil {
+		klog.Fatalf("Error while generating healthcheck, err: %s", err.Error())
+	}
 }
 
 func main() {
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	cfgParams, err := config.NewConfig()
@@ -67,15 +67,9 @@ func main() {
 		klog.Fatalf("unable to create NewConfig, err: %s", err.Error())
 	}
 
-	var (
-		endpoint   = flag.String("endpoint", "unix:///var/lib/kubelet/plugins/"+driver.DefaultDriverName+"/csi.sock", "CSI endpoint")
-		driverName = flag.String("driver-name", driver.DefaultDriverName, "Name for the driver")
-		address    = flag.String("address", driver.DefaultAddress, "Address to serve on")
-	)
-
 	log, err := logger.NewLogger(cfgParams.Loglevel)
 	if err != nil {
-		fmt.Println(fmt.Sprintf("unable to create NewLogger, err: %v", err))
+		fmt.Printf("unable to create NewLogger, err: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -111,7 +105,7 @@ func main() {
 		}
 	}()
 
-	drv, err := driver.NewDriver(*endpoint, *driverName, *address, &cfgParams.NodeName, log, cl)
+	drv, err := driver.NewDriver(cfgParams.CsiAddress, cfgParams.DriverName, cfgParams.Address, &cfgParams.NodeName, log, cl)
 	if err != nil {
 		log.Error(err, "[main] create NewDriver")
 	}

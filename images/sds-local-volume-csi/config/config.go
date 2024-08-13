@@ -17,8 +17,11 @@ limitations under the License.
 package config
 
 import (
+	"flag"
 	"fmt"
 	"os"
+
+	"sds-local-volume-csi/driver"
 	"sds-local-volume-csi/pkg/logger"
 )
 
@@ -34,6 +37,9 @@ type Options struct {
 	Version                string
 	Loglevel               logger.Verbosity
 	HealthProbeBindAddress string
+	CsiAddress             string
+	DriverName             string
+	Address                string
 }
 
 func NewConfig() (*Options, error) {
@@ -57,6 +63,16 @@ func NewConfig() (*Options, error) {
 	}
 
 	opts.Version = "dev"
+
+	fl := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fl.StringVar(&opts.CsiAddress, "csi-address", "unix:///var/lib/kubelet/plugins/"+driver.DefaultDriverName+"/csi.sock", "CSI address")
+	fl.StringVar(&opts.DriverName, "driver-name", driver.DefaultDriverName, "Name for the driver")
+	fl.StringVar(&opts.Address, "address", driver.DefaultAddress, "Address to serve on")
+
+	err := fl.Parse(os.Args[1:])
+	if err != nil {
+		return &opts, err
+	}
 
 	return &opts, nil
 }

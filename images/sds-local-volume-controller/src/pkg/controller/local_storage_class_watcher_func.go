@@ -19,15 +19,15 @@ package controller
 import (
 	"context"
 	"fmt"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
-	"sds-local-volume-controller/pkg/logger"
 	"strings"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/strings/slices"
+	"sds-local-volume-controller/pkg/logger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -198,11 +198,7 @@ func identifyReconcileFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageCla
 }
 
 func shouldReconcileByDeleteFunc(lsc *slv.LocalStorageClass) bool {
-	if lsc.DeletionTimestamp != nil {
-		return true
-	}
-
-	return false
+	return lsc.DeletionTimestamp != nil
 }
 
 func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass) (bool, error) {
@@ -227,17 +223,15 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 				}
 
 				return false, nil
-
-			} else {
-				err := fmt.Errorf("a storage class %s already exists and does not belong to %s provisioner", sc.Name, LocalStorageClassProvisioner)
-				return false, err
 			}
+
+			err := fmt.Errorf("a storage class %s already exists and does not belong to %s provisioner", sc.Name, LocalStorageClassProvisioner)
+			return false, err
 		}
 	}
 
 	err := fmt.Errorf("a storage class %s does not exist", lsc.Name)
 	return false, err
-
 }
 
 func hasLVGDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {

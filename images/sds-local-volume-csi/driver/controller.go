@@ -20,15 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sds-local-volume-csi/internal"
-	"sds-local-volume-csi/pkg/utils"
-
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"sds-local-volume-csi/internal"
+	"sds-local-volume-csi/pkg/utils"
 )
 
 func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
@@ -185,7 +184,7 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
-func (d *Driver) ControllerPublishVolume(ctx context.Context, request *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
+func (d *Driver) ControllerPublishVolume(_ context.Context, request *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	d.log.Info("method ControllerPublishVolume")
 	return &csi.ControllerPublishVolumeResponse{
 		PublishContext: map[string]string{
@@ -194,27 +193,27 @@ func (d *Driver) ControllerPublishVolume(ctx context.Context, request *csi.Contr
 	}, nil
 }
 
-func (d *Driver) ControllerUnpublishVolume(ctx context.Context, request *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
+func (d *Driver) ControllerUnpublishVolume(_ context.Context, _ *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
 	d.log.Info("method ControllerUnpublishVolume")
 	// todo called Immediate
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
 }
 
-func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, request *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
+func (d *Driver) ValidateVolumeCapabilities(_ context.Context, _ *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	d.log.Info("call method ValidateVolumeCapabilities")
 	return nil, nil
 }
 
-func (d *Driver) ListVolumes(ctx context.Context, request *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
+func (d *Driver) ListVolumes(_ context.Context, _ *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	d.log.Info("call method ListVolumes")
 	return nil, nil
 }
 
-func (d *Driver) GetCapacity(ctx context.Context, request *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
+func (d *Driver) GetCapacity(_ context.Context, _ *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
 	d.log.Info("method GetCapacity")
 
-	//todo MaxSize one PV
-	//todo call volumeBindingMode: WaitForFirstConsumer
+	// todo MaxSize one PV
+	// todo call volumeBindingMode: WaitForFirstConsumer
 
 	return &csi.GetCapacityResponse{
 		AvailableCapacity: 1000000,
@@ -223,7 +222,7 @@ func (d *Driver) GetCapacity(ctx context.Context, request *csi.GetCapacityReques
 	}, nil
 }
 
-func (d *Driver) ControllerGetCapabilities(ctx context.Context, request *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
+func (d *Driver) ControllerGetCapabilities(_ context.Context, _ *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	d.log.Info("method ControllerGetCapabilities")
 	capabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
@@ -250,17 +249,17 @@ func (d *Driver) ControllerGetCapabilities(ctx context.Context, request *csi.Con
 	}, nil
 }
 
-func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+func (d *Driver) CreateSnapshot(_ context.Context, _ *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	d.log.Info(" call method CreateSnapshot")
 	return nil, nil
 }
 
-func (d *Driver) DeleteSnapshot(ctx context.Context, request *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+func (d *Driver) DeleteSnapshot(_ context.Context, _ *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
 	d.log.Info(" call method DeleteSnapshot")
 	return nil, nil
 }
 
-func (d *Driver) ListSnapshots(ctx context.Context, request *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
+func (d *Driver) ListSnapshots(_ context.Context, _ *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	d.log.Info(" call method ListSnapshots")
 	return nil, nil
 }
@@ -339,12 +338,12 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 	}, nil
 }
 
-func (d *Driver) ControllerGetVolume(ctx context.Context, request *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+func (d *Driver) ControllerGetVolume(_ context.Context, _ *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
 	d.log.Info(" call method ControllerGetVolume")
 	return &csi.ControllerGetVolumeResponse{}, nil
 }
 
-func (d *Driver) ControllerModifyVolume(ctx context.Context, request *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
+func (d *Driver) ControllerModifyVolume(_ context.Context, _ *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
 	d.log.Info(" call method ControllerModifyVolume")
 	return &csi.ControllerModifyVolumeResponse{}, nil
 }

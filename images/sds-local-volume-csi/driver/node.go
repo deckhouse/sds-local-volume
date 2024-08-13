@@ -19,13 +19,13 @@ package driver
 import (
 	"context"
 	"fmt"
-	"sds-local-volume-csi/internal"
 	"slices"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"sds-local-volume-csi/internal"
 )
 
 const (
@@ -49,7 +49,7 @@ var (
 	}
 )
 
-func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	d.log.Debug(fmt.Sprintf("[NodeStageVolume] method called with request: %v", request))
 
 	volumeID := request.GetVolumeId()
@@ -147,7 +147,7 @@ func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolu
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
-func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
+func (d *Driver) NodeUnstageVolume(_ context.Context, request *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] method called with request: %v", request))
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
@@ -176,7 +176,7 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstage
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
-func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	d.log.Info("Start method NodePublishVolume")
 	d.log.Trace("------------- NodePublishVolume --------------")
 	d.log.Trace(request.String())
@@ -269,7 +269,7 @@ func (d *Driver) NodePublishVolume(ctx context.Context, request *csi.NodePublish
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
-func (d *Driver) NodeUnpublishVolume(ctx context.Context, request *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
+func (d *Driver) NodeUnpublishVolume(_ context.Context, request *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	d.log.Debug(fmt.Sprintf("[NodeUnpublishVolume] method called with request: %v", request))
 	d.log.Trace("------------- NodeUnpublishVolume --------------")
 	d.log.Trace(request.String())
@@ -303,12 +303,12 @@ func (d *Driver) NodeUnpublishVolume(ctx context.Context, request *csi.NodeUnpub
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func (d *Driver) NodeGetVolumeStats(ctx context.Context, request *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+func (d *Driver) NodeGetVolumeStats(_ context.Context, _ *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	d.log.Info("method NodeGetVolumeStats")
 	return &csi.NodeGetVolumeStatsResponse{}, nil
 }
 
-func (d *Driver) NodeExpandVolume(ctx context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+func (d *Driver) NodeExpandVolume(_ context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	d.log.Info("Call method NodeExpandVolume")
 
 	d.log.Trace("========== NodeExpandVolume ============")
@@ -333,7 +333,7 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, request *csi.NodeExpandVo
 	return &csi.NodeExpandVolumeResponse{}, nil
 }
 
-func (d *Driver) NodeGetCapabilities(ctx context.Context, request *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
+func (d *Driver) NodeGetCapabilities(_ context.Context, request *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	d.log.Debug(fmt.Sprintf("[NodeGetCapabilities] method called with request: %v", request))
 
 	caps := make([]*csi.NodeServiceCapability, len(nodeCaps))
@@ -352,7 +352,7 @@ func (d *Driver) NodeGetCapabilities(ctx context.Context, request *csi.NodeGetCa
 	}, nil
 }
 
-func (d *Driver) NodeGetInfo(ctx context.Context, request *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+func (d *Driver) NodeGetInfo(_ context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	d.log.Info("method NodeGetInfo")
 	d.log.Info(fmt.Sprintf("hostID = %s", d.hostID))
 
