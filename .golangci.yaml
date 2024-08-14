@@ -13,7 +13,10 @@ linters-settings:
     sections:
       - standard
       - default
+      - prefix(sds-local-volume-controller)
+      - prefix(sds-local-volume-csi)
       - prefix(sds-local-volume-scheduler-extender)
+      - prefix(webhooks)
   errcheck:
     ignore: fmt:.*,[rR]ead|[wW]rite|[cC]lose,io:Copy
 
