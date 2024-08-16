@@ -34,15 +34,16 @@ import (
 	sv1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/yaml"
+
 	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/controller"
 	"sds-local-volume-scheduler-extender/pkg/kubutils"
 	"sds-local-volume-scheduler-extender/pkg/logger"
 	"sds-local-volume-scheduler-extender/pkg/scheduler"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/yaml"
 )
 
 var cfgFilePath string

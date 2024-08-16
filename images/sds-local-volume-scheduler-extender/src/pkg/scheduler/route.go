@@ -22,9 +22,10 @@ import (
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/api/resource"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/logger"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type scheduler struct {
