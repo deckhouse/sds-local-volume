@@ -22,9 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"sds-local-volume-controller/pkg/config"
-	"sds-local-volume-controller/pkg/logger"
-
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
@@ -36,6 +33,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/yaml"
+
+	"sds-local-volume-controller/pkg/config"
+	"sds-local-volume-controller/pkg/logger"
 )
 
 const (

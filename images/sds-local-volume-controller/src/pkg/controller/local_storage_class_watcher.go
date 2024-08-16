@@ -23,9 +23,6 @@ import (
 	"reflect"
 	"time"
 
-	"sds-local-volume-controller/pkg/config"
-	"sds-local-volume-controller/pkg/logger"
-
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	v1 "k8s.io/api/storage/v1"
 	errors2 "k8s.io/apimachinery/pkg/api/errors"
@@ -38,6 +35,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"sds-local-volume-controller/pkg/config"
+	"sds-local-volume-controller/pkg/logger"
 )
 
 const (
@@ -131,12 +131,12 @@ func RunLocalStorageClassWatcherController(
 	err = c.Watch(
 		source.Kind(mgr.GetCache(), &slv.LocalStorageClass{},
 			handler.TypedFuncs[*slv.LocalStorageClass]{
-				CreateFunc: func(ctx context.Context, e event.TypedCreateEvent[*slv.LocalStorageClass], q workqueue.RateLimitingInterface) {
+				CreateFunc: func(_ context.Context, e event.TypedCreateEvent[*slv.LocalStorageClass], q workqueue.RateLimitingInterface) {
 					log.Info(fmt.Sprintf("[CreateFunc] get event for LocalStorageClass %q. Add to the queue", e.Object.GetName()))
 					request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: e.Object.GetNamespace(), Name: e.Object.GetName()}}
 					q.Add(request)
 				},
-				UpdateFunc: func(ctx context.Context, e event.TypedUpdateEvent[*slv.LocalStorageClass], q workqueue.RateLimitingInterface) {
+				UpdateFunc: func(_ context.Context, e event.TypedUpdateEvent[*slv.LocalStorageClass], q workqueue.RateLimitingInterface) {
 					log.Info(fmt.Sprintf("[UpdateFunc] get event for LocalStorageClass %q. Check if it should be reconciled", e.ObjectNew.GetName()))
 
 					oldLsc := e.ObjectOld
