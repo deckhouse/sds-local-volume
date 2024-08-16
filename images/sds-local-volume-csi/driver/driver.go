@@ -29,12 +29,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 	"sds-local-volume-csi/internal"
 	"sds-local-volume-csi/pkg/logger"
 	"sds-local-volume-csi/pkg/utils"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -70,6 +71,10 @@ type Driver struct {
 	cl           client.Client
 	storeManager utils.NodeStoreManager
 	inFlight     *internal.InFlight
+
+	csi.UnimplementedControllerServer
+	csi.UnimplementedIdentityServer
+	csi.UnimplementedNodeServer
 }
 
 // NewDriver returns a CSI plugin that contains the necessary gRPC
