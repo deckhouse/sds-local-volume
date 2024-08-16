@@ -93,8 +93,7 @@ func main() {
 	log.Info("[main] successfully read scheme CR")
 
 	cl, err := client.New(kConfig, client.Options{
-		Scheme:         scheme,
-		WarningHandler: client.WarningHandlerOptions{},
+		Scheme: scheme,
 	})
 
 	http.HandleFunc("/healthz", healthHandler)
