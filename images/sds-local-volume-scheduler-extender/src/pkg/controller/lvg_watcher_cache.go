@@ -42,8 +42,8 @@ func RunLVGWatcherCacheController(
 
 	err = c.Watch(
 		source.Kind(mgr.GetCache(), &snc.LvmVolumeGroup{},
-			handler.TypedFuncs[*snc.LvmVolumeGroup]{
-				CreateFunc: func(_ context.Context, e event.TypedCreateEvent[*snc.LvmVolumeGroup], _ workqueue.RateLimitingInterface) {
+			handler.TypedFuncs[*snc.LvmVolumeGroup, reconcile.Request]{
+				CreateFunc: func(_ context.Context, e event.TypedCreateEvent[*snc.LvmVolumeGroup], _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] CreateFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.Object.GetName()))
 
 					lvg := e.Object
@@ -88,7 +88,7 @@ func RunLVGWatcherCacheController(
 
 					log.Info(fmt.Sprintf("[RunLVGWatcherCacheController] cache for the LVMVolumeGroup %s was reconciled by CreateFunc", lvg.Name))
 				},
-				UpdateFunc: func(_ context.Context, e event.TypedUpdateEvent[*snc.LvmVolumeGroup], _ workqueue.RateLimitingInterface) {
+				UpdateFunc: func(_ context.Context, e event.TypedUpdateEvent[*snc.LvmVolumeGroup], _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					log.Info(fmt.Sprintf("[RunCacheWatcherController] UpdateFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.ObjectNew.GetName()))
 					oldLvg := e.ObjectOld
 					newLvg := e.ObjectNew
@@ -128,7 +128,7 @@ func RunLVGWatcherCacheController(
 
 					log.Debug(fmt.Sprintf("[RunLVGWatcherCacheController] Update Func ends reconciliation the LVMVolumeGroup %s cache", newLvg.Name))
 				},
-				DeleteFunc: func(_ context.Context, e event.TypedDeleteEvent[*snc.LvmVolumeGroup], _ workqueue.RateLimitingInterface) {
+				DeleteFunc: func(_ context.Context, e event.TypedDeleteEvent[*snc.LvmVolumeGroup], _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					log.Info(fmt.Sprintf("[RunCacheWatcherController] DeleteFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.Object.GetName()))
 					lvg := e.Object
 					cache.DeleteLVG(lvg.Name)

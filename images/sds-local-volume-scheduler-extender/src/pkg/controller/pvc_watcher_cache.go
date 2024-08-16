@@ -46,8 +46,8 @@ func RunPVCWatcherCacheController(
 
 	err = c.Watch(
 		source.Kind(mgr.GetCache(), &v1.PersistentVolumeClaim{},
-			handler.TypedFuncs[*v1.PersistentVolumeClaim]{
-				CreateFunc: func(ctx context.Context, e event.TypedCreateEvent[*v1.PersistentVolumeClaim], _ workqueue.RateLimitingInterface) {
+			handler.TypedFuncs[*v1.PersistentVolumeClaim, reconcile.Request]{
+				CreateFunc: func(ctx context.Context, e event.TypedCreateEvent[*v1.PersistentVolumeClaim], _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					log.Info("[RunPVCWatcherCacheController] CreateFunc reconciliation starts")
 					pvc := e.Object
 					log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] CreateFunc starts the reconciliation for the PVC %s/%s", pvc.Namespace, pvc.Name))
@@ -68,7 +68,7 @@ func RunPVCWatcherCacheController(
 					reconcilePVC(ctx, mgr, log, schedulerCache, pvc, selectedNodeName)
 					log.Info("[RunPVCWatcherCacheController] CreateFunc reconciliation ends")
 				},
-				UpdateFunc: func(ctx context.Context, e event.TypedUpdateEvent[*v1.PersistentVolumeClaim], _ workqueue.RateLimitingInterface) {
+				UpdateFunc: func(ctx context.Context, e event.TypedUpdateEvent[*v1.PersistentVolumeClaim], _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					log.Info("[RunPVCWatcherCacheController] Update Func reconciliation starts")
 					pvc := e.ObjectNew
 					log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] UpdateFunc starts the reconciliation for the PVC %s/%s", pvc.Namespace, pvc.Name))
@@ -89,7 +89,7 @@ func RunPVCWatcherCacheController(
 					reconcilePVC(ctx, mgr, log, schedulerCache, pvc, selectedNodeName)
 					log.Info("[RunPVCWatcherCacheController] Update Func reconciliation ends")
 				},
-				DeleteFunc: func(_ context.Context, e event.TypedDeleteEvent[*v1.PersistentVolumeClaim], _ workqueue.RateLimitingInterface) {
+				DeleteFunc: func(_ context.Context, e event.TypedDeleteEvent[*v1.PersistentVolumeClaim], _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					log.Info("[RunPVCWatcherCacheController] Delete Func reconciliation starts")
 					pvc := e.Object
 					log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] DeleteFunc starts the reconciliation for the PVC %s/%s", pvc.Namespace, pvc.Name))
