@@ -9,6 +9,7 @@ issues:
     - "exported: .*"
 
 linters-settings:
+  # gci write --skip-generated -s standard -s default -s 'prefix(sds-local-volume-controller,sds-local-volume-csi,sds-local-volume-scheduler-extender,webhooks)'  .
   gci:
     sections:
       - standard
