@@ -130,13 +130,13 @@ func RunLocalStorageClassWatcherController(
 
 	err = c.Watch(
 		source.Kind(mgr.GetCache(), &slv.LocalStorageClass{},
-			handler.TypedFuncs[*slv.LocalStorageClass]{
-				CreateFunc: func(_ context.Context, e event.TypedCreateEvent[*slv.LocalStorageClass], q workqueue.RateLimitingInterface) {
+			handler.TypedFuncs[*slv.LocalStorageClass, reconcile.Request]{
+				CreateFunc: func(_ context.Context, e event.TypedCreateEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					log.Info(fmt.Sprintf("[CreateFunc] get event for LocalStorageClass %q. Add to the queue", e.Object.GetName()))
 					request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: e.Object.GetNamespace(), Name: e.Object.GetName()}}
 					q.Add(request)
 				},
-				UpdateFunc: func(_ context.Context, e event.TypedUpdateEvent[*slv.LocalStorageClass], q workqueue.RateLimitingInterface) {
+				UpdateFunc: func(_ context.Context, e event.TypedUpdateEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 					log.Info(fmt.Sprintf("[UpdateFunc] get event for LocalStorageClass %q. Check if it should be reconciled", e.ObjectNew.GetName()))
 
 					oldLsc := e.ObjectOld
