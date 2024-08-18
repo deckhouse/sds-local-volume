@@ -45,14 +45,6 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Trace(fmt.Sprintf("[prioritize] input data: %+v", inputData))
 
-	if inputData.NodeNames == nil || len(*inputData.NodeNames) == 0 {
-		s.log.Error(errors.New("no node names in the request"), "[prioritize] unable to get node names from the request")
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	nodeNames := inputData.NodeNames
-	s.log.Trace(fmt.Sprintf("[prioritize] node names from the request: %v", nodeNames))
-
 	if inputData.Pod == nil {
 		s.log.Error(errors.New("no pod in the request"), "[prioritize] unable to get a Pod from the request")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -61,7 +53,41 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	pod := inputData.Pod
 	s.log.Debug(fmt.Sprintf("[prioritize] starts the prioritizeing for Pod %s/%s", pod.Namespace, pod.Name))
 
-	s.log.Debug(fmt.Sprintf("[prioritize] starts the prioritizing for Pod %s/%s", pod.Namespace, pod.Name))
+	s.log.Debug(fmt.Sprintf("[prioritize] Find out if the Pod %s/%s should be processed", pod.Namespace, pod.Name))
+	shouldProcess, err := ShouldProcessPod(s.ctx, s.client, s.log, pod, consts.SdsLocalVolumeProvisioner)
+	if err != nil {
+		s.log.Error(err, "[prioritize] unable to check if the Pod should be processed")
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !shouldProcess {
+		s.log.Debug(fmt.Sprintf("[prioritize] Pod %s/%s should not be processed. Return the same nodes with 0 score", pod.Namespace, pod.Name))
+		nodeScores := make([]HostPriority, 0, len(*inputData.NodeNames))
+		for _, nodeName := range *inputData.NodeNames {
+			nodeScores = append(nodeScores, HostPriority{
+				Host:  nodeName,
+				Score: 0,
+			})
+		}
+
+		s.log.Trace(fmt.Sprintf("[prioritize] node scores: %+v", nodeScores))
+		w.Header().Set("content-type", "application/json")
+		err = json.NewEncoder(w).Encode(nodeScores)
+		if err != nil {
+			s.log.Error(err, fmt.Sprintf("[prioritize] unable to encode a response for a Pod %s/%s", pod.Namespace, pod.Name))
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}
+		return
+	}
+	s.log.Debug(fmt.Sprintf("[prioritize] Pod %s/%s should be processed", pod.Namespace, pod.Name))
+
+	if inputData.NodeNames == nil || len(*inputData.NodeNames) == 0 {
+		s.log.Error(errors.New("no node names in the request"), "[prioritize] unable to get node names from the request")
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	nodeNames := inputData.NodeNames
+	s.log.Trace(fmt.Sprintf("[prioritize] node names from the request: %v", nodeNames))
 
 	pvcs, err := getUsedPVC(s.ctx, s.client, s.log, pod)
 	if err != nil {

@@ -49,14 +49,6 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Trace(fmt.Sprintf("[filter] input data: %+v", inputData))
 
-	if inputData.NodeNames == nil || len(*inputData.NodeNames) == 0 {
-		s.log.Error(errors.New("no node names in the request"), "[filter] unable to get node names from the request")
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	nodeNames := inputData.NodeNames
-	s.log.Trace(fmt.Sprintf("[filter] node names from the request: %v", nodeNames))
-
 	if inputData.Pod == nil {
 		s.log.Error(errors.New("no pod in the request"), "[filter] unable to get a Pod from the request")
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -64,8 +56,39 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	}
 	pod := inputData.Pod
 	s.log.Debug(fmt.Sprintf("[filter] starts the filtering for Pod %s/%s", pod.Namespace, pod.Name))
-
 	s.log.Trace(fmt.Sprintf("[filter] Pod from the request: %+v", pod))
+
+	s.log.Debug(fmt.Sprintf("[filter] Find out if the Pod %s/%s should be processed", pod.Namespace, pod.Name))
+	shouldProcess, err := ShouldProcessPod(s.ctx, s.client, s.log, pod, consts.SdsLocalVolumeProvisioner)
+	if err != nil {
+		s.log.Error(err, "[filter] unable to check if the Pod should be processed")
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !shouldProcess {
+		s.log.Debug(fmt.Sprintf("[filter] Pod %s/%s should not be processed. Return the same nodes", pod.Namespace, pod.Name))
+		filteredNodes := &ExtenderFilterResult{
+			NodeNames: inputData.NodeNames,
+		}
+		s.log.Trace(fmt.Sprintf("[filter] filtered nodes: %+v", filteredNodes))
+
+		w.Header().Set("content-type", "application/json")
+		err = json.NewEncoder(w).Encode(filteredNodes)
+		if err != nil {
+			s.log.Error(err, "[filter] unable to encode a response")
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		return
+	}
+	s.log.Debug(fmt.Sprintf("[filter] Pod %s/%s should be processed", pod.Namespace, pod.Name))
+
+	if inputData.NodeNames == nil || len(*inputData.NodeNames) == 0 {
+		s.log.Error(errors.New("no node names in the request"), "[filter] unable to get node names from the request")
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	nodeNames := inputData.NodeNames
 	for _, nodeName := range *nodeNames {
 		s.log.Debug(fmt.Sprintf("[filter] Pod %s/%s has node %s from the request", pod.Namespace, pod.Name, nodeName))
 	}
