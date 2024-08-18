@@ -48,25 +48,28 @@ func ShouldProcessPod(ctx context.Context, cl client.Client, log logger.Logger, 
 
 			log.Trace(fmt.Sprintf("[ShouldProcessPod] get pvc: %+v", pvc))
 			log.Trace(fmt.Sprintf("[ShouldProcessPod] check provisioner in pvc annotations: %+v", pvc.Annotations))
-			provisioner, ok := pvc.Annotations[annotationStorageProvisioner]
-			if !ok {
-				provisioner, ok = pvc.Annotations[annotationBetaStorageProvisioner]
+
+			switch {
+			case pvc.Annotations[annotationStorageProvisioner] != "":
+				discoveredProvisioner = pvc.Annotations[annotationStorageProvisioner]
+				log.Trace(fmt.Sprintf("[ShouldProcessPod] discovered provisioner in pvc annotations: %s", discoveredProvisioner))
+			case pvc.Annotations[annotationBetaStorageProvisioner] != "":
+				discoveredProvisioner = pvc.Annotations[annotationBetaStorageProvisioner]
+				log.Trace(fmt.Sprintf("[ShouldProcessPod] discovered provisioner in beta pvc annotations: %s", discoveredProvisioner))
 			}
 
-			if ok {
-				discoveredProvisioner = provisioner
-				log.Trace(fmt.Sprintf("[ShouldProcessPod] discovered provisioner in pvc annotations: %s", discoveredProvisioner))
-			} else if pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != "" {
+			if discoveredProvisioner == "" && pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != "" {
 				log.Trace(fmt.Sprintf("[ShouldProcessPod] can't find provisioner in pvc annotations, check in storageClass with name: %s", *pvc.Spec.StorageClassName))
 				storageClass := &storagev1.StorageClass{}
 				err := cl.Get(ctx, client.ObjectKey{Name: *pvc.Spec.StorageClassName}, storageClass)
 				if err != nil {
 					return false, fmt.Errorf("[ShouldProcessPod] error getting StorageClass %s: %v", *pvc.Spec.StorageClassName, err)
 				}
-
 				discoveredProvisioner = storageClass.Provisioner
 				log.Trace(fmt.Sprintf("[ShouldProcessPod] discover provisioner %s in storageClass: %+v", discoveredProvisioner, storageClass))
-			} else if pvc.Spec.VolumeName != "" {
+			}
+
+			if discoveredProvisioner == "" && pvc.Spec.VolumeName != "" {
 				log.Trace(fmt.Sprintf("[ShouldProcessPod] can't find provisioner in pvc annotations and StorageClass, check in PV with name: %s", pvc.Spec.VolumeName))
 				pv := &corev1.PersistentVolume{}
 				err := cl.Get(ctx, client.ObjectKey{Name: pvc.Spec.VolumeName}, pv)
