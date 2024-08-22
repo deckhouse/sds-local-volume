@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"os"
 
-	dh "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	kwhhttp "github.com/slok/kubewebhook/v2/pkg/http"
 	"github.com/slok/kubewebhook/v2/pkg/log"
@@ -38,6 +37,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	mc "webhooks/api"
 )
 
 func NewKubeClient(kubeconfigPath string) (client.Client, error) {
@@ -57,7 +58,7 @@ func NewKubeClient(kubeconfigPath string) (client.Client, error) {
 	var (
 		resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
 			v1alpha2.AddToScheme,
-			dh.AddToScheme,
+			mc.AddToScheme,
 			snc.AddToScheme,
 			clientgoscheme.AddToScheme,
 			extv1.AddToScheme,
