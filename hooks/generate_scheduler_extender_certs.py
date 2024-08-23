@@ -30,7 +30,8 @@ def main():
                 "sds-local-volume-scheduler-extender",
                 f"sds-local-volume-scheduler-extender.{common.NAMESPACE}",
                 f"sds-local-volume-scheduler-extender.{common.NAMESPACE}.svc",
-                f"sds-local-volume-scheduler-extender.{common.NAMESPACE}.svc.cluster.local"]),
+                f"%CLUSTER_DOMAIN%://sds-local-volume-scheduler-extender.{common.NAMESPACE}.svc",
+            ]),
             values_path_prefix=f"{common.MODULE_NAME}.internal.customSchedulerExtenderCert"
             ),
         cn="sds-local-volume-scheduler-extender",

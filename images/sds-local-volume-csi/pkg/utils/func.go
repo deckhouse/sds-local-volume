@@ -57,25 +57,9 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 	}
 
 	log.Trace(fmt.Sprintf("[CreateLVMLogicalVolume][traceID:%s][volumeID:%s] LVMLogicalVolume: %+v", traceID, name, llv))
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		log.Trace(fmt.Sprintf("[CreateLVMLogicalVolume][traceID:%s][volumeID:%s] Attempt: %d", traceID, name, attempt))
-		err = kc.Create(ctx, llv)
-		if err == nil {
-			return llv, nil
-		}
 
-		if kerrors.IsAlreadyExists(err) {
-			return nil, err
-		}
-
-		log.Warning(fmt.Sprintf("[CreateLVMLogicalVolume][traceID:%s][volumeID:%s] error: %s. Retry after %d seconds", traceID, name, err.Error(), KubernetesAPIRequestTimeout))
-		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("after %d attempts of creating LVMLogicalVolume %s, last error: %w", KubernetesAPIRequestLimit, name, err)
-	}
-	return llv, nil
+	err = kc.Create(ctx, llv)
+	return llv, err
 }
 
 func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName string) error {
@@ -109,7 +93,7 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 			return nil
 		}
 		log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] error: %s. Retry after %d seconds", traceID, lvmLogicalVolumeName, err.Error(), KubernetesAPIRequestTimeout))
-		time.Sleep(KubernetesAPIRequestTimeout)
+		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
 	}
 
 	if err != nil {
@@ -174,7 +158,7 @@ func GetLVMLogicalVolume(ctx context.Context, kc client.Client, lvmLogicalVolume
 		if err == nil {
 			return &llv, nil
 		}
-		time.Sleep(KubernetesAPIRequestTimeout)
+		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
 	}
 	return nil, fmt.Errorf("after %d attempts of getting LVMLogicalVolume %s in namespace %s, last error: %w", KubernetesAPIRequestLimit, lvmLogicalVolumeName, namespace, err)
 }
@@ -224,7 +208,7 @@ func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.L
 		if err == nil {
 			break
 		}
-		time.Sleep(KubernetesAPIRequestTimeout)
+		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
 	}
 	if err != nil {
 		return "", "", fmt.Errorf("after %d attempts of getting LvmVolumeGroups, last error: %w", KubernetesAPIRequestLimit, err)
@@ -269,7 +253,7 @@ func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace
 		if err == nil {
 			return &lvg, nil
 		}
-		time.Sleep(KubernetesAPIRequestTimeout)
+		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
 	}
 	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroup %s in namespace %s, last error: %w", KubernetesAPIRequestLimit, lvgName, namespace, err)
 }
@@ -303,21 +287,22 @@ func ExpandLVMLogicalVolume(ctx context.Context, kc client.Client, llv *snc.LVML
 		if err == nil {
 			return nil
 		}
+		if !kerrors.IsConflict(err) {
+			return fmt.Errorf("[ExpandLVMLogicalVolume] error updating LVMLogicalVolume %s: %w", llv.Name, err)
+		}
+
+		freshLLV, getErr := GetLVMLogicalVolume(ctx, kc, llv.Name, "")
+		if getErr != nil {
+			return fmt.Errorf("[ExpandLVMLogicalVolume] error getting LVMLogicalVolume %s after update conflict: %w", llv.Name, getErr)
+		}
+		llv = freshLLV
 
 		if attempt < KubernetesAPIRequestLimit-1 {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				time.Sleep(KubernetesAPIRequestTimeout)
-			}
-
-			if kerrors.IsConflict(err) {
-				freshLLV, getErr := GetLVMLogicalVolume(ctx, kc, llv.Name, "")
-				if getErr != nil {
-					return fmt.Errorf("[ExpandLVMLogicalVolume] error getting LVMLogicalVolume %s after update conflict: %w", llv.Name, getErr)
-				}
-				llv = freshLLV
+				time.Sleep(KubernetesAPIRequestTimeout * time.Second)
 			}
 		}
 	}
@@ -369,7 +354,7 @@ func GetLVGList(ctx context.Context, kc client.Client) (*snc.LvmVolumeGroupList,
 		if err == nil {
 			return listLvgs, nil
 		}
-		time.Sleep(KubernetesAPIRequestTimeout)
+		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
 	}
 
 	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroupList, last error: %w", KubernetesAPIRequestLimit, err)
@@ -431,20 +416,16 @@ func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *snc.L
 			return true, nil
 		}
 
+		if !kerrors.IsConflict(err) {
+			return false, fmt.Errorf("[removeLLVFinalizerIfExist] error updating LVMLogicalVolume %s: %w", llv.Name, err)
+		}
+
 		if attempt < KubernetesAPIRequestLimit-1 {
 			select {
 			case <-ctx.Done():
 				return false, ctx.Err()
 			default:
-				time.Sleep(KubernetesAPIRequestTimeout)
-			}
-
-			if kerrors.IsConflict(err) {
-				freshLLV, getErr := GetLVMLogicalVolume(ctx, kc, llv.Name, "")
-				if getErr != nil {
-					return false, fmt.Errorf("[removeLLVFinalizerIfExist] error getting LVMLogicalVolume %s after update conflict: %w", llv.Name, getErr)
-				}
-				llv = freshLLV
+				time.Sleep(KubernetesAPIRequestTimeout * time.Second)
 			}
 		}
 	}
