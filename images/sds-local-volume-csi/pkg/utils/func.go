@@ -85,21 +85,8 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 	}
 
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Trying to delete LVMLogicalVolume", traceID, lvmLogicalVolumeName))
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Attempt: %d", traceID, lvmLogicalVolumeName, attempt))
-		err = kc.Delete(ctx, llv)
-		if err == nil {
-			log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] LVMLogicalVolume deleted", traceID, lvmLogicalVolumeName))
-			return nil
-		}
-		log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] error: %s. Retry after %d seconds", traceID, lvmLogicalVolumeName, err.Error(), KubernetesAPIRequestTimeout))
-		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
-	}
-
-	if err != nil {
-		return fmt.Errorf("after %d attempts of deleting LVMLogicalVolume %s, last error: %w", KubernetesAPIRequestLimit, lvmLogicalVolumeName, err)
-	}
-	return nil
+	err = kc.Delete(ctx, llv)
+	return err
 }
 
 func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
@@ -147,20 +134,13 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 
 func GetLVMLogicalVolume(ctx context.Context, kc client.Client, lvmLogicalVolumeName, namespace string) (*snc.LVMLogicalVolume, error) {
 	var llv snc.LVMLogicalVolume
-	var err error
 
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.Get(ctx, client.ObjectKey{
-			Name:      lvmLogicalVolumeName,
-			Namespace: namespace,
-		}, &llv)
+	err := kc.Get(ctx, client.ObjectKey{
+		Name:      lvmLogicalVolumeName,
+		Namespace: namespace,
+	}, &llv)
 
-		if err == nil {
-			return &llv, nil
-		}
-		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
-	}
-	return nil, fmt.Errorf("after %d attempts of getting LVMLogicalVolume %s in namespace %s, last error: %w", KubernetesAPIRequestLimit, lvmLogicalVolumeName, namespace, err)
+	return &llv, err
 }
 
 func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantity) bool {
@@ -203,15 +183,9 @@ func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.L
 		Items:    []snc.LvmVolumeGroup{},
 	}
 
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.List(ctx, listLvgs)
-		if err == nil {
-			break
-		}
-		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
-	}
+	err = kc.List(ctx, listLvgs)
 	if err != nil {
-		return "", "", fmt.Errorf("after %d attempts of getting LvmVolumeGroups, last error: %w", KubernetesAPIRequestLimit, err)
+		return "", "", fmt.Errorf("error getting LvmVolumeGroup list: %w", err)
 	}
 
 	for _, lvg := range listLvgs.Items {
@@ -242,20 +216,13 @@ func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.L
 
 func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace string) (*snc.LvmVolumeGroup, error) {
 	var lvg snc.LvmVolumeGroup
-	var err error
 
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.Get(ctx, client.ObjectKey{
-			Name:      lvgName,
-			Namespace: namespace,
-		}, &lvg)
+	err := kc.Get(ctx, client.ObjectKey{
+		Name:      lvgName,
+		Namespace: namespace,
+	}, &lvg)
 
-		if err == nil {
-			return &lvg, nil
-		}
-		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
-	}
-	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroup %s in namespace %s, last error: %w", KubernetesAPIRequestLimit, lvgName, namespace, err)
+	return &lvg, err
 }
 
 func GetLVMVolumeGroupFreeSpace(lvg snc.LvmVolumeGroup) (vgFreeSpace resource.Quantity) {
@@ -281,33 +248,9 @@ func GetLVMThinPoolFreeSpace(lvg snc.LvmVolumeGroup, thinPoolName string) (thinP
 }
 
 func ExpandLVMLogicalVolume(ctx context.Context, kc client.Client, llv *snc.LVMLogicalVolume, newSize string) error {
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		llv.Spec.Size = newSize
-		err := kc.Update(ctx, llv)
-		if err == nil {
-			return nil
-		}
-		if !kerrors.IsConflict(err) {
-			return fmt.Errorf("[ExpandLVMLogicalVolume] error updating LVMLogicalVolume %s: %w", llv.Name, err)
-		}
-
-		freshLLV, getErr := GetLVMLogicalVolume(ctx, kc, llv.Name, "")
-		if getErr != nil {
-			return fmt.Errorf("[ExpandLVMLogicalVolume] error getting LVMLogicalVolume %s after update conflict: %w", llv.Name, getErr)
-		}
-		llv = freshLLV
-
-		if attempt < KubernetesAPIRequestLimit-1 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-				time.Sleep(KubernetesAPIRequestTimeout * time.Second)
-			}
-		}
-	}
-
-	return fmt.Errorf("after %d attempts of expanding LVMLogicalVolume %s, last error: %w", KubernetesAPIRequestLimit, llv.Name, nil)
+	llv.Spec.Size = newSize
+	err := kc.Update(ctx, llv)
+	return err
 }
 
 func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log *logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []snc.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
@@ -349,15 +292,9 @@ func GetLVGList(ctx context.Context, kc client.Client) (*snc.LvmVolumeGroupList,
 	var err error
 	listLvgs := &snc.LvmVolumeGroupList{}
 
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.List(ctx, listLvgs)
-		if err == nil {
-			return listLvgs, nil
-		}
-		time.Sleep(KubernetesAPIRequestTimeout * time.Second)
-	}
+	err = kc.List(ctx, listLvgs)
 
-	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroupList, last error: %w", KubernetesAPIRequestLimit, err)
+	return listLvgs, err
 }
 
 func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG snc.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity, contiguous bool) snc.LVMLogicalVolumeSpec {
