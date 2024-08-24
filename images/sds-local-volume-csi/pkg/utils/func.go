@@ -116,18 +116,22 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 			log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume status: %+v, full LVMLogicalVolume resource: %+v", traceID, lvmLogicalVolumeName, attemptCounter, llv.Status, llv))
 			sizeEquals = AreSizesEqualWithinDelta(llvSize, llv.Status.ActualSize, delta)
 
-			if llv.Status.Phase == LLVStatusFailed {
-				return attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: %s", lvmLogicalVolumeName, llv.Status.Reason)
-			}
-
 			if llv.DeletionTimestamp != nil {
 				return attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: LVMLogicalVolume is being deleted", lvmLogicalVolumeName)
 			}
 
-			if llv.Status.Phase == LLVStatusCreated && sizeEquals {
-				return attemptCounter, nil
+			if llv.Status.Phase == LLVStatusFailed {
+				return attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: %s", lvmLogicalVolumeName, llv.Status.Reason)
 			}
-			log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume status does not have the required fields yet. Waiting...", traceID, lvmLogicalVolumeName, attemptCounter))
+
+			if llv.Status.Phase == LLVStatusCreated {
+				if sizeEquals {
+					return attemptCounter, nil
+				}
+				log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume created but size does not match the requested size yet. Waiting...", traceID, lvmLogicalVolumeName, attemptCounter))
+			} else {
+				log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume status is not 'Created' yet. Waiting...", traceID, lvmLogicalVolumeName, attemptCounter))
+			}
 		}
 	}
 }
