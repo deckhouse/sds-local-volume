@@ -74,7 +74,7 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] LVMLogicalVolume found: %+v (status: %+v)", traceID, lvmLogicalVolumeName, llv, llv.Status))
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Removing finalizer %s if exists", traceID, lvmLogicalVolumeName, SDSLocalVolumeCSIFinalizer))
 
-	removed, err := removeLLVFinalizerIfExist(ctx, kc, llv, SDSLocalVolumeCSIFinalizer)
+	removed, err := removeLLVFinalizerIfExist(ctx, kc, log, llv, SDSLocalVolumeCSIFinalizer)
 	if err != nil {
 		return fmt.Errorf("remove finalizers from LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
 	}
@@ -333,7 +333,7 @@ func SelectLVG(storageClassLVGs []snc.LvmVolumeGroup, nodeName string) (snc.LvmV
 	return snc.LvmVolumeGroup{}, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found for node %s", nodeName)
 }
 
-func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *snc.LVMLogicalVolume, finalizer string) (bool, error) {
+func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logger.Logger, llv *snc.LVMLogicalVolume, finalizer string) (bool, error) {
 	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
 		removed := false
 		for i, val := range llv.Finalizers {
@@ -348,6 +348,7 @@ func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *snc.L
 			return false, nil
 		}
 
+		log.Trace(fmt.Sprintf("[removeLLVFinalizerIfExist] removing finalizer %s from LVMLogicalVolume %s", finalizer, llv.Name))
 		err := kc.Update(ctx, llv)
 		if err == nil {
 			return true, nil
@@ -358,11 +359,17 @@ func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *snc.L
 		}
 
 		if attempt < KubernetesAPIRequestLimit-1 {
+			log.Trace(fmt.Sprintf("[removeLLVFinalizerIfExist] conflict while updating LVMLogicalVolume %s, retrying...", llv.Name))
 			select {
 			case <-ctx.Done():
 				return false, ctx.Err()
 			default:
 				time.Sleep(KubernetesAPIRequestTimeout * time.Second)
+				freshLLV, getErr := GetLVMLogicalVolume(ctx, kc, llv.Name, "")
+				if getErr != nil {
+					return false, fmt.Errorf("[removeLLVFinalizerIfExist] error getting LVMLogicalVolume %s after update conflict: %w", llv.Name, getErr)
+				}
+				llv = freshLLV
 			}
 		}
 	}
