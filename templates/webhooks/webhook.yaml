@@ -1,4 +1,4 @@
-# {{- if and (not (eq "dev" .Values.global.deckhouseVersion)) (semverCompare "<1.64" .Values.global.deckhouseVersion) }}
+{{- if and (not (eq "dev" .Values.global.deckhouseVersion)) (semverCompare "<1.64" .Values.global.deckhouseVersion) }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
@@ -30,7 +30,7 @@ webhooks:
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
-# {{- end }}
+{{- end }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
