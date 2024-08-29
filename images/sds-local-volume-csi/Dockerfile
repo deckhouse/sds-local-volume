@@ -1,5 +1,5 @@
 ARG BASE_ALPINE=registry.deckhouse.io/base_images/alpine:3.16.9@sha256:fd0e79d78108625846e5f95b2da118bbf941e9ccb43492cee672ceab0e60e65c
-ARG BASE_GOLANG_ALPINE_BUILDER=registry.deckhouse.io/base_images/golang:1.22.3-alpine@sha256:dbf216b880b802c22e3f4f2ef0a78396b4a9a6983cb9b767c5efc351ebf946b0
+ARG BASE_GOLANG_ALPINE_BUILDER=registry.deckhouse.io/base_images/golang:1.22.6-alpine@sha256:41ad3e6d91b2e10a15e871672578b11a51c7f2eb126c82e193e38b647da0bbb2
 
 FROM $BASE_GOLANG_ALPINE_BUILDER as builder
 
