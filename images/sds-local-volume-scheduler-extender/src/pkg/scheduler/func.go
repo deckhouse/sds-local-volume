@@ -32,7 +32,7 @@ const (
 	annotationStorageProvisioner     = "volume.kubernetes.io/storage-provisioner"
 )
 
-func ShouldProcessPod(ctx context.Context, cl client.Client, log logger.Logger, pod *corev1.Pod, targetProvisioner string) (bool, error) {
+func shouldProcessPod(ctx context.Context, cl client.Client, log logger.Logger, pod *corev1.Pod, targetProvisioner string) (bool, error) {
 	log.Trace(fmt.Sprintf("[ShouldProcessPod] targetProvisioner=%s, pod: %+v", targetProvisioner, pod))
 	var discoveredProvisioner string
 
@@ -49,11 +49,10 @@ func ShouldProcessPod(ctx context.Context, cl client.Client, log logger.Logger, 
 			log.Trace(fmt.Sprintf("[ShouldProcessPod] get pvc: %+v", pvc))
 			log.Trace(fmt.Sprintf("[ShouldProcessPod] check provisioner in pvc annotations: %+v", pvc.Annotations))
 
-			switch {
-			case pvc.Annotations[annotationStorageProvisioner] != "":
-				discoveredProvisioner = pvc.Annotations[annotationStorageProvisioner]
+			discoveredProvisioner = pvc.Annotations[annotationStorageProvisioner]
+			if discoveredProvisioner != "" {
 				log.Trace(fmt.Sprintf("[ShouldProcessPod] discovered provisioner in pvc annotations: %s", discoveredProvisioner))
-			case pvc.Annotations[annotationBetaStorageProvisioner] != "":
+			} else {
 				discoveredProvisioner = pvc.Annotations[annotationBetaStorageProvisioner]
 				log.Trace(fmt.Sprintf("[ShouldProcessPod] discovered provisioner in beta pvc annotations: %s", discoveredProvisioner))
 			}
@@ -61,7 +60,7 @@ func ShouldProcessPod(ctx context.Context, cl client.Client, log logger.Logger, 
 			if discoveredProvisioner == "" && pvc.Spec.StorageClassName != nil && *pvc.Spec.StorageClassName != "" {
 				log.Trace(fmt.Sprintf("[ShouldProcessPod] can't find provisioner in pvc annotations, check in storageClass with name: %s", *pvc.Spec.StorageClassName))
 				storageClass := &storagev1.StorageClass{}
-				err := cl.Get(ctx, client.ObjectKey{Name: *pvc.Spec.StorageClassName}, storageClass)
+				err = cl.Get(ctx, client.ObjectKey{Name: *pvc.Spec.StorageClassName}, storageClass)
 				if err != nil {
 					return false, fmt.Errorf("[ShouldProcessPod] error getting StorageClass %s: %v", *pvc.Spec.StorageClassName, err)
 				}
@@ -94,4 +93,20 @@ func ShouldProcessPod(ctx context.Context, cl client.Client, log logger.Logger, 
 	}
 	log.Trace(fmt.Sprintf("[ShouldProcessPod] can't find targetProvisioner %s in pod volumes. Skip pod: %s/%s", targetProvisioner, pod.Namespace, pod.Name))
 	return false, nil
+}
+
+func getNodeNames(inputData ExtenderArgs) ([]string, error) {
+	if inputData.NodeNames != nil && len(*inputData.NodeNames) > 0 {
+		return *inputData.NodeNames, nil
+	}
+
+	if inputData.Nodes != nil && len(inputData.Nodes.Items) > 0 {
+		nodeNames := make([]string, 0, len(inputData.Nodes.Items))
+		for _, node := range inputData.Nodes.Items {
+			nodeNames = append(nodeNames, node.Name)
+		}
+		return nodeNames, nil
+	}
+
+	return nil, fmt.Errorf("no nodes provided")
 }

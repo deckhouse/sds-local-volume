@@ -227,7 +227,7 @@ func TestShouldProcessPod(t *testing.T) {
 			_ = storagev1.AddToScheme(s)
 
 			cl := fake.NewFakeClient(tc.objects...)
-			shouldProcess, err := ShouldProcessPod(ctx, cl, log, tc.pod, tc.targetProvisioner)
+			shouldProcess, err := shouldProcessPod(ctx, cl, log, tc.pod, tc.targetProvisioner)
 			if (err != nil) != tc.expectedError {
 				t.Fatalf("Unexpected error: %v", err)
 			}

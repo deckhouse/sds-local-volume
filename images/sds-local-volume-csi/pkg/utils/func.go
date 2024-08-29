@@ -253,8 +253,7 @@ func GetLVMThinPoolFreeSpace(lvg snc.LvmVolumeGroup, thinPoolName string) (thinP
 
 func ExpandLVMLogicalVolume(ctx context.Context, kc client.Client, llv *snc.LVMLogicalVolume, newSize string) error {
 	llv.Spec.Size = newSize
-	err := kc.Update(ctx, llv)
-	return err
+	return kc.Update(ctx, llv)
 }
 
 func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log *logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []snc.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
@@ -293,12 +292,8 @@ func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log
 }
 
 func GetLVGList(ctx context.Context, kc client.Client) (*snc.LvmVolumeGroupList, error) {
-	var err error
 	listLvgs := &snc.LvmVolumeGroupList{}
-
-	err = kc.List(ctx, listLvgs)
-
-	return listLvgs, err
+	return listLvgs, kc.List(ctx, listLvgs)
 }
 
 func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG snc.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity, contiguous bool) snc.LVMLogicalVolumeSpec {
@@ -373,7 +368,8 @@ func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logge
 				if getErr != nil {
 					return false, fmt.Errorf("[removeLLVFinalizerIfExist] error getting LVMLogicalVolume %s after update conflict: %w", llv.Name, getErr)
 				}
-				llv = freshLLV
+				// Update the llv struct with fresh data (without changing pointers because we need the new resource version outside of this function)
+				*llv = *freshLLV
 			}
 		}
 	}
