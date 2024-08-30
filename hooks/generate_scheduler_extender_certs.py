@@ -24,17 +24,17 @@ import common
 def main():
     hook = GenerateCertificateHook(
         TlsSecret(
-            cn="webhooks",
-            name="webhooks-https-certs",
+            cn="sds-local-volume-scheduler-extender",
+            name="scheduler-extender-https-certs",
             sansGenerator=default_sans([
-                "webhooks",
-                f"webhooks.{common.NAMESPACE}",
-                f"webhooks.{common.NAMESPACE}.svc",
-                f"%CLUSTER_DOMAIN%://webhooks.{common.NAMESPACE}.svc",
-                ]),
-            values_path_prefix=f"{common.MODULE_NAME}.internal.customWebhookCert"
+                "sds-local-volume-scheduler-extender",
+                f"sds-local-volume-scheduler-extender.{common.NAMESPACE}",
+                f"sds-local-volume-scheduler-extender.{common.NAMESPACE}.svc",
+                f"%CLUSTER_DOMAIN%://sds-local-volume-scheduler-extender.{common.NAMESPACE}.svc",
+            ]),
+            values_path_prefix=f"{common.MODULE_NAME}.internal.customSchedulerExtenderCert"
             ),
-        cn="sds-local-volume-webhooks",
+        cn="sds-local-volume-scheduler-extender",
         common_ca=True,
         namespace=common.NAMESPACE)
 

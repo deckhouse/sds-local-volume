@@ -39,11 +39,11 @@ type scheduler struct {
 
 func (s *scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
-	case "/filter":
+	case "/scheduler/filter":
 		s.log.Debug("[ServeHTTP] filter route starts handling the request")
 		s.filter(w, r)
 		s.log.Debug("[ServeHTTP] filter route ends handling the request")
-	case "/prioritize":
+	case "/scheduler/prioritize":
 		s.log.Debug("[ServeHTTP] prioritize route starts handling the request")
 		s.prioritize(w, r)
 		s.log.Debug("[ServeHTTP] prioritize route ends handling the request")

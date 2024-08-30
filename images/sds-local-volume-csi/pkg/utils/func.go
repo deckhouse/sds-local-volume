@@ -45,7 +45,7 @@ const (
 	SDSLocalVolumeCSIFinalizer  = "storage.deckhouse.io/sds-local-volume-csi"
 )
 
-func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, lvmLogicalVolumeSpec snc.LVMLogicalVolumeSpec) (*snc.LVMLogicalVolume, error) {
+func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, traceID, name string, lvmLogicalVolumeSpec snc.LVMLogicalVolumeSpec) (*snc.LVMLogicalVolume, error) {
 	var err error
 	llv := &snc.LVMLogicalVolume{
 		ObjectMeta: metav1.ObjectMeta{
@@ -56,66 +56,51 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, name string, 
 		Spec: lvmLogicalVolumeSpec,
 	}
 
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.Create(ctx, llv)
-		if err == nil {
-			return llv, nil
-		}
+	log.Trace(fmt.Sprintf("[CreateLVMLogicalVolume][traceID:%s][volumeID:%s] LVMLogicalVolume: %+v", traceID, name, llv))
 
-		if kerrors.IsAlreadyExists(err) {
-			return nil, err
-		}
-
-		time.Sleep(KubernetesAPIRequestTimeout)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("after %d attempts of creating LVMLogicalVolume %s, last error: %w", KubernetesAPIRequestLimit, name, err)
-	}
-	return llv, nil
+	err = kc.Create(ctx, llv)
+	return llv, err
 }
 
-func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, lvmLogicalVolumeName string) error {
+func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName string) error {
 	var err error
 
+	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Trying to find LVMLogicalVolume", traceID, lvmLogicalVolumeName))
 	llv, err := GetLVMLogicalVolume(ctx, kc, lvmLogicalVolumeName, "")
 	if err != nil {
 		return fmt.Errorf("get LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
 	}
 
-	removed, err := removeLLVFinalizerIfExist(ctx, kc, llv, SDSLocalVolumeCSIFinalizer)
+	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] LVMLogicalVolume found: %+v (status: %+v)", traceID, lvmLogicalVolumeName, llv, llv.Status))
+	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Removing finalizer %s if exists", traceID, lvmLogicalVolumeName, SDSLocalVolumeCSIFinalizer))
+
+	removed, err := removeLLVFinalizerIfExist(ctx, kc, log, llv, SDSLocalVolumeCSIFinalizer)
 	if err != nil {
 		return fmt.Errorf("remove finalizers from LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
 	}
 	if removed {
-		log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume] finalizer %s removed from LVMLogicalVolume %s", SDSLocalVolumeCSIFinalizer, lvmLogicalVolumeName))
+		log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] finalizer %s removed from LVMLogicalVolume %s", traceID, lvmLogicalVolumeName, SDSLocalVolumeCSIFinalizer, lvmLogicalVolumeName))
 	} else {
-		log.Warning(fmt.Sprintf("[DeleteLVMLogicalVolume] finalizer %s not found in LVMLogicalVolume %s", SDSLocalVolumeCSIFinalizer, lvmLogicalVolumeName))
+		log.Warning(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] finalizer %s not found in LVMLogicalVolume %s", traceID, lvmLogicalVolumeName, SDSLocalVolumeCSIFinalizer, lvmLogicalVolumeName))
 	}
 
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.Delete(ctx, llv)
-		if err == nil {
-			return nil
-		}
-		time.Sleep(KubernetesAPIRequestTimeout)
-	}
-
-	if err != nil {
-		return fmt.Errorf("after %d attempts of deleting LVMLogicalVolume %s, last error: %w", KubernetesAPIRequestLimit, lvmLogicalVolumeName, err)
-	}
-	return nil
+	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Trying to delete LVMLogicalVolume", traceID, lvmLogicalVolumeName))
+	err = kc.Delete(ctx, llv)
+	return err
 }
 
-func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logger, lvmLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
+func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
 	var attemptCounter int
 	sizeEquals := false
+	log.Info(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Waiting for LVM Logical Volume status update", traceID, lvmLogicalVolumeName))
 	for {
 		attemptCounter++
 		select {
 		case <-ctx.Done():
+			log.Warning(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] context done. Failed to wait for LVM Logical Volume status update", traceID, lvmLogicalVolumeName))
 			return attemptCounter, ctx.Err()
-		case <-time.After(500 * time.Millisecond):
+		default:
+			time.Sleep(500 * time.Millisecond)
 		}
 
 		llv, err := GetLVMLogicalVolume(ctx, kc, lvmLogicalVolumeName, namespace)
@@ -124,18 +109,28 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 		}
 
 		if attemptCounter%10 == 0 {
-			log.Info(fmt.Sprintf("[WaitForStatusUpdate] Attempt: %d,LVM Logical Volume: %+v; delta=%s; sizeEquals=%t", attemptCounter, llv, delta.String(), sizeEquals))
+			log.Info(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt: %d,LVM Logical Volume: %+v; delta=%s; sizeEquals=%t", traceID, lvmLogicalVolumeName, attemptCounter, llv, delta.String(), sizeEquals))
 		}
 
 		if llv.Status != nil {
+			log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume status: %+v, full LVMLogicalVolume resource: %+v", traceID, lvmLogicalVolumeName, attemptCounter, llv.Status, llv))
 			sizeEquals = AreSizesEqualWithinDelta(llvSize, llv.Status.ActualSize, delta)
+
+			if llv.DeletionTimestamp != nil {
+				return attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: LVMLogicalVolume is being deleted", lvmLogicalVolumeName)
+			}
 
 			if llv.Status.Phase == LLVStatusFailed {
 				return attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: %s", lvmLogicalVolumeName, llv.Status.Reason)
 			}
 
-			if llv.Status.Phase == LLVStatusCreated && sizeEquals {
-				return attemptCounter, nil
+			if llv.Status.Phase == LLVStatusCreated {
+				if sizeEquals {
+					return attemptCounter, nil
+				}
+				log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume created but size does not match the requested size yet. Waiting...", traceID, lvmLogicalVolumeName, attemptCounter))
+			} else {
+				log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume status is not 'Created' yet. Waiting...", traceID, lvmLogicalVolumeName, attemptCounter))
 			}
 		}
 	}
@@ -143,20 +138,13 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 
 func GetLVMLogicalVolume(ctx context.Context, kc client.Client, lvmLogicalVolumeName, namespace string) (*snc.LVMLogicalVolume, error) {
 	var llv snc.LVMLogicalVolume
-	var err error
 
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.Get(ctx, client.ObjectKey{
-			Name:      lvmLogicalVolumeName,
-			Namespace: namespace,
-		}, &llv)
+	err := kc.Get(ctx, client.ObjectKey{
+		Name:      lvmLogicalVolumeName,
+		Namespace: namespace,
+	}, &llv)
 
-		if err == nil {
-			return &llv, nil
-		}
-		time.Sleep(KubernetesAPIRequestTimeout)
-	}
-	return nil, fmt.Errorf("after %d attempts of getting LVMLogicalVolume %s in namespace %s, last error: %w", KubernetesAPIRequestLimit, lvmLogicalVolumeName, namespace, err)
+	return &llv, err
 }
 
 func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantity) bool {
@@ -199,15 +187,9 @@ func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.L
 		Items:    []snc.LvmVolumeGroup{},
 	}
 
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.List(ctx, listLvgs)
-		if err == nil {
-			break
-		}
-		time.Sleep(KubernetesAPIRequestTimeout)
-	}
+	err = kc.List(ctx, listLvgs)
 	if err != nil {
-		return "", "", fmt.Errorf("after %d attempts of getting LvmVolumeGroups, last error: %w", KubernetesAPIRequestLimit, err)
+		return "", "", fmt.Errorf("error getting LvmVolumeGroup list: %w", err)
 	}
 
 	for _, lvg := range listLvgs.Items {
@@ -238,20 +220,13 @@ func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.L
 
 func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace string) (*snc.LvmVolumeGroup, error) {
 	var lvg snc.LvmVolumeGroup
-	var err error
 
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.Get(ctx, client.ObjectKey{
-			Name:      lvgName,
-			Namespace: namespace,
-		}, &lvg)
+	err := kc.Get(ctx, client.ObjectKey{
+		Name:      lvgName,
+		Namespace: namespace,
+	}, &lvg)
 
-		if err == nil {
-			return &lvg, nil
-		}
-		time.Sleep(KubernetesAPIRequestTimeout)
-	}
-	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroup %s in namespace %s, last error: %w", KubernetesAPIRequestLimit, lvgName, namespace, err)
+	return &lvg, err
 }
 
 func GetLVMVolumeGroupFreeSpace(lvg snc.LvmVolumeGroup) (vgFreeSpace resource.Quantity) {
@@ -276,20 +251,9 @@ func GetLVMThinPoolFreeSpace(lvg snc.LvmVolumeGroup, thinPoolName string) (thinP
 	return storagePoolThinPool.AvailableSpace, nil
 }
 
-func UpdateLVMLogicalVolume(ctx context.Context, kc client.Client, llv *snc.LVMLogicalVolume) error {
-	var err error
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.Update(ctx, llv)
-		if err == nil {
-			return nil
-		}
-		time.Sleep(KubernetesAPIRequestTimeout)
-	}
-
-	if err != nil {
-		return fmt.Errorf("after %d attempts of updating LVMLogicalVolume %s, last error: %w", KubernetesAPIRequestLimit, llv.Name, err)
-	}
-	return nil
+func ExpandLVMLogicalVolume(ctx context.Context, kc client.Client, llv *snc.LVMLogicalVolume, newSize string) error {
+	llv.Spec.Size = newSize
+	return kc.Update(ctx, llv)
 }
 
 func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log *logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []snc.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
@@ -304,7 +268,7 @@ func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log
 	for _, v := range storageClassLVGParametersList {
 		storageClassLVGParametersMap[v.Name] = v.Thin.PoolName
 	}
-	log.Info(fmt.Sprintf("StorageClass LVM volume groups parameters map: %+v", storageClassLVGParametersMap))
+	log.Info(fmt.Sprintf("[GetStorageClassLVGs] StorageClass LVM volume groups parameters map: %+v", storageClassLVGParametersMap))
 
 	lvgs, err := GetLVGList(ctx, kc)
 	if err != nil {
@@ -328,18 +292,8 @@ func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log
 }
 
 func GetLVGList(ctx context.Context, kc client.Client) (*snc.LvmVolumeGroupList, error) {
-	var err error
 	listLvgs := &snc.LvmVolumeGroupList{}
-
-	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
-		err = kc.List(ctx, listLvgs)
-		if err == nil {
-			return listLvgs, nil
-		}
-		time.Sleep(KubernetesAPIRequestTimeout)
-	}
-
-	return nil, fmt.Errorf("after %d attempts of getting LvmVolumeGroupList, last error: %w", KubernetesAPIRequestLimit, err)
+	return listLvgs, kc.List(ctx, listLvgs)
 }
 
 func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG snc.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity, contiguous bool) snc.LVMLogicalVolumeSpec {
@@ -378,25 +332,49 @@ func SelectLVG(storageClassLVGs []snc.LvmVolumeGroup, nodeName string) (snc.LvmV
 	return snc.LvmVolumeGroup{}, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found for node %s", nodeName)
 }
 
-func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, llv *snc.LVMLogicalVolume, finalizer string) (bool, error) {
-	removed := false
+func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logger.Logger, llv *snc.LVMLogicalVolume, finalizer string) (bool, error) {
+	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
+		removed := false
+		for i, val := range llv.Finalizers {
+			if val == finalizer {
+				llv.Finalizers = slices.Delete(llv.Finalizers, i, i+1)
+				removed = true
+				break
+			}
+		}
 
-	for i, val := range llv.Finalizers {
-		if val == finalizer {
-			llv.Finalizers = slices.Delete(llv.Finalizers, i, i+1)
-			removed = true
-			break
+		if !removed {
+			return false, nil
+		}
+
+		log.Trace(fmt.Sprintf("[removeLLVFinalizerIfExist] removing finalizer %s from LVMLogicalVolume %s", finalizer, llv.Name))
+		err := kc.Update(ctx, llv)
+		if err == nil {
+			return true, nil
+		}
+
+		if !kerrors.IsConflict(err) {
+			return false, fmt.Errorf("[removeLLVFinalizerIfExist] error updating LVMLogicalVolume %s: %w", llv.Name, err)
+		}
+
+		if attempt < KubernetesAPIRequestLimit-1 {
+			log.Trace(fmt.Sprintf("[removeLLVFinalizerIfExist] conflict while updating LVMLogicalVolume %s, retrying...", llv.Name))
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			default:
+				time.Sleep(KubernetesAPIRequestTimeout * time.Second)
+				freshLLV, getErr := GetLVMLogicalVolume(ctx, kc, llv.Name, "")
+				if getErr != nil {
+					return false, fmt.Errorf("[removeLLVFinalizerIfExist] error getting LVMLogicalVolume %s after update conflict: %w", llv.Name, getErr)
+				}
+				// Update the llv struct with fresh data (without changing pointers because we need the new resource version outside of this function)
+				*llv = *freshLLV
+			}
 		}
 	}
 
-	if removed {
-		err := UpdateLVMLogicalVolume(ctx, kc, llv)
-		if err != nil {
-			return false, err
-		}
-		return true, nil
-	}
-	return false, nil
+	return false, fmt.Errorf("after %d attempts of removing finalizer %s from LVMLogicalVolume %s, last error: %w", KubernetesAPIRequestLimit, finalizer, llv.Name, nil)
 }
 
 func IsContiguous(request *csi.CreateVolumeRequest, lvmType string) bool {
