@@ -23,11 +23,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sds-local-volume-scheduler-extender/pkg/cache"
-	"sds-local-volume-scheduler-extender/pkg/controller"
-	"sds-local-volume-scheduler-extender/pkg/kubutils"
-	"sds-local-volume-scheduler-extender/pkg/logger"
-	"sds-local-volume-scheduler-extender/pkg/scheduler"
 	"sync"
 	"syscall"
 	"time"
@@ -42,6 +37,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/yaml"
+
+	"sds-local-volume-scheduler-extender/pkg/cache"
+	"sds-local-volume-scheduler-extender/pkg/controller"
+	"sds-local-volume-scheduler-extender/pkg/kubutils"
+	"sds-local-volume-scheduler-extender/pkg/logger"
+	"sds-local-volume-scheduler-extender/pkg/scheduler"
 )
 
 const (
