@@ -130,29 +130,29 @@ func subMain(ctx context.Context) error {
 		}
 	}
 
-	log, err := logger.NewLoggerFromConfig(logger.LoggerConfig{Name: "[subMain]", Level: logger.Verbosity(config.LogLevel)})
+	log, err := logger.NewLogger(logger.Verbosity(config.LogLevel))
 	if err != nil {
-		print(fmt.Sprintf("unable to initialize logger, err: %s", err))
+		print(fmt.Sprintf("[subMain] unable to initialize logger, err: %s", err))
 		return err
 	}
-	log.Info(fmt.Sprintf("logger has been initialized, log level: %s", config.LogLevel))
+	log.Info(fmt.Sprintf("[subMain] logger has been initialized, log level: %s", config.LogLevel))
 	ctrl.SetLogger(log.GetLogger())
 
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {
-		log.Error(err, "unable to KubernetesDefaultConfigCreate")
+		log.Error(err, "[subMain] unable to KubernetesDefaultConfigCreate")
 		return err
 	}
-	log.Info("kubernetes config has been successfully created.")
+	log.Info("[subMain] kubernetes config has been successfully created.")
 
 	scheme := runtime.NewScheme()
 	for _, f := range resourcesSchemeFuncs {
 		if err := f(scheme); err != nil {
-			log.Error(err, "unable to add scheme to func")
+			log.Error(err, "[subMain] unable to add scheme to func")
 			return err
 		}
 	}
-	log.Info("successfully read scheme CR")
+	log.Info("[subMain] successfully read scheme CR")
 
 	managerOpts := manager.Options{
 		Scheme:                 scheme,
@@ -163,43 +163,43 @@ func subMain(ctx context.Context) error {
 
 	mgr, err := manager.New(kConfig, managerOpts)
 	if err != nil {
-		log.Error(err, "unable to create manager for creating controllers")
+		log.Error(err, "[subMain] unable to create manager for creating controllers")
 		return err
 	}
 
 	schedulerCache := cache.NewCache(*log)
-	log.Info("scheduler cache was initialized")
+	log.Info("[subMain] scheduler cache was initialized")
 
 	h, err := scheduler.NewHandler(ctx, mgr.GetClient(), *log, schedulerCache, config.DefaultDivisor)
 	if err != nil {
-		log.Error(err, "unable to create http.Handler of the scheduler extender")
+		log.Error(err, "[subMain] unable to create http.Handler of the scheduler extender")
 		return err
 	}
-	log.Info("scheduler handler initialized")
+	log.Info("[subMain] scheduler handler initialized")
 
 	if _, err = controller.RunLVGWatcherCacheController(mgr, *log, schedulerCache); err != nil {
-		log.Error(err, fmt.Sprintf("unable to run %s controller", controller.LVGWatcherCacheCtrlName))
+		log.Error(err, fmt.Sprintf("[subMain] unable to run %s controller", controller.LVGWatcherCacheCtrlName))
 		return err
 	}
-	log.Info(fmt.Sprintf("successfully ran %s controller", controller.LVGWatcherCacheCtrlName))
+	log.Info(fmt.Sprintf("[subMain] successfully ran %s controller", controller.LVGWatcherCacheCtrlName))
 
 	if err = controller.RunPVCWatcherCacheController(mgr, *log, schedulerCache); err != nil {
-		log.Error(err, fmt.Sprintf("unable to run %s controller", controller.PVCWatcherCacheCtrlName))
+		log.Error(err, fmt.Sprintf("[subMain] unable to run %s controller", controller.PVCWatcherCacheCtrlName))
 		return err
 	}
-	log.Info(fmt.Sprintf("successfully ran %s controller", controller.PVCWatcherCacheCtrlName))
+	log.Info(fmt.Sprintf("[subMain] successfully ran %s controller", controller.PVCWatcherCacheCtrlName))
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		log.Error(err, "unable to mgr.AddHealthzCheck")
+		log.Error(err, "[subMain] unable to mgr.AddHealthzCheck")
 		return err
 	}
-	log.Info("successfully AddHealthzCheck")
+	log.Info("[subMain] successfully AddHealthzCheck")
 
 	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		log.Error(err, "unable to mgr.AddReadyzCheck")
+		log.Error(err, "[subMain] unable to mgr.AddReadyzCheck")
 		return err
 	}
-	log.Info("successfully AddReadyzCheck")
+	log.Info("[subMain] successfully AddReadyzCheck")
 
 	serv := &http.Server{
 		Addr:         config.ListenAddr,
@@ -207,7 +207,7 @@ func subMain(ctx context.Context) error {
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
-	log.Info("server was initialized")
+	log.Info("[subMain] server was initialized")
 
 	return runServer(ctx, serv, mgr, log)
 }
@@ -224,21 +224,21 @@ func runServer(ctx context.Context, serv *http.Server, mgr manager.Manager, log 
 		defer wg.Done()
 		<-ctx.Done()
 		if err := serv.Shutdown(ctx); err != nil {
-			log.Error(err, "failed to shutdown gracefully")
+			log.Error(err, "[runServer] failed to shutdown gracefully")
 		}
 	}()
 
 	go func() {
-		log.Info("kube manager will start now")
+		log.Info("[runServer] kube manager will start now")
 		if err := mgr.Start(ctx); err != nil {
-			log.Error(err, "unable to mgr.Start")
+			log.Error(err, "[runServer] unable to mgr.Start")
 		}
 	}()
 
-	log.Info(fmt.Sprintf("starts serving on: %s", config.ListenAddr))
+	log.Info(fmt.Sprintf("[runServer] starts serving on: %s", config.ListenAddr))
 
 	if err := serv.ListenAndServeTLS(config.CertFile, config.KeyFile); !errors.Is(err, http.ErrServerClosed) {
-		log.Error(err, "unable to run the server")
+		log.Error(err, "[runServer] unable to run the server")
 		return err
 	}
 

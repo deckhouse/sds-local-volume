@@ -43,33 +43,18 @@ type (
 )
 
 type Logger struct {
-	log    logr.Logger
-	prefix string
-}
-
-type LoggerConfig struct {
-	Name  string
-	Level Verbosity
+	log logr.Logger
 }
 
 func NewLogger(level Verbosity) (*Logger, error) {
-	return NewLoggerFromConfig(LoggerConfig{Level: level})
-}
-
-func NewLoggerFromConfig(cfg LoggerConfig) (*Logger, error) {
-	v, err := strconv.Atoi(string(cfg.Level))
+	v, err := strconv.Atoi(string(level))
 	if err != nil {
 		return nil, err
 	}
 
 	log := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(v))).WithCallDepth(1)
 
-	var prefix string
-	if cfg.Name != "" {
-		prefix = cfg.Name + " "
-	}
-
-	return &Logger{log: log, prefix: prefix}, nil
+	return &Logger{log: log}, nil
 }
 
 func (l Logger) GetLogger() logr.Logger {
@@ -77,25 +62,25 @@ func (l Logger) GetLogger() logr.Logger {
 }
 
 func (l Logger) Error(err error, message string, keysAndValues ...interface{}) {
-	l.log.Error(err, fmt.Sprintf("ERROR %s%s", l.prefix, message), keysAndValues...)
+	l.log.Error(err, fmt.Sprintf("ERROR %s", message), keysAndValues...)
 }
 
 func (l Logger) Warning(message string, keysAndValues ...interface{}) {
-	l.log.V(warnLvl).Info(fmt.Sprintf("WARNING %s%s", l.prefix, message), keysAndValues...)
+	l.log.V(warnLvl).Info(fmt.Sprintf("WARNING %s", message), keysAndValues...)
 }
 
 func (l Logger) Info(message string, keysAndValues ...interface{}) {
-	l.log.V(infoLvl).Info(fmt.Sprintf("INFO %s%s", l.prefix, message), keysAndValues...)
+	l.log.V(infoLvl).Info(fmt.Sprintf("INFO %s", message), keysAndValues...)
 }
 
 func (l Logger) Debug(message string, keysAndValues ...interface{}) {
-	l.log.V(debugLvl).Info(fmt.Sprintf("DEBUG %s%s", l.prefix, message), keysAndValues...)
+	l.log.V(debugLvl).Info(fmt.Sprintf("DEBUG %s", message), keysAndValues...)
 }
 
 func (l Logger) Trace(message string, keysAndValues ...interface{}) {
-	l.log.V(traceLvl).Info(fmt.Sprintf("TRACE %s%s", l.prefix, message), keysAndValues...)
+	l.log.V(traceLvl).Info(fmt.Sprintf("TRACE %s", message), keysAndValues...)
 }
 
 func (l Logger) Cache(message string, keysAndValues ...interface{}) {
-	l.log.V(cacheLvl).Info(fmt.Sprintf("CACHE %s%s", l.prefix, message), keysAndValues...)
+	l.log.V(cacheLvl).Info(fmt.Sprintf("CACHE %s", message), keysAndValues...)
 }
