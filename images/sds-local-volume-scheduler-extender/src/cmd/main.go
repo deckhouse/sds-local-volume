@@ -157,6 +157,7 @@ func subMain(ctx context.Context) error {
 		Scheme:                 scheme,
 		Logger:                 log.GetLogger(),
 		HealthProbeBindAddress: config.HealthProbeBindAddress,
+		BaseContext:            func() context.Context { return ctx },
 	}
 
 	mgr, err := manager.New(kConfig, managerOpts)
