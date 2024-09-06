@@ -5,7 +5,7 @@ moduleStatus: preview
 ---
 
 This module manages local block storage based on `LVM`. The module allows you to create a `StorageClass` in `Kubernetes` by creating [Kubernetes custom resources](./cr.html) `LocalStorageClass` (see example below). 
-To create a `Storage Class`, you will need the `LvmVolumeGroup` configured on the cluster nodes. The `LVM` configuration is done by the [sds-node-configurator](../../sds-node-configurator/) module.
+To create a `Storage Class`, you will need the `LvmVolumeGroup` configured on the cluster nodes. The `LVM` configuration is done by the [sds-node-configurator](../../sds-node-configurator/stable/) module.
 > **Caution!** Before enabling the `sds-local-volume` module, you must enable the `sds-node-configurator` module.
 >
 After you enable the `sds-local-volume` module in the Deckhouse Kubernetes Platform configuration, you have to create StorageClasses.
