@@ -108,7 +108,7 @@ func init() {
 }
 
 func main() {
-	ctx, _ := signal.NotifyContext(context.Background(), syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM)
+	ctx, _ := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		// we expect err to be logged already
