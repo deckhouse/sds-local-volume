@@ -58,6 +58,8 @@ const (
 	LVMVolumeGroupsParamKey      = LocalStorageClassProvisioner + "/lvm-volume-groups"
 	LVMVThickContiguousParamKey  = LocalStorageClassProvisioner + "/lvm-thick-contiguous"
 
+	FSTypeParamKey = "csi.storage.k8s.io/fstype"
+
 	LocalStorageClassFinalizerName    = "storage.deckhouse.io/local-storage-class-controller"
 	LocalStorageClassFinalizerNameOld = "localstorageclass.storage.deckhouse.io"
 

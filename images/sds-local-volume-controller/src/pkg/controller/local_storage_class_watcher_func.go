@@ -434,6 +434,11 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 		LVMTypeParamKey:              lsc.Spec.LVM.Type,
 		LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
 		LVMVolumeGroupsParamKey:      string(lvgsParam),
+		// TODO: EXPERIMENT DO NOT MERGE
+		// TODO: EXPERIMENT DO NOT MERGE
+		// TODO: EXPERIMENT DO NOT MERGE
+		// TODO: EXPERIMENT DO NOT MERGE
+		FSTypeParamKey: "xfs",
 	}
 
 	if lsc.Spec.LVM.Thick != nil {
