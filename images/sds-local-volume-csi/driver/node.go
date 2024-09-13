@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"sds-local-volume-csi/internal"
+	"sds-local-volume-csi/pkg/utils"
 )
 
 const (
@@ -47,6 +48,7 @@ var (
 
 	ValidFSTypes = map[string]struct{}{
 		internal.FSTypeExt4: {},
+		internal.FSTypeXfs:  {},
 	}
 )
 
@@ -68,7 +70,8 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume capability cannot be empty")
 	}
 
-	vgName, ok := request.GetVolumeContext()[internal.VGNameKey]
+	context := request.GetVolumeContext()
+	vgName, ok := context[internal.VGNameKey]
 	if !ok {
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume group name cannot be empty")
 	}
@@ -84,6 +87,8 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	}
 
 	fsType := mountVolume.GetFsType()
+	d.log.Info(fmt.Sprintf("[NodeStageVolume] fsType: %s", fsType))
+	d.log.Info(fmt.Sprintf("[NodeStageVolume] fsType (from context): %s", context[internal.FSTypeKey]))
 	if fsType == "" {
 		fsType = defaultFsType
 	}
@@ -92,6 +97,62 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	if !ok {
 		return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes))
 	}
+
+	blockSize, err := recheckFormattingOptionParameter(context, internal.BlockSizeKey, internal.FileSystemConfigs, fsType)
+	if err != nil {
+		return nil, err
+	}
+	inodeSize, err := recheckFormattingOptionParameter(context, internal.InodeSizeKey, internal.FileSystemConfigs, fsType)
+	if err != nil {
+		return nil, err
+	}
+	bytesPerInode, err := recheckFormattingOptionParameter(context, internal.BytesPerInodeKey, internal.FileSystemConfigs, fsType)
+	if err != nil {
+		return nil, err
+	}
+	numInodes, err := recheckFormattingOptionParameter(context, internal.NumberOfInodesKey, internal.FileSystemConfigs, fsType)
+	if err != nil {
+		return nil, err
+	}
+	ext4BigAlloc, err := recheckFormattingOptionParameter(context, internal.Ext4BigAllocKey, internal.FileSystemConfigs, fsType)
+	if err != nil {
+		return nil, err
+	}
+	ext4ClusterSize, err := recheckFormattingOptionParameter(context, internal.Ext4ClusterSizeKey, internal.FileSystemConfigs, fsType)
+	if err != nil {
+		return nil, err
+	}
+
+	formatOptions := []string{}
+	if len(blockSize) > 0 {
+		if fsType == internal.FSTypeXfs {
+			blockSize = "size=" + blockSize
+		}
+		formatOptions = append(formatOptions, "-b", blockSize)
+	}
+	if len(inodeSize) > 0 {
+		option := "-I"
+		if fsType == internal.FSTypeXfs {
+			option, inodeSize = "-i", "size="+inodeSize
+		}
+		formatOptions = append(formatOptions, option, inodeSize)
+	}
+	if len(bytesPerInode) > 0 {
+		formatOptions = append(formatOptions, "-i", bytesPerInode)
+	}
+	if len(numInodes) > 0 {
+		formatOptions = append(formatOptions, "-N", numInodes)
+	}
+	if ext4BigAlloc == "true" {
+		formatOptions = append(formatOptions, "-O", "bigalloc")
+	}
+	if len(ext4ClusterSize) > 0 {
+		formatOptions = append(formatOptions, "-C", ext4ClusterSize)
+	}
+	// TODO support linux kernel ≤ v5.4
+	// if fsType == internal.FSTypeXfs && d.options.LegacyXFSProgs {
+	// 	formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0")
+	// }
 
 	mountOptions := collectMountOptions(fsType, mountVolume.GetMountFlags(), []string{})
 
@@ -115,15 +176,15 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		return nil, status.Errorf(codes.NotFound, "[NodeStageVolume] Device %s not found", devPath)
 	}
 
-	lvmType := request.GetVolumeContext()[internal.LvmTypeKey]
-	lvmThinPoolName := request.GetVolumeContext()[internal.ThinPoolNameKey]
+	lvmType := context[internal.LvmTypeKey]
+	lvmThinPoolName := context[internal.ThinPoolNameKey]
 
 	d.log.Trace(fmt.Sprintf("mountOptions = %s", mountOptions))
 	d.log.Trace(fmt.Sprintf("lvmType = %s", lvmType))
 	d.log.Trace(fmt.Sprintf("lvmThinPoolName = %s", lvmThinPoolName))
 	d.log.Trace(fmt.Sprintf("fsType = %s", fsType))
 
-	err = d.storeManager.NodeStageVolumeFS(devPath, target, fsType, mountOptions, lvmType, lvmThinPoolName)
+	err = d.storeManager.NodeStageVolumeFS(devPath, target, fsType, mountOptions, formatOptions, lvmType, lvmThinPoolName)
 	if err != nil {
 		d.log.Error(err, "[NodeStageVolume] Error mounting volume")
 		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error format device %q and mounting volume at %q: %v", devPath, target, err)
@@ -387,4 +448,22 @@ func collectMountOptions(fsType string, mountFlags, mountOptions []string) []str
 	}
 
 	return mountOptions
+}
+
+func recheckFormattingOptionParameter(context map[string]string, key string, fsConfigs map[string]internal.FileSystemConfig, fsType string) (value string, err error) {
+	v, ok := context[key]
+	if ok {
+		// This check is already performed on the controller side
+		// However, because it is potentially security-sensitive, we redo it here to be safe
+		if isAlphanumeric := utils.StringIsAlphanumeric(v); !isAlphanumeric {
+			return "", status.Errorf(codes.InvalidArgument, "Invalid %s (aborting!): %v", key, err)
+		}
+
+		// In the case that the default fstype does not support custom sizes we could
+		// be using an invalid fstype, so recheck that here
+		if supported := fsConfigs[strings.ToLower(fsType)].IsParameterSupported(key); !supported {
+			return "", status.Errorf(codes.InvalidArgument, "Cannot use %s with fstype %s", key, fsType)
+		}
+	}
+	return v, nil
 }
