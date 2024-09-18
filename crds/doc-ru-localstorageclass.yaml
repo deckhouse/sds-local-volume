@@ -49,6 +49,11 @@ spec:
                               poolName:
                                 description: |
                                   Имя выбранного Thin pool.
+                fstype:
+                  description: |
+                    Тип файловой системы для данного Storage class'а. Может быть:
+                    - ext4 (по умолчанию)
+                    - xfs
             status:
               description: |
                 Описывает текущую информацию о соответствующем Storage Class.
