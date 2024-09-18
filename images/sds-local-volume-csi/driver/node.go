@@ -150,7 +150,7 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		formatOptions = append(formatOptions, "-C", ext4ClusterSize)
 	}
 	// support mounting on linux kernel ≤ v5.4
-	if fsType == internal.FSTypeXfs && needLegacyXfsSupport() {
+	if fsType == internal.FSTypeXfs && needLegacyXfsArguments() {
 		d.log.Info("[NodeStageVolume] Linux <= 5.4 detected, LegacyXfsSupport is on")
 		formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0")
 	}
@@ -469,7 +469,7 @@ func recheckFormattingOptionParameter(context map[string]string, key string, fsC
 	return v, nil
 }
 
-func needLegacyXfsSupport() bool {
+func needLegacyXfsArguments() bool {
 	// TODO DO NOT MERGE
 	// TODO DO NOT MERGE
 	// TODO DO NOT MERGE
