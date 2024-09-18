@@ -429,16 +429,17 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 		return nil, err
 	}
 
+	fsType := lsc.Spec.FSType
+	if fsType == "" {
+		fsType = DefaultFSType
+	}
+
 	params := map[string]string{
 		TypeParamKey:                 LocalStorageClassLvmType,
 		LVMTypeParamKey:              lsc.Spec.LVM.Type,
 		LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
 		LVMVolumeGroupsParamKey:      string(lvgsParam),
-		// TODO: EXPERIMENT DO NOT MERGE
-		// TODO: EXPERIMENT DO NOT MERGE
-		// TODO: EXPERIMENT DO NOT MERGE
-		// TODO: EXPERIMENT DO NOT MERGE
-		FSTypeParamKey: "xfs",
+		FSTypeParamKey:               fsType,
 	}
 
 	if lsc.Spec.LVM.Thick != nil {
