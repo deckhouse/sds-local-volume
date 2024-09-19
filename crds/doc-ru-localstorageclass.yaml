@@ -50,6 +50,7 @@ spec:
                                 description: |
                                   Имя выбранного Thin pool.
                 fstype:
+                  default: ext4
                   description: |
                     Тип файловой системы для данного Storage class'а. Может быть:
                     - ext4 (по умолчанию)
