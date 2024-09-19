@@ -1,0 +1,22 @@
+image: {{ $.ImageName }}
+from: registry.deckhouse.io/base_images/golang:1.22.6-alpine@sha256:41ad3e6d91b2e10a15e871672578b11a51c7f2eb126c82e193e38b647da0bbb2
+
+git:
+  - add: /
+    to: /
+    includePaths:
+      - api
+      - images/sds-local-volume-csi/src
+    stageDependencies:
+      setup:
+        - "**/*"
+
+mount:
+  - fromPath: ~/go-pkg-cache
+    to: /go/pkg
+shell:
+  setup:
+    - cd /images/sds-local-volume-csi/src/cmd
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /sds-local-volume-csi
+    - chmod +x /sds-local-volume-controller
+    - apk add --no-cache lvm2 e2fsprogs e2fsprogs-extra xfsprogs xfsprogs-extra blkid
