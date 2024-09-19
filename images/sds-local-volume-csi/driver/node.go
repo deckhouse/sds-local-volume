@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -149,9 +151,14 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	if len(ext4ClusterSize) > 0 {
 		formatOptions = append(formatOptions, "-C", ext4ClusterSize)
 	}
-	// support mounting on linux kernel ≤ v5.4
-	if fsType == internal.FSTypeXfs && needLegacyXfsArguments() {
-		d.log.Info("[NodeStageVolume] Linux <= 5.4 detected, LegacyXfsSupport is on")
+
+	// support mounting on old linux kernels
+	needLegacySupport, err := needLegacyXFSSupport()
+	if err != nil {
+		return nil, err
+	}
+	if fsType == internal.FSTypeXfs && needLegacySupport {
+		d.log.Info("[NodeStageVolume] legacy xfs support is on")
 		formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0")
 	}
 
@@ -469,13 +476,40 @@ func recheckFormattingOptionParameter(context map[string]string, key string, fsC
 	return v, nil
 }
 
-func needLegacyXfsArguments() bool {
-	// TODO DO NOT MERGE
-	// TODO DO NOT MERGE
-	// TODO DO NOT MERGE
-	// TODO DO NOT MERGE
-	// TODO DO NOT MERGE
-	// TODO DO NOT MERGE
-	// TODO DO NOT MERGE
-	return true
+func int8ToStr(arr []int8) string {
+	b := make([]byte, 0, len(arr))
+	for _, v := range arr {
+		if v == 0x00 {
+			break
+		}
+		b = append(b, byte(v))
+	}
+	return string(b)
+}
+
+func needLegacyXFSSupport() (bool, error) {
+	// checking if Linux kernel version is <= 5.4
+	var uname syscall.Utsname
+	if err := syscall.Uname(&uname); err != nil {
+		return false, fmt.Errorf("unable to Uname kernel version: %w", err)
+	}
+
+	fullVersion := int8ToStr(uname.Release[:]) // similar to: "6.8.0-44-generic"
+
+	parts := strings.SplitN(fullVersion, ".", 3)
+	if len(parts) < 3 {
+		return false, fmt.Errorf("unexpected kernel version: %s", fullVersion)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false, fmt.Errorf("unexpected kernel version (major part): %s", fullVersion)
+	}
+
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false, fmt.Errorf("unexpected kernel version (minor part): %s", fullVersion)
+	}
+
+	return major < 5 || major == 5 && minor <= 4, nil
 }
