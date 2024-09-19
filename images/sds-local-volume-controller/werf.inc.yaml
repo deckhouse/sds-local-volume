@@ -8,19 +8,22 @@ fromCacheVersion: 202408091334349
 final: false
 
 git:
-  - add: /images/sds-local-volume-controller/src
-    to: /src
+  - add: /
+    to: /
+    includePaths:
+      - api
+      - images/sds-local-volume-controller/src
     stageDependencies:
       setup:
         - "**/*"
+
 mount:
   - fromPath: ~/go-pkg-cache
     to: /go/pkg
 shell:
   setup:
-    - cd /src/cmd
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o sds-local-volume-controller
-    - mv sds-local-volume-controller /sds-local-volume-controller
+    - cd /images/sds-local-volume-controller/src/cmd
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /sds-local-volume-controller
     - chmod +x /sds-local-volume-controller
 
 ---
