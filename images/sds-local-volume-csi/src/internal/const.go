@@ -35,50 +35,8 @@ const (
 	ResizeDelta                 = "32Mi"
 
 	FSTypeKey = "csi.storage.k8s.io/fstype"
-	// FSTypeExt4 represents the ext4 filesystem type
+
+	// supported filesystem types
 	FSTypeExt4 = "ext4"
 	FSTypeXfs  = "xfs"
-
-	// BlockSizeKey configures the block size when formatting a volume
-	BlockSizeKey = "blocksize"
-
-	// InodeSizeKey configures the inode size when formatting a volume
-	InodeSizeKey = "inodesize"
-
-	// BytesPerInodeKey configures the `bytes-per-inode` when formatting a volume
-	BytesPerInodeKey = "bytesperinode"
-
-	// NumberOfInodesKey configures the `number-of-inodes` when formatting a volume
-	NumberOfInodesKey = "numberofinodes"
-
-	// Ext4ClusterSizeKey enables the bigalloc option when formatting an ext4 volume
-	Ext4BigAllocKey = "ext4bigalloc"
-
-	// Ext4ClusterSizeKey configures the cluster size when formatting an ext4 volume with the bigalloc option enabled
-	Ext4ClusterSizeKey = "ext4clustersize"
-)
-
-type FileSystemConfig struct {
-	NotSupportedParams map[string]struct{}
-}
-
-func (fsConfig FileSystemConfig) IsParameterSupported(paramName string) bool {
-	_, notSupported := fsConfig.NotSupportedParams[paramName]
-	return !notSupported
-}
-
-var (
-	FileSystemConfigs = map[string]FileSystemConfig{
-		FSTypeExt4: {
-			NotSupportedParams: map[string]struct{}{},
-		},
-		FSTypeXfs: {
-			NotSupportedParams: map[string]struct{}{
-				BytesPerInodeKey:   {},
-				NumberOfInodesKey:  {},
-				Ext4BigAllocKey:    {},
-				Ext4ClusterSizeKey: {},
-			},
-		},
-	}
 )
