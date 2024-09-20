@@ -23,7 +23,6 @@ shell:
     - cd /images/sds-local-volume-csi/src/cmd
     - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /sds-local-volume-csi
     - chmod +x /sds-local-volume-csi
-    - apk add --no-cache lvm2 e2fsprogs e2fsprogs-extra xfsprogs xfsprogs-extra blkid
 
 ---
 image: {{ $.ImageName }}
@@ -34,6 +33,10 @@ import:
     add: /sds-local-volume-csi
     to: /sds-local-volume-csi
     before: setup
+
+shell:
+  setup:
+    - apk add --no-cache lvm2 e2fsprogs e2fsprogs-extra xfsprogs xfsprogs-extra blkid
 
 docker:
   ENTRYPOINT: ["/sds-local-volume-csi"]
