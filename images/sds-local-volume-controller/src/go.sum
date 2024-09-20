@@ -10,6 +10,8 @@ github.com/deckhouse/sds-local-volume/api v0.0.0-20240816081122-3de604d3d889 h1:
 github.com/deckhouse/sds-local-volume/api v0.0.0-20240816081122-3de604d3d889/go.mod h1:cYxHYJmIl6g9lXb1etqmLeQL/vsPMgscmact/FObd+U=
 github.com/deckhouse/sds-node-configurator/api v0.0.0-20240816031400-b001b5ab8337 h1:v4HuZxGfTAfqV2Mec/yUXRDO9aVP1+Uhht0+1qZeMsg=
 github.com/deckhouse/sds-node-configurator/api v0.0.0-20240816031400-b001b5ab8337/go.mod h1:H71+9G0Jr46Qs0BA3z3/xt0h9lbnJnCEYcaCJCWFBf0=
+github.com/deckhouse/sds-node-configurator/api v0.0.0-20240919102704-a035b4a92e77 h1:Y3vswUk/rnCpkZzWBk+Mlr9LtMg6EI5LkQ4GvgHCslI=
+github.com/deckhouse/sds-node-configurator/api v0.0.0-20240919102704-a035b4a92e77/go.mod h1:H71+9G0Jr46Qs0BA3z3/xt0h9lbnJnCEYcaCJCWFBf0=
 github.com/emicklei/go-restful/v3 v3.12.1 h1:PJMDIM/ak7btuL8Ex0iYET9hxM3CI2sjZtzpL63nKAU=
 github.com/emicklei/go-restful/v3 v3.12.1/go.mod h1:6n3XBCmQQb25CM2LCACGz8ukIrRry+4bhvbpWn3mrbc=
 github.com/evanphx/json-patch v4.12.0+incompatible h1:4onqiflcdA9EOZ4RxV643DvftH5pOlLGNtQ5lPWQu84=

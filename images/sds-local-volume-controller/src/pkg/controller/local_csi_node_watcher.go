@@ -253,7 +253,7 @@ func addLabelOnTheLSCIfNotExist(ctx context.Context, cl client.Client, lsc slv.L
 	return true, nil
 }
 
-func addLabelOnTheLVGIfNotExist(ctx context.Context, cl client.Client, lvg snc.LvmVolumeGroup, label string) (bool, error) {
+func addLabelOnTheLVGIfNotExist(ctx context.Context, cl client.Client, lvg snc.LVMVolumeGroup, label string) (bool, error) {
 	if _, exist := lvg.Labels[label]; exist {
 		return false, nil
 	}
@@ -303,12 +303,12 @@ func clearManualEvictionLabelsIfNeeded(ctx context.Context, cl client.Client, lo
 		return err
 	}
 
-	lvgs := make(map[string]snc.LvmVolumeGroup, len(lvgList.Items))
+	lvgs := make(map[string]snc.LVMVolumeGroup, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		lvgs[lvg.Name] = lvg
 	}
 
-	usedLvgs := make(map[string]snc.LvmVolumeGroup, len(lvgList.Items))
+	usedLvgs := make(map[string]snc.LVMVolumeGroup, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		for _, n := range lvg.Status.Nodes {
 			if n.Name == node.Name {
@@ -375,13 +375,13 @@ func clearManualEvictionLabelsIfNeeded(ctx context.Context, cl client.Client, lo
 	return nil
 }
 
-func getManuallyEvictedLVGsAndLSCs(ctx context.Context, cl client.Client, node v1.Node) (map[string]snc.LvmVolumeGroup, map[string]slv.LocalStorageClass, error) {
+func getManuallyEvictedLVGsAndLSCs(ctx context.Context, cl client.Client, node v1.Node) (map[string]snc.LVMVolumeGroup, map[string]slv.LocalStorageClass, error) {
 	lvgList, err := getLVMVolumeGroups(ctx, cl)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	usedLvgs := make(map[string]snc.LvmVolumeGroup, len(lvgList.Items))
+	usedLvgs := make(map[string]snc.LVMVolumeGroup, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		for _, n := range lvg.Status.Nodes {
 			if n.Name == node.Name {
@@ -396,7 +396,7 @@ func getManuallyEvictedLVGsAndLSCs(ctx context.Context, cl client.Client, node v
 	}
 
 	unhealthyLscs := make(map[string]slv.LocalStorageClass, len(lscList.Items))
-	unhealthyLvgs := make(map[string]snc.LvmVolumeGroup, len(usedLvgs))
+	unhealthyLvgs := make(map[string]snc.LVMVolumeGroup, len(usedLvgs))
 
 	// This case is a base case, when the controller did not label any resource.
 	for _, lsc := range lscList.Items {
@@ -418,8 +418,8 @@ func getManuallyEvictedLVGsAndLSCs(ctx context.Context, cl client.Client, node v
 	return unhealthyLvgs, unhealthyLscs, nil
 }
 
-func getLVMVolumeGroups(ctx context.Context, cl client.Client) (*snc.LvmVolumeGroupList, error) {
-	lvgList := &snc.LvmVolumeGroupList{}
+func getLVMVolumeGroups(ctx context.Context, cl client.Client) (*snc.LVMVolumeGroupList, error) {
+	lvgList := &snc.LVMVolumeGroupList{}
 	err := cl.List(ctx, lvgList)
 
 	return lvgList, err

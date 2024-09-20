@@ -57,13 +57,13 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	LvmType := request.GetParameters()[internal.LvmTypeKey]
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] storage class LvmType: %s", traceID, volumeID, LvmType))
 
-	if len(request.GetParameters()[internal.LvmVolumeGroupKey]) == 0 {
+	if len(request.GetParameters()[internal.LVMVolumeGroupKey]) == 0 {
 		err := errors.New("no LVMVolumeGroups specified in a storage class's parameters")
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] no LVMVolumeGroups were found for the request: %+v", traceID, volumeID, request))
 		return nil, status.Errorf(codes.InvalidArgument, err.Error())
 	}
 
-	storageClassLVGs, storageClassLVGParametersMap, err := utils.GetStorageClassLVGsAndParameters(ctx, d.cl, d.log, request.GetParameters()[internal.LvmVolumeGroupKey])
+	storageClassLVGs, storageClassLVGParametersMap, err := utils.GetStorageClassLVGsAndParameters(ctx, d.cl, d.log, request.GetParameters()[internal.LVMVolumeGroupKey])
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error GetStorageClassLVGs", traceID, volumeID))
 		return nil, status.Errorf(codes.Internal, err.Error())
@@ -321,7 +321,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		}, nil
 	}
 
-	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LvmVolumeGroupName, llv.Namespace)
+	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LVMVolumeGroupName, llv.Namespace)
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error getting LVMVolumeGroup", traceID, volumeID))
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)

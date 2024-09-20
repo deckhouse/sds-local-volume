@@ -120,14 +120,14 @@ You can verify this using the command:
 kubectl get node %node-name% --show-labels
 ```
 
-If the labels from `nodeSelector` are not present on the node, ensure that this node does not own any `LvmVolumeGroup` resources used by `LocalStorageClass` resources. More details about this check can be found [here](#how-to-check-if-there-are-dependent-resources-lvmvolumegroup-on-the-node).
+If the labels from `nodeSelector` are not present on the node, ensure that this node does not own any `LVMVolumeGroup` resources used by `LocalStorageClass` resources. More details about this check can be found [here](#how-to-check-if-there-are-dependent-resources-lvmvolumegroup-on-the-node).
 
 
-> Please note that on the `LvmVolumeGroup` and `LocalStorageClass` resources, which prevent the node from being taken out of the module's control, the label `storage.deckhouse.io/sds-local-volume-candidate-for-eviction` will be displayed.
+> Please note that on the `LVMVolumeGroup` and `LocalStorageClass` resources, which prevent the node from being taken out of the module's control, the label `storage.deckhouse.io/sds-local-volume-candidate-for-eviction` will be displayed.
 On the node itself, the label `storage.deckhouse.io/sds-local-volume-need-manual-eviction` will be present.
 
 
-## How to check if there are dependent resources `LvmVolumeGroup` on the node?
+## How to check if there are dependent resources `LVMVolumeGroup` on the node?
 To check for such resources, follow these steps:
 1. Display the existing `LocalStorageClass` resources
 
@@ -135,7 +135,7 @@ To check for such resources, follow these steps:
 kubectl get lsc
 ```
 
-2. Check each of them for the list of used `LvmVolumeGroup` resources.
+2. Check each of them for the list of used `LVMVolumeGroup` resources.
 
 > If you want to list all `LocalStorageClass` resources at once, run the command:
 > 
@@ -170,15 +170,15 @@ items:
 kind: List
 ```
 
-> Please pay attention to the `spec.lvm.lvmVolumeGroups` field - it specifies the used `LvmVolumeGroup` resources.
+> Please pay attention to the `spec.lvm.lvmVolumeGroups` field - it specifies the used `LVMVolumeGroup` resources.
 
-3. Display the list of existing `LvmVolumeGroup` resources.
+3. Display the list of existing `LVMVolumeGroup` resources.
 
 ```shell
 kubectl get lvg
 ```
 
-An approximate representation of `LvmVolumeGroup` could be:
+An approximate representation of `LVMVolumeGroup` could be:
 
 ```text
 NAME              HEALTH        NODE                         SIZE       ALLOCATED SIZE   VG        AGE
@@ -190,12 +190,12 @@ lvg-on-worker-4   Operational   node-worker-4   307196Mi   0                test
 lvg-on-worker-5   Operational   node-worker-5   204796Mi   0                test-vg   15d
 ```
 
-4. Ensure that the node you intend to remove from the module's control does not have any `LvmVolumeGroup` resources used in `LocalStorageClass` resources.
+4. Ensure that the node you intend to remove from the module's control does not have any `LVMVolumeGroup` resources used in `LocalStorageClass` resources.
 
 > To avoid unintentionally losing control over volumes already created using the module, the user needs to manually delete dependent resources by performing necessary operations on the volume.
 
 ## I removed the labels from the node, but the `sds-local-volume-csi-node` pod is still there. Why did this happen? 
-Most likely, there are `LvmVolumeGroup` resources present on the node, which are used in one of the `LocalStorageClass` resources.
+Most likely, there are `LVMVolumeGroup` resources present on the node, which are used in one of the `LocalStorageClass` resources.
 
 To avoid unintentionally losing control over volumes already created using the module, the user needs to manually delete dependent resources by performing necessary operations on the volume."
 

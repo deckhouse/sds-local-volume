@@ -50,7 +50,7 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 		klog.Fatal(err)
 	}
 
-	listDevice := &snc.LvmVolumeGroupList{}
+	listDevice := &snc.LVMVolumeGroupList{}
 
 	err = cl.List(ctx, listDevice)
 	if err != nil {

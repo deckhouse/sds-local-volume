@@ -511,7 +511,7 @@ func validateLocalStorageClass(
 		failedMsgBuilder.WriteString(fmt.Sprintf("There already is a storage class with the same name: %s but it is not managed by the LocalStorageClass controller\n", unmanagedScName))
 	}
 
-	lvgList := &snc.LvmVolumeGroupList{}
+	lvgList := &snc.LVMVolumeGroupList{}
 	err := cl.List(ctx, lvgList)
 	if err != nil {
 		valid = false
@@ -575,8 +575,8 @@ func findAnyThinPool(lsc *slv.LocalStorageClass) []string {
 	return badLvgs
 }
 
-func findNonexistentThinPools(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageClass) []string {
-	lvgs := make(map[string]snc.LvmVolumeGroup, len(lvgList.Items))
+func findNonexistentThinPools(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalStorageClass) []string {
+	lvgs := make(map[string]snc.LVMVolumeGroup, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		lvgs[lvg.Name] = lvg
 	}
@@ -606,7 +606,7 @@ func findNonexistentThinPools(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalSto
 	return badLvgs
 }
 
-func findNonexistentLVGs(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageClass) []string {
+func findNonexistentLVGs(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalStorageClass) []string {
 	lvgs := make(map[string]struct{}, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		lvgs[lvg.Name] = struct{}{}
@@ -622,7 +622,7 @@ func findNonexistentLVGs(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageC
 	return nonexistent
 }
 
-func findLVMVolumeGroupsOnTheSameNode(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageClass) []string {
+func findLVMVolumeGroupsOnTheSameNode(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalStorageClass) []string {
 	nodesWithLVGs := make(map[string][]string, len(lsc.Spec.LVM.LVMVolumeGroups))
 	usedLVGs := make(map[string]struct{}, len(lsc.Spec.LVM.LVMVolumeGroups))
 	for _, lvg := range lsc.Spec.LVM.LVMVolumeGroups {

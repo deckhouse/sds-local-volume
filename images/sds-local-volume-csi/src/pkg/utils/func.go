@@ -154,7 +154,7 @@ func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantit
 	return math.Abs(leftSizeFloat-rightSizeFloat) < float64(allowedDelta.Value())
 }
 
-func GetNodeWithMaxFreeSpace(lvgs []snc.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
+func GetNodeWithMaxFreeSpace(lvgs []snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
 	var maxFreeSpace int64
 	for _, lvg := range lvgs {
 		switch lvmType {
@@ -182,14 +182,14 @@ func GetNodeWithMaxFreeSpace(lvgs []snc.LvmVolumeGroup, storageClassLVGParameter
 
 // TODO: delete the method below?
 func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.Logger, lvmVG map[string]string, nodeName, lvmType string) (lvgName, vgName string, err error) {
-	listLvgs := &snc.LvmVolumeGroupList{
+	listLvgs := &snc.LVMVolumeGroupList{
 		ListMeta: metav1.ListMeta{},
-		Items:    []snc.LvmVolumeGroup{},
+		Items:    []snc.LVMVolumeGroup{},
 	}
 
 	err = kc.List(ctx, listLvgs)
 	if err != nil {
-		return "", "", fmt.Errorf("error getting LvmVolumeGroup list: %w", err)
+		return "", "", fmt.Errorf("error getting LVMVolumeGroup list: %w", err)
 	}
 
 	for _, lvg := range listLvgs.Items {
@@ -218,8 +218,8 @@ func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.L
 	return "", "", errors.New("there are no matches")
 }
 
-func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace string) (*snc.LvmVolumeGroup, error) {
-	var lvg snc.LvmVolumeGroup
+func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace string) (*snc.LVMVolumeGroup, error) {
+	var lvg snc.LVMVolumeGroup
 
 	err := kc.Get(ctx, client.ObjectKey{
 		Name:      lvgName,
@@ -229,14 +229,14 @@ func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace
 	return &lvg, err
 }
 
-func GetLVMVolumeGroupFreeSpace(lvg snc.LvmVolumeGroup) (vgFreeSpace resource.Quantity) {
+func GetLVMVolumeGroupFreeSpace(lvg snc.LVMVolumeGroup) (vgFreeSpace resource.Quantity) {
 	vgFreeSpace = lvg.Status.VGSize
 	vgFreeSpace.Sub(lvg.Status.AllocatedSize)
 	return vgFreeSpace
 }
 
-func GetLVMThinPoolFreeSpace(lvg snc.LvmVolumeGroup, thinPoolName string) (thinPoolFreeSpace resource.Quantity, err error) {
-	var storagePoolThinPool *snc.LvmVolumeGroupThinPoolStatus
+func GetLVMThinPoolFreeSpace(lvg snc.LVMVolumeGroup, thinPoolName string) (thinPoolFreeSpace resource.Quantity, err error) {
+	var storagePoolThinPool *snc.LVMVolumeGroupThinPoolStatus
 	for _, thinPool := range lvg.Status.ThinPools {
 		if thinPool.Name == thinPoolName {
 			storagePoolThinPool = &thinPool
@@ -256,7 +256,7 @@ func ExpandLVMLogicalVolume(ctx context.Context, kc client.Client, llv *snc.LVML
 	return kc.Update(ctx, llv)
 }
 
-func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log *logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []snc.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
+func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log *logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
 	var storageClassLVGParametersList LVMVolumeGroups
 	err = yaml.Unmarshal([]byte(storageClassLVGParametersString), &storageClassLVGParametersList)
 	if err != nil {
@@ -291,17 +291,17 @@ func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log
 	return storageClassLVGs, storageClassLVGParametersMap, nil
 }
 
-func GetLVGList(ctx context.Context, kc client.Client) (*snc.LvmVolumeGroupList, error) {
-	listLvgs := &snc.LvmVolumeGroupList{}
+func GetLVGList(ctx context.Context, kc client.Client) (*snc.LVMVolumeGroupList, error) {
+	listLvgs := &snc.LVMVolumeGroupList{}
 	return listLvgs, kc.List(ctx, listLvgs)
 }
 
-func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG snc.LvmVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity, contiguous bool) snc.LVMLogicalVolumeSpec {
+func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity, contiguous bool) snc.LVMLogicalVolumeSpec {
 	lvmLogicalVolumeSpec := snc.LVMLogicalVolumeSpec{
 		ActualLVNameOnTheNode: lvName,
 		Type:                  lvmType,
 		Size:                  llvSize.String(),
-		LvmVolumeGroupName:    selectedLVG.Name,
+		LVMVolumeGroupName:    selectedLVG.Name,
 	}
 
 	switch lvmType {
@@ -323,13 +323,13 @@ func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG snc.LvmVolumeGrou
 	return lvmLogicalVolumeSpec
 }
 
-func SelectLVG(storageClassLVGs []snc.LvmVolumeGroup, nodeName string) (snc.LvmVolumeGroup, error) {
+func SelectLVG(storageClassLVGs []snc.LVMVolumeGroup, nodeName string) (snc.LVMVolumeGroup, error) {
 	for _, lvg := range storageClassLVGs {
 		if lvg.Status.Nodes[0].Name == nodeName {
 			return lvg, nil
 		}
 	}
-	return snc.LvmVolumeGroup{}, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found for node %s", nodeName)
+	return snc.LVMVolumeGroup{}, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found for node %s", nodeName)
 }
 
 func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logger.Logger, llv *snc.LVMLogicalVolume, finalizer string) (bool, error) {
