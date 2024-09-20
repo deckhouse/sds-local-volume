@@ -805,7 +805,7 @@ func performStandartChecksForSC(
 	lvmType,
 	reclaimPolicy,
 	volumeBindingMode,
-	fstype string,
+	fsType string,
 ) {
 	expectString := ""
 	for i, lvg := range lvgSpec {
@@ -820,8 +820,8 @@ func performStandartChecksForSC(
 	}
 	expectString += "\n"
 
-	expectedFSType := fstype
-	if fstype == "" {
+	expectedFSType := fsType
+	if fsType == "" {
 		expectedFSType = controller.DefaultFSType
 	}
 

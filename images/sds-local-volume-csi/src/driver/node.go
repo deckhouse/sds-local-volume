@@ -467,10 +467,10 @@ func recheckFormattingOptionParameter(context map[string]string, key string, fsC
 			return "", status.Errorf(codes.InvalidArgument, "Invalid %s (aborting!): %v", key, err)
 		}
 
-		// In the case that the default fstype does not support custom sizes we could
-		// be using an invalid fstype, so recheck that here
+		// In the case that the default fsType does not support custom sizes we could
+		// be using an invalid fsType, so recheck that here
 		if supported := fsConfigs[strings.ToLower(fsType)].IsParameterSupported(key); !supported {
-			return "", status.Errorf(codes.InvalidArgument, "Cannot use %s with fstype %s", key, fsType)
+			return "", status.Errorf(codes.InvalidArgument, "Cannot use %s with fsType %s", key, fsType)
 		}
 	}
 	return v, nil

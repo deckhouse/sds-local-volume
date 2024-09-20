@@ -35,7 +35,6 @@ spec:
                 - reclaimPolicy
                 - volumeBindingMode
                 - lvm
-                - fstype
               properties:
                 reclaimPolicy:
                   type: string
@@ -134,8 +133,9 @@ spec:
                                   The name of the thin pool.
                                 minLength: 1
                                 pattern: ^.*$
-                fstype:
+                fsType:
                   type: string
+                  default: ext4
                   x-kubernetes-validations:
                     - rule: self == oldSelf
                       message: Value is immutable.
