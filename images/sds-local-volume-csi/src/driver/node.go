@@ -54,7 +54,6 @@ var (
 )
 
 func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume id cannot be empty")
