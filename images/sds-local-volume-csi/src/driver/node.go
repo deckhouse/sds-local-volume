@@ -403,7 +403,7 @@ func collectMountOptions(fsType string, mountFlags, mountOptions []string) []str
 	return mountOptions
 }
 
-func int8ToStr(arr []int8) string {
+func readCString(arr []int8) string {
 	b := make([]byte, 0, len(arr))
 	for _, v := range arr {
 		if v == 0x00 {
@@ -421,7 +421,7 @@ func needLegacyXFSSupport() (bool, error) {
 		return false, fmt.Errorf("unable to Uname kernel version: %w", err)
 	}
 
-	fullVersion := int8ToStr(uname.Release[:]) // similar to: "6.8.0-44-generic"
+	fullVersion := readCString(uname.Release[:]) // similar to: "6.8.0-44-generic"
 
 	parts := strings.SplitN(fullVersion, ".", 3)
 	if len(parts) < 3 {
