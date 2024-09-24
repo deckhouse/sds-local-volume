@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
@@ -21,10 +22,11 @@ const (
 )
 
 type Cache struct {
-	lvgs     sync.Map // map[string]*lvgCache
-	pvcLVGs  sync.Map // map[string][]string
-	nodeLVGs sync.Map // map[string][]string
-	log      logger.Logger
+	lvgs            sync.Map // map[string]*lvgCache
+	pvcLVGs         sync.Map // map[string][]string
+	nodeLVGs        sync.Map // map[string][]string
+	log             logger.Logger
+	expiredDuration time.Duration
 }
 
 type lvgCache struct {
@@ -44,17 +46,57 @@ type pvcCache struct {
 
 // NewCache initialize new cache.
 func NewCache(logger logger.Logger) *Cache {
-	return &Cache{
-		log: logger,
+	ch := &Cache{
+		log:             logger,
+		expiredDuration: 30 * time.Second,
 	}
+
+	go func() {
+		timer := time.NewTimer(ch.expiredDuration)
+
+		for {
+			select {
+			case <-timer.C:
+				ch.clearBoundExpiredPVC()
+				timer.Reset(ch.expiredDuration)
+			}
+		}
+	}()
+	return ch
+}
+
+func (c *Cache) clearBoundExpiredPVC() {
+	c.log.Debug("[clearBoundExpiredPVC] starts to clear expired PVC")
+	c.lvgs.Range(func(lvgName, _ any) bool {
+		pvcs, err := c.GetAllPVCForLVG(lvgName.(string))
+		if err != nil {
+			c.log.Error(err, fmt.Sprintf("[clearBoundExpiredPVC] unable to get PVCs for the LVMVolumeGroup %s", lvgName.(string)))
+			return false
+		}
+
+		for _, pvc := range pvcs {
+			if pvc.Status.Phase != v1.ClaimBound {
+				c.log.Trace(fmt.Sprintf("[clearBoundExpiredPVC] PVC %s is not in a Bound state", pvc.Name))
+				continue
+			}
+
+			if time.Now().Sub(pvc.CreationTimestamp.Time) > c.expiredDuration {
+				c.log.Warning(fmt.Sprintf("[clearBoundExpiredPVC] PVC %s is in a Bound state and expired, remove it from the cache", pvc.Name))
+				c.RemovePVCFromTheCache(pvc)
+			} else {
+				c.log.Trace(fmt.Sprintf("[clearBoundExpiredPVC] PVC %s is in a Bound state but not expired yet.", pvc.Name))
+			}
+		}
+
+		return true
+	})
+	c.log.Debug("[clearBoundExpiredPVC] finished the expired PVC clearing")
 }
 
 // AddLVG adds selected LVMVolumeGroup resource to the cache. If it is already stored, does nothing.
 func (c *Cache) AddLVG(lvg *snc.LVMVolumeGroup) {
 	_, loaded := c.lvgs.LoadOrStore(lvg.Name, &lvgCache{
-		lvg:       lvg,
-		thickPVCs: sync.Map{},
-		thinPools: sync.Map{},
+		lvg: lvg,
 	})
 	if loaded {
 		c.log.Debug(fmt.Sprintf("[AddLVG] the LVMVolumeGroup %s has been already added to the cache", lvg.Name))
