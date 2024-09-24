@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -47,12 +49,11 @@ var (
 
 	ValidFSTypes = map[string]struct{}{
 		internal.FSTypeExt4: {},
+		internal.FSTypeXfs:  {},
 	}
 )
 
 func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	d.log.Debug(fmt.Sprintf("[NodeStageVolume] method called with request: %v", request))
-
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume id cannot be empty")
@@ -68,7 +69,8 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume capability cannot be empty")
 	}
 
-	vgName, ok := request.GetVolumeContext()[internal.VGNameKey]
+	context := request.GetVolumeContext()
+	vgName, ok := context[internal.VGNameKey]
 	if !ok {
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume group name cannot be empty")
 	}
@@ -93,6 +95,18 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes))
 	}
 
+	formatOptions := []string{}
+
+	// support mounting on old linux kernels
+	needLegacySupport, err := needLegacyXFSSupport()
+	if err != nil {
+		return nil, err
+	}
+	if fsType == internal.FSTypeXfs && needLegacySupport {
+		d.log.Info("[NodeStageVolume] legacy xfs support is on")
+		formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0")
+	}
+
 	mountOptions := collectMountOptions(fsType, mountVolume.GetMountFlags(), []string{})
 
 	d.log.Debug(fmt.Sprintf("[NodeStageVolume] Volume %s operation started", volumeID))
@@ -115,15 +129,15 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		return nil, status.Errorf(codes.NotFound, "[NodeStageVolume] Device %s not found", devPath)
 	}
 
-	lvmType := request.GetVolumeContext()[internal.LvmTypeKey]
-	lvmThinPoolName := request.GetVolumeContext()[internal.ThinPoolNameKey]
+	lvmType := context[internal.LvmTypeKey]
+	lvmThinPoolName := context[internal.ThinPoolNameKey]
 
 	d.log.Trace(fmt.Sprintf("mountOptions = %s", mountOptions))
 	d.log.Trace(fmt.Sprintf("lvmType = %s", lvmType))
 	d.log.Trace(fmt.Sprintf("lvmThinPoolName = %s", lvmThinPoolName))
 	d.log.Trace(fmt.Sprintf("fsType = %s", fsType))
 
-	err = d.storeManager.NodeStageVolumeFS(devPath, target, fsType, mountOptions, lvmType, lvmThinPoolName)
+	err = d.storeManager.NodeStageVolumeFS(devPath, target, fsType, mountOptions, formatOptions, lvmType, lvmThinPoolName)
 	if err != nil {
 		d.log.Error(err, "[NodeStageVolume] Error mounting volume")
 		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error format device %q and mounting volume at %q: %v", devPath, target, err)
@@ -387,4 +401,42 @@ func collectMountOptions(fsType string, mountFlags, mountOptions []string) []str
 	}
 
 	return mountOptions
+}
+
+func readCString(arr []int8) string {
+	b := make([]byte, 0, len(arr))
+	for _, v := range arr {
+		if v == 0x00 {
+			break
+		}
+		b = append(b, byte(v))
+	}
+	return string(b)
+}
+
+func needLegacyXFSSupport() (bool, error) {
+	// checking if Linux kernel version is <= 5.4
+	var uname syscall.Utsname
+	if err := syscall.Uname(&uname); err != nil {
+		return false, fmt.Errorf("unable to Uname kernel version: %w", err)
+	}
+
+	fullVersion := readCString(uname.Release[:]) // similar to: "6.8.0-44-generic"
+
+	parts := strings.SplitN(fullVersion, ".", 3)
+	if len(parts) < 3 {
+		return false, fmt.Errorf("unexpected kernel version: %s", fullVersion)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false, fmt.Errorf("unexpected kernel version (major part): %s", fullVersion)
+	}
+
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false, fmt.Errorf("unexpected kernel version (minor part): %s", fullVersion)
+	}
+
+	return major < 5 || major == 5 && minor <= 4, nil
 }

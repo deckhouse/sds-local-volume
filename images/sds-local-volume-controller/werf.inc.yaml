@@ -1,4 +1,4 @@
-{{- $_ := set . "BASE_GOLANG" "registry.deckhouse.io/base_images/golang:1.22.6-bullseye@sha256:260918a3795372a6d33225d361fe5349723be9667de865a23411b50fbcc76c5a" }}
+{{- $_ := set . "BASE_GOLANG" "registry.deckhouse.io/base_images/golang:1.23.1-alpine3.20@sha256:716820a183116e643839611ff9eca9bd1c92d2bf8f7a5eda2f9fd16e8acbaa72" }}
 {{- $_ := set . "BASE_SCRATCH"    "registry.deckhouse.io/base_images/scratch@sha256:b054705fcc9f2205777d80a558d920c0b4209efdc3163c22b5bfcb5dda1db5fc" }}
 
 ---
@@ -8,19 +8,22 @@ fromCacheVersion: 202408091334349
 final: false
 
 git:
-  - add: /images/sds-local-volume-controller/src
-    to: /src
+  - add: /
+    to: /
+    includePaths:
+      - api
+      - images/sds-local-volume-controller/src
     stageDependencies:
       setup:
         - "**/*"
+
 mount:
   - fromPath: ~/go-pkg-cache
     to: /go/pkg
 shell:
   setup:
-    - cd /src/cmd
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o sds-local-volume-controller
-    - mv sds-local-volume-controller /sds-local-volume-controller
+    - cd /images/sds-local-volume-controller/src/cmd
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /sds-local-volume-controller
     - chmod +x /sds-local-volume-controller
 
 ---

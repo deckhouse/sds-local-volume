@@ -133,6 +133,19 @@ spec:
                                   The name of the thin pool.
                                 minLength: 1
                                 pattern: ^.*$
+                fsType:
+                  type: string
+                  default: ext4
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: Value is immutable.
+                  description: |
+                    The storage class's file system type. Might be:
+                    - ext4 (default)
+                    - xfs
+                  enum:
+                    - ext4
+                    - xfs
             status:
               type: object
               description: |

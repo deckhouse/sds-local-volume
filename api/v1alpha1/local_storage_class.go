@@ -36,6 +36,7 @@ type LocalStorageClassSpec struct {
 	ReclaimPolicy     string                    `json:"reclaimPolicy"`
 	VolumeBindingMode string                    `json:"volumeBindingMode"`
 	LVM               *LocalStorageClassLVMSpec `json:"lvm,omitempty"`
+	FSType            string                    `json:"fsType,omitempty"`
 }
 
 type LocalStorageClassLVMSpec struct {

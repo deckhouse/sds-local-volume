@@ -66,6 +66,7 @@ func main() {
 	cfgParams, err := config.NewConfig()
 	if err != nil {
 		klog.Fatalf("unable to create NewConfig, err: %s", err.Error())
+		os.Exit(1)
 	}
 
 	log, err := logger.NewLogger(cfgParams.Loglevel)
@@ -79,6 +80,7 @@ func main() {
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {
 		log.Error(err, "[main] unable to KubernetesDefaultConfigCreate")
+		os.Exit(1)
 	}
 	log.Info("[main] kubernetes config has been successfully created.")
 
