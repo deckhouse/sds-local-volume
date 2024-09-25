@@ -21,7 +21,7 @@ const (
 	Lvm                         = "lvm"
 	LvmTypeKey                  = "local.csi.storage.deckhouse.io/lvm-type"
 	BindingModeKey              = "local.csi.storage.deckhouse.io/volume-binding-mode"
-	LvmVolumeGroupKey           = "local.csi.storage.deckhouse.io/lvm-volume-groups"
+	LVMVolumeGroupKey           = "local.csi.storage.deckhouse.io/lvm-volume-groups"
 	LVMVThickContiguousParamKey = "local.csi.storage.deckhouse.io/lvm-thick-contiguous"
 	TopologyKey                 = "topology.sds-local-volume-csi/node"
 	SubPath                     = "subPath"

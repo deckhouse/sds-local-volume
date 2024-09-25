@@ -15,7 +15,7 @@ import (
 
 func BenchmarkCache_DeleteLVG(b *testing.B) {
 	cache := NewCache(logger.Logger{})
-	lvg := &snc.LvmVolumeGroup{
+	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "first",
 		},
@@ -34,7 +34,7 @@ func BenchmarkCache_DeleteLVG(b *testing.B) {
 
 func BenchmarkCache_GetLVGReservedSpace(b *testing.B) {
 	cache := NewCache(logger.Logger{})
-	lvg := &snc.LvmVolumeGroup{
+	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "first",
 		},
@@ -101,32 +101,32 @@ func BenchmarkCache_GetLVGReservedSpace(b *testing.B) {
 func BenchmarkCache_AddPVC(b *testing.B) {
 	cache := NewCache(logger.Logger{})
 
-	lvg1 := &snc.LvmVolumeGroup{
+	lvg1 := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "first",
 		},
-		Status: snc.LvmVolumeGroupStatus{
-			Nodes: []snc.LvmVolumeGroupNode{
+		Status: snc.LVMVolumeGroupStatus{
+			Nodes: []snc.LVMVolumeGroupNode{
 				{Name: "test-node1"},
 			},
 		},
 	}
-	lvg2 := &snc.LvmVolumeGroup{
+	lvg2 := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "second",
 		},
-		Status: snc.LvmVolumeGroupStatus{
-			Nodes: []snc.LvmVolumeGroupNode{
+		Status: snc.LVMVolumeGroupStatus{
+			Nodes: []snc.LVMVolumeGroupNode{
 				{Name: "test-node2"},
 			},
 		},
 	}
-	lvg3 := &snc.LvmVolumeGroup{
+	lvg3 := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "third",
 		},
-		Status: snc.LvmVolumeGroupStatus{
-			Nodes: []snc.LvmVolumeGroupNode{
+		Status: snc.LVMVolumeGroupStatus{
+			Nodes: []snc.LVMVolumeGroupNode{
 				{Name: "test-node3"},
 			},
 		},
@@ -170,14 +170,14 @@ func BenchmarkCache_GetAllLVG(b *testing.B) {
 	cache := NewCache(logger.Logger{})
 	lvgs := map[string]*lvgCache{
 		"first": {
-			lvg: &snc.LvmVolumeGroup{
+			lvg: &snc.LVMVolumeGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "first",
 				},
 			},
 		},
 		"second": {
-			lvg: &snc.LvmVolumeGroup{
+			lvg: &snc.LVMVolumeGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "second",
 				},
@@ -225,7 +225,7 @@ func BenchmarkCache_TryGetLVG(b *testing.B) {
 	cache := NewCache(logger.Logger{})
 	name := "test-name"
 
-	lvg := &snc.LvmVolumeGroup{
+	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
@@ -249,12 +249,12 @@ func BenchmarkCache_AddLVG(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			i++
-			lvg1 := &snc.LvmVolumeGroup{
+			lvg1 := &snc.LVMVolumeGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf("test-lvg-%d", i),
 				},
-				Status: snc.LvmVolumeGroupStatus{
-					Nodes: []snc.LvmVolumeGroupNode{
+				Status: snc.LVMVolumeGroupStatus{
+					Nodes: []snc.LVMVolumeGroupNode{
 						{
 							Name: "test-1",
 						},
@@ -262,12 +262,12 @@ func BenchmarkCache_AddLVG(b *testing.B) {
 				},
 			}
 
-			lvg2 := &snc.LvmVolumeGroup{
+			lvg2 := &snc.LVMVolumeGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf("test-lvg-%d", i+1),
 				},
-				Status: snc.LvmVolumeGroupStatus{
-					Nodes: []snc.LvmVolumeGroupNode{
+				Status: snc.LVMVolumeGroupStatus{
+					Nodes: []snc.LVMVolumeGroupNode{
 						{
 							Name: "test-1",
 						},
@@ -275,12 +275,12 @@ func BenchmarkCache_AddLVG(b *testing.B) {
 				},
 			}
 
-			lvg3 := &snc.LvmVolumeGroup{
+			lvg3 := &snc.LVMVolumeGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: fmt.Sprintf("test-lvg-%d", i+2),
 				},
-				Status: snc.LvmVolumeGroupStatus{
-					Nodes: []snc.LvmVolumeGroupNode{
+				Status: snc.LVMVolumeGroupStatus{
+					Nodes: []snc.LVMVolumeGroupNode{
 						{
 							Name: "test-1",
 						},
@@ -301,21 +301,21 @@ func BenchmarkCache_AddLVG(b *testing.B) {
 func TestCache_UpdateLVG(t *testing.T) {
 	cache := NewCache(logger.Logger{})
 	name := "test-lvg"
-	lvg := &snc.LvmVolumeGroup{
+	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Status: snc.LvmVolumeGroupStatus{
+		Status: snc.LVMVolumeGroupStatus{
 			AllocatedSize: resource.MustParse("1Gi"),
 		},
 	}
 	cache.AddLVG(lvg)
 
-	newLVG := &snc.LvmVolumeGroup{
+	newLVG := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Status: snc.LvmVolumeGroupStatus{
+		Status: snc.LVMVolumeGroupStatus{
 			AllocatedSize: resource.MustParse("2Gi"),
 		},
 	}
@@ -334,7 +334,7 @@ func BenchmarkCache_UpdateLVG(b *testing.B) {
 	name := "test-name"
 	i := 0
 
-	lvg := &snc.LvmVolumeGroup{
+	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
@@ -349,11 +349,11 @@ func BenchmarkCache_UpdateLVG(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			i++
-			updated := &snc.LvmVolumeGroup{
+			updated := &snc.LVMVolumeGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
 				},
-				Status: snc.LvmVolumeGroupStatus{
+				Status: snc.LVMVolumeGroupStatus{
 					AllocatedSize: resource.MustParse(fmt.Sprintf("2%dGi", i)),
 				},
 			}
@@ -369,12 +369,12 @@ func BenchmarkCache_UpdateLVG(b *testing.B) {
 func BenchmarkCache_UpdatePVC(b *testing.B) {
 	cache := NewCache(logger.Logger{})
 	i := 0
-	lvg := &snc.LvmVolumeGroup{
+	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-lvg",
 		},
-		Status: snc.LvmVolumeGroupStatus{
-			Nodes: []snc.LvmVolumeGroupNode{
+		Status: snc.LVMVolumeGroupStatus{
+			Nodes: []snc.LVMVolumeGroupNode{
 				{
 					Name: "test-node",
 				},
@@ -426,13 +426,13 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 		for pb.Next() {
 			i++
 
-			lvgs := []*snc.LvmVolumeGroup{
+			lvgs := []*snc.LVMVolumeGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("test-lvg-%d", i),
 					},
-					Status: snc.LvmVolumeGroupStatus{
-						Nodes: []snc.LvmVolumeGroupNode{
+					Status: snc.LVMVolumeGroupStatus{
+						Nodes: []snc.LVMVolumeGroupNode{
 							{
 								Name: nodeName,
 							},
@@ -444,8 +444,8 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("test-lvg-%d", i+1),
 					},
-					Status: snc.LvmVolumeGroupStatus{
-						Nodes: []snc.LvmVolumeGroupNode{
+					Status: snc.LVMVolumeGroupStatus{
+						Nodes: []snc.LVMVolumeGroupNode{
 							{
 								Name: nodeName,
 							},
@@ -457,8 +457,8 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("test-lvg-%d", i+2),
 					},
-					Status: snc.LvmVolumeGroupStatus{
-						Nodes: []snc.LvmVolumeGroupNode{
+					Status: snc.LVMVolumeGroupStatus{
+						Nodes: []snc.LVMVolumeGroupNode{
 							{
 								Name: nodeName,
 							},
@@ -501,12 +501,12 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 				}
 			}
 
-			updatedLvgs := []*snc.LvmVolumeGroup{
+			updatedLvgs := []*snc.LVMVolumeGroup{
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("test-lvg-%d", i),
 					},
-					Status: snc.LvmVolumeGroupStatus{
+					Status: snc.LVMVolumeGroupStatus{
 						AllocatedSize: resource.MustParse(fmt.Sprintf("1%dGi", i+1)),
 					},
 				},
@@ -514,7 +514,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("test-lvg-%d", i+1),
 					},
-					Status: snc.LvmVolumeGroupStatus{
+					Status: snc.LVMVolumeGroupStatus{
 						AllocatedSize: resource.MustParse(fmt.Sprintf("1%dGi", i+1)),
 					},
 				},
@@ -522,7 +522,7 @@ func BenchmarkCache_FullLoad(b *testing.B) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("test-lvg-%d", i+2),
 					},
-					Status: snc.LvmVolumeGroupStatus{
+					Status: snc.LVMVolumeGroupStatus{
 						AllocatedSize: resource.MustParse(fmt.Sprintf("1%dGi", i+1)),
 					},
 				},

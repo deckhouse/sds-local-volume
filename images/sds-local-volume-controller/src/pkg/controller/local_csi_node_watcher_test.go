@@ -63,12 +63,12 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			t.Error(err)
 		}
 
-		lvgOnNode4 := &snc.LvmVolumeGroup{
+		lvgOnNode4 := &snc.LVMVolumeGroup{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "lvgOnNode4",
 			},
-			Status: snc.LvmVolumeGroupStatus{
-				Nodes: []snc.LvmVolumeGroupNode{
+			Status: snc.LVMVolumeGroupStatus{
+				Nodes: []snc.LVMVolumeGroupNode{
 					{
 						Name: "test-node4",
 					},
@@ -190,7 +190,7 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			_, exist = node4.Labels[localCsiNodeSelectorLabel]
 			assert.True(t, exist)
 
-			updateLvg := &snc.LvmVolumeGroup{}
+			updateLvg := &snc.LVMVolumeGroup{}
 			err = cl.Get(ctx,
 				client.ObjectKey{
 					Name: "lvgOnNode4",

@@ -12,34 +12,34 @@ import (
 func TestLVGWatcherCache(t *testing.T) {
 	t.Run("shouldReconcileLVG", func(t *testing.T) {
 		t.Run("deletion_timestamp_not_nil_returns_false", func(t *testing.T) {
-			lvg := &snc.LvmVolumeGroup{}
+			lvg := &snc.LVMVolumeGroup{}
 			lvg.DeletionTimestamp = &v1.Time{}
 
-			assert.False(t, shouldReconcileLVG(&snc.LvmVolumeGroup{}, lvg))
+			assert.False(t, shouldReconcileLVG(&snc.LVMVolumeGroup{}, lvg))
 		})
 
 		t.Run("allocated_size_and_status_thin_pools_equal_returns_false", func(t *testing.T) {
 			size := resource.MustParse("1G")
-			thinPools := []snc.LvmVolumeGroupThinPoolStatus{
+			thinPools := []snc.LVMVolumeGroupThinPoolStatus{
 				{
 					Name:       "thin",
 					ActualSize: resource.MustParse("1G"),
 				},
 			}
-			oldLvg := &snc.LvmVolumeGroup{
+			oldLvg := &snc.LVMVolumeGroup{
 				ObjectMeta: v1.ObjectMeta{
 					Name: "first",
 				},
-				Status: snc.LvmVolumeGroupStatus{
+				Status: snc.LVMVolumeGroupStatus{
 					AllocatedSize: size,
 					ThinPools:     thinPools,
 				},
 			}
-			newLvg := &snc.LvmVolumeGroup{
+			newLvg := &snc.LVMVolumeGroup{
 				ObjectMeta: v1.ObjectMeta{
 					Name: "first",
 				},
-				Status: snc.LvmVolumeGroupStatus{
+				Status: snc.LVMVolumeGroupStatus{
 					AllocatedSize: size,
 					ThinPools:     thinPools,
 				},
@@ -49,26 +49,26 @@ func TestLVGWatcherCache(t *testing.T) {
 		})
 
 		t.Run("allocated_size_not_equal_returns_true", func(t *testing.T) {
-			thinPools := []snc.LvmVolumeGroupThinPoolStatus{
+			thinPools := []snc.LVMVolumeGroupThinPoolStatus{
 				{
 					Name:       "thin",
 					ActualSize: resource.MustParse("1G"),
 				},
 			}
-			oldLvg := &snc.LvmVolumeGroup{
+			oldLvg := &snc.LVMVolumeGroup{
 				ObjectMeta: v1.ObjectMeta{
 					Name: "first",
 				},
-				Status: snc.LvmVolumeGroupStatus{
+				Status: snc.LVMVolumeGroupStatus{
 					AllocatedSize: resource.MustParse("1G"),
 					ThinPools:     thinPools,
 				},
 			}
-			newLvg := &snc.LvmVolumeGroup{
+			newLvg := &snc.LVMVolumeGroup{
 				ObjectMeta: v1.ObjectMeta{
 					Name: "first",
 				},
-				Status: snc.LvmVolumeGroupStatus{
+				Status: snc.LVMVolumeGroupStatus{
 					AllocatedSize: resource.MustParse("2G"),
 					ThinPools:     thinPools,
 				},
@@ -79,13 +79,13 @@ func TestLVGWatcherCache(t *testing.T) {
 
 		t.Run("status_thin_pools_not_equal_returns_false", func(t *testing.T) {
 			size := resource.MustParse("1G")
-			oldLvg := &snc.LvmVolumeGroup{
+			oldLvg := &snc.LVMVolumeGroup{
 				ObjectMeta: v1.ObjectMeta{
 					Name: "first",
 				},
-				Status: snc.LvmVolumeGroupStatus{
+				Status: snc.LVMVolumeGroupStatus{
 					AllocatedSize: size,
-					ThinPools: []snc.LvmVolumeGroupThinPoolStatus{
+					ThinPools: []snc.LVMVolumeGroupThinPoolStatus{
 						{
 							Name:       "thin",
 							ActualSize: resource.MustParse("1G"),
@@ -93,13 +93,13 @@ func TestLVGWatcherCache(t *testing.T) {
 					},
 				},
 			}
-			newLvg := &snc.LvmVolumeGroup{
+			newLvg := &snc.LVMVolumeGroup{
 				ObjectMeta: v1.ObjectMeta{
 					Name: "first",
 				},
-				Status: snc.LvmVolumeGroupStatus{
+				Status: snc.LVMVolumeGroupStatus{
 					AllocatedSize: size,
-					ThinPools: []snc.LvmVolumeGroupThinPoolStatus{
+					ThinPools: []snc.LVMVolumeGroupThinPoolStatus{
 						{
 							Name:       "thin",
 							ActualSize: resource.MustParse("2G"),

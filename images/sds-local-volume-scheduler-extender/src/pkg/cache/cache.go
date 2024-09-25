@@ -28,7 +28,7 @@ type Cache struct {
 }
 
 type lvgCache struct {
-	lvg       *snc.LvmVolumeGroup
+	lvg       *snc.LVMVolumeGroup
 	thickPVCs sync.Map // map[string]*pvcCache
 	thinPools sync.Map // map[string]*thinPoolCache
 }
@@ -50,7 +50,7 @@ func NewCache(logger logger.Logger) *Cache {
 }
 
 // AddLVG adds selected LVMVolumeGroup resource to the cache. If it is already stored, does nothing.
-func (c *Cache) AddLVG(lvg *snc.LvmVolumeGroup) {
+func (c *Cache) AddLVG(lvg *snc.LVMVolumeGroup) {
 	_, loaded := c.lvgs.LoadOrStore(lvg.Name, &lvgCache{
 		lvg:       lvg,
 		thickPVCs: sync.Map{},
@@ -75,7 +75,7 @@ func (c *Cache) AddLVG(lvg *snc.LvmVolumeGroup) {
 }
 
 // UpdateLVG updated selected LVMVolumeGroup resource in the cache. If such LVMVolumeGroup is not stored, returns an error.
-func (c *Cache) UpdateLVG(lvg *snc.LvmVolumeGroup) error {
+func (c *Cache) UpdateLVG(lvg *snc.LVMVolumeGroup) error {
 	if lvgCh, found := c.lvgs.Load(lvg.Name); found {
 		lvgCh.(*lvgCache).lvg = lvg
 
@@ -102,7 +102,7 @@ func (c *Cache) UpdateLVG(lvg *snc.LvmVolumeGroup) error {
 }
 
 // TryGetLVG returns selected LVMVolumeGroup resource if it is stored in the cache, otherwise returns nil.
-func (c *Cache) TryGetLVG(name string) *snc.LvmVolumeGroup {
+func (c *Cache) TryGetLVG(name string) *snc.LVMVolumeGroup {
 	lvgCh, found := c.lvgs.Load(name)
 	if !found {
 		c.log.Debug(fmt.Sprintf("[TryGetLVG] the LVMVolumeGroup %s was not found in the cache. Return nil", name))
@@ -124,8 +124,8 @@ func (c *Cache) GetLVGNamesByNodeName(nodeName string) []string {
 }
 
 // GetAllLVG returns all the LVMVolumeGroups resources stored in the cache.
-func (c *Cache) GetAllLVG() map[string]*snc.LvmVolumeGroup {
-	lvgs := make(map[string]*snc.LvmVolumeGroup)
+func (c *Cache) GetAllLVG() map[string]*snc.LVMVolumeGroup {
+	lvgs := make(map[string]*snc.LVMVolumeGroup)
 	c.lvgs.Range(func(lvgName, lvgCh any) bool {
 		if lvgCh.(*lvgCache).lvg == nil {
 			c.log.Error(fmt.Errorf("LVMVolumeGroup %s is not initialized", lvgName), "[GetAllLVG] an error occurs while iterating the LVMVolumeGroups")

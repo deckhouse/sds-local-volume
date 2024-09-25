@@ -37,7 +37,6 @@ import (
 
 var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 	const (
-		controllerNamespace      = "test-namespace"
 		nameForLocalStorageClass = "sds-local-volume-storage-class"
 
 		existingThickLVG1Name = "test-thick-vg1"
@@ -63,13 +62,13 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		volumeBindingModeWFFC = string(v1.VolumeBindingWaitForFirstConsumer)
 		volumeBindingModeIM   = string(v1.VolumeBindingImmediate)
 
-		existingThickLVG1Template = generateLVMVolumeGroup(existingThickLVG1Name, []string{"dev-1111", "dev-2222"}, []string{})
-		existingThickLVG2Template = generateLVMVolumeGroup(existingThickLVG2Name, []string{"dev-3333", "dev-4444"}, []string{})
-		newThickLVGTemplate       = generateLVMVolumeGroup(newThickLVGName, []string{"dev-5555", "dev-6666"}, []string{})
+		existingThickLVG1Template = generateLVMVolumeGroup(existingThickLVG1Name, []string{})
+		existingThickLVG2Template = generateLVMVolumeGroup(existingThickLVG2Name, []string{})
+		newThickLVGTemplate       = generateLVMVolumeGroup(newThickLVGName, []string{})
 
-		existingThinLVG1Template = generateLVMVolumeGroup(existingThinLVG1Name, []string{"dev-7777", "dev-8888"}, []string{"thin-pool-1", "thin-pool-2"})
-		existingThinLVG2Template = generateLVMVolumeGroup(existingThinLVG2Name, []string{"dev-9999", "dev-1010"}, []string{"thin-pool-1", "thin-pool-2"})
-		newThinLVGTemplate       = generateLVMVolumeGroup(newThinLVGName, []string{"dev-1111", "dev-1212"}, []string{"thin-pool-1", "thin-pool-2"})
+		existingThinLVG1Template = generateLVMVolumeGroup(existingThinLVG1Name, []string{"thin-pool-1", "thin-pool-2"})
+		existingThinLVG2Template = generateLVMVolumeGroup(existingThinLVG2Name, []string{"thin-pool-1", "thin-pool-2"})
+		newThinLVGTemplate       = generateLVMVolumeGroup(newThinLVGName, []string{"thin-pool-1", "thin-pool-2"})
 	)
 
 	It("Create_local_sc_with_existing_lvgs", func() {
@@ -742,38 +741,37 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 
 })
 
-func generateLVMVolumeGroup(name string, devices, thinPoolNames []string) *snc.LvmVolumeGroup {
+func generateLVMVolumeGroup(name string, thinPoolNames []string) *snc.LVMVolumeGroup {
 	lvmType := controller.LVMThickType
 
 	if len(thinPoolNames) > 0 {
 		lvmType = controller.LVMThinType
 	}
 
-	thinPoolsSpec := make([]snc.LvmVolumeGroupThinPoolSpec, 0)
-	thinPoolsStatus := make([]snc.LvmVolumeGroupThinPoolStatus, 0)
+	thinPoolsSpec := make([]snc.LVMVolumeGroupThinPoolSpec, 0)
+	thinPoolsStatus := make([]snc.LVMVolumeGroupThinPoolStatus, 0)
 	for i := 0; i < len(thinPoolNames); i++ {
-		thinPoolsSpec = append(thinPoolsSpec, snc.LvmVolumeGroupThinPoolSpec{
+		thinPoolsSpec = append(thinPoolsSpec, snc.LVMVolumeGroupThinPoolSpec{
 			Name: thinPoolNames[i],
 			Size: "10Gi",
 		})
-		thinPoolsStatus = append(thinPoolsStatus, snc.LvmVolumeGroupThinPoolStatus{
+		thinPoolsStatus = append(thinPoolsStatus, snc.LVMVolumeGroupThinPoolStatus{
 			Name:       thinPoolNames[i],
 			ActualSize: resource.MustParse("10Gi"),
 			UsedSize:   resource.MustParse("0Gi"),
 		})
 	}
 
-	return &snc.LvmVolumeGroup{
+	return &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Spec: snc.LvmVolumeGroupSpec{
+		Spec: snc.LVMVolumeGroupSpec{
 			ActualVGNameOnTheNode: "vg1",
-			BlockDeviceNames:      devices,
 			ThinPools:             thinPoolsSpec,
 			Type:                  lvmType,
 		},
-		Status: snc.LvmVolumeGroupStatus{
+		Status: snc.LVMVolumeGroupStatus{
 			ThinPools: thinPoolsStatus,
 		},
 	}
