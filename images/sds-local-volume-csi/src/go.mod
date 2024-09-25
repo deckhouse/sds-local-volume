@@ -5,7 +5,7 @@ go 1.22.3
 require (
 	github.com/container-storage-interface/spec v1.10.0
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20240903071950-ed9d3bba999b
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20240919102704-a035b4a92e77
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20240925090458-249de2896583
 	github.com/go-logr/logr v1.4.2
 	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
