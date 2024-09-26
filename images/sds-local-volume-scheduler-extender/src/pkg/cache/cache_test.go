@@ -26,7 +26,7 @@ func TestCache(t *testing.T) {
 			thinPendingExpiredPVC  = "thin-pending-expired-pvc"
 			thinBoundNotExpiredPVC = "thin-bound-not-expired-pvc"
 		)
-		ch := NewCache(log, DefaultPVCExpiredDurationSec*time.Second)
+		ch := NewCache(log, DefaultPVCExpiredDurationSec)
 		expiredTime := time.Now().Add((-DefaultPVCExpiredDurationSec - 1) * time.Second)
 		thickPVCs := map[string]*pvcCache{
 			"/" + thickBoundExpiredPVC: {
@@ -148,7 +148,7 @@ func TestCache(t *testing.T) {
 }
 
 func BenchmarkCache_DeleteLVG(b *testing.B) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "first",
@@ -167,7 +167,7 @@ func BenchmarkCache_DeleteLVG(b *testing.B) {
 }
 
 func BenchmarkCache_GetLVGReservedSpace(b *testing.B) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "first",
@@ -233,7 +233,7 @@ func BenchmarkCache_GetLVGReservedSpace(b *testing.B) {
 }
 
 func BenchmarkCache_AddPVC(b *testing.B) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 
 	lvg1 := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -301,7 +301,7 @@ func BenchmarkCache_AddPVC(b *testing.B) {
 }
 
 func BenchmarkCache_GetAllLVG(b *testing.B) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	lvgs := map[string]*lvgCache{
 		"first": {
 			lvg: &snc.LVMVolumeGroup{
@@ -335,7 +335,7 @@ func BenchmarkCache_GetAllLVG(b *testing.B) {
 }
 
 func BenchmarkCache_GetLVGNamesByNodeName(b *testing.B) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	lvgs := []string{
 		"first",
 		"second",
@@ -356,7 +356,7 @@ func BenchmarkCache_GetLVGNamesByNodeName(b *testing.B) {
 }
 
 func BenchmarkCache_TryGetLVG(b *testing.B) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	name := "test-name"
 
 	lvg := &snc.LVMVolumeGroup{
@@ -377,7 +377,7 @@ func BenchmarkCache_TryGetLVG(b *testing.B) {
 }
 
 func BenchmarkCache_AddLVG(b *testing.B) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	i := 0
 
 	b.RunParallel(func(pb *testing.PB) {
@@ -433,7 +433,7 @@ func BenchmarkCache_AddLVG(b *testing.B) {
 }
 
 func TestCache_UpdateLVG(t *testing.T) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	name := "test-lvg"
 	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -464,7 +464,7 @@ func TestCache_UpdateLVG(t *testing.T) {
 }
 
 func BenchmarkCache_UpdateLVG(b *testing.B) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	name := "test-name"
 	i := 0
 
@@ -501,7 +501,7 @@ func BenchmarkCache_UpdateLVG(b *testing.B) {
 }
 
 func BenchmarkCache_UpdatePVC(b *testing.B) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	i := 0
 	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -549,7 +549,7 @@ func BenchmarkCache_UpdatePVC(b *testing.B) {
 }
 
 func BenchmarkCache_FullLoad(b *testing.B) {
-	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec*time.Second)
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 
 	const (
 		nodeName = "test-node"

@@ -54,14 +54,14 @@ const (
 )
 
 type Config struct {
-	ListenAddr             string        `json:"listen"`
-	DefaultDivisor         float64       `json:"default-divisor"`
-	LogLevel               string        `json:"log-level"`
-	CacheSize              int           `json:"cache-size"`
-	HealthProbeBindAddress string        `json:"health-probe-bind-address"`
-	CertFile               string        `json:"cert-file"`
-	KeyFile                string        `json:"key-file"`
-	PVCExpiredDurationSec  time.Duration `json:"pvc-expired-duration-sec"`
+	ListenAddr             string  `json:"listen"`
+	DefaultDivisor         float64 `json:"default-divisor"`
+	LogLevel               string  `json:"log-level"`
+	CacheSize              int     `json:"cache-size"`
+	HealthProbeBindAddress string  `json:"health-probe-bind-address"`
+	CertFile               string  `json:"cert-file"`
+	KeyFile                string  `json:"key-file"`
+	PVCExpiredDurationSec  int     `json:"pvc-expired-duration-sec"`
 }
 
 var cfgFilePath string
@@ -80,7 +80,7 @@ var config = &Config{
 	CacheSize:             defaultCacheSize,
 	CertFile:              defaultcertFile,
 	KeyFile:               defaultkeyFile,
-	PVCExpiredDurationSec: cache.DefaultPVCExpiredDurationSec * time.Second,
+	PVCExpiredDurationSec: cache.DefaultPVCExpiredDurationSec,
 }
 
 var rootCmd = &cobra.Command{

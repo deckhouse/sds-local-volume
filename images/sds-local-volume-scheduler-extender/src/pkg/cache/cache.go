@@ -47,10 +47,10 @@ type pvcCache struct {
 }
 
 // NewCache initialize new cache.
-func NewCache(logger logger.Logger, pvcExpDurSec time.Duration) *Cache {
+func NewCache(logger logger.Logger, pvcExpDurSec int) *Cache {
 	ch := &Cache{
 		log:             logger,
-		expiredDuration: pvcExpDurSec,
+		expiredDuration: time.Duration(pvcExpDurSec) * time.Second,
 	}
 
 	go func() {
