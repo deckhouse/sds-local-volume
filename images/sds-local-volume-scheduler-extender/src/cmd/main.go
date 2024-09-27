@@ -61,6 +61,7 @@ type Config struct {
 	HealthProbeBindAddress string  `json:"health-probe-bind-address"`
 	CertFile               string  `json:"cert-file"`
 	KeyFile                string  `json:"key-file"`
+	PVCExpiredDurationSec  int     `json:"pvc-expired-duration-sec"`
 }
 
 var cfgFilePath string
@@ -73,12 +74,13 @@ var resourcesSchemeFuncs = []func(*runtime.Scheme) error{
 }
 
 var config = &Config{
-	ListenAddr:     defaultListenAddr,
-	DefaultDivisor: defaultDivisor,
-	LogLevel:       "2",
-	CacheSize:      defaultCacheSize,
-	CertFile:       defaultcertFile,
-	KeyFile:        defaultkeyFile,
+	ListenAddr:            defaultListenAddr,
+	DefaultDivisor:        defaultDivisor,
+	LogLevel:              "2",
+	CacheSize:             defaultCacheSize,
+	CertFile:              defaultcertFile,
+	KeyFile:               defaultkeyFile,
+	PVCExpiredDurationSec: cache.DefaultPVCExpiredDurationSec,
 }
 
 var rootCmd = &cobra.Command{
@@ -167,7 +169,7 @@ func subMain(ctx context.Context) error {
 		return err
 	}
 
-	schedulerCache := cache.NewCache(*log)
+	schedulerCache := cache.NewCache(*log, config.PVCExpiredDurationSec)
 	log.Info("[subMain] scheduler cache was initialized")
 
 	h, err := scheduler.NewHandler(ctx, mgr.GetClient(), *log, schedulerCache, config.DefaultDivisor)

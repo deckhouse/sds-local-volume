@@ -90,7 +90,6 @@ func RunLVGWatcherCacheController(
 			log.Info(fmt.Sprintf("[RunCacheWatcherController] UpdateFunc starts the cache reconciliation for the LVMVolumeGroup %s", e.ObjectNew.GetName()))
 			oldLvg := e.ObjectOld
 			newLvg := e.ObjectNew
-
 			err := cache.UpdateLVG(newLvg)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[RunLVGWatcherCacheController] unable to update the LVMVolumeGroup %s cache", newLvg.Name))

@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
@@ -13,8 +14,141 @@ import (
 	"sds-local-volume-scheduler-extender/pkg/logger"
 )
 
+func TestCache(t *testing.T) {
+	log := logger.Logger{}
+	t.Run("clearBoundExpiredPVC", func(t *testing.T) {
+		const (
+			thickBoundExpiredPVC    = "thick-bound-expired-pvc"
+			thickPendingExpiredPVC  = "thick-pending-expired-pvc"
+			thickBoundNotExpiredPVC = "thick-bound-not-expired-pvc"
+
+			thinBoundExpiredPVC    = "thin-bound-expired-pvc"
+			thinPendingExpiredPVC  = "thin-pending-expired-pvc"
+			thinBoundNotExpiredPVC = "thin-bound-not-expired-pvc"
+		)
+		ch := NewCache(log, DefaultPVCExpiredDurationSec)
+		expiredTime := time.Now().Add((-DefaultPVCExpiredDurationSec - 1) * time.Second)
+		thickPVCs := map[string]*pvcCache{
+			"/" + thickBoundExpiredPVC: {
+				pvc: &v1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              thickBoundExpiredPVC,
+						CreationTimestamp: metav1.NewTime(expiredTime),
+					},
+					Status: v1.PersistentVolumeClaimStatus{
+						Phase: v1.ClaimBound,
+					},
+				},
+			},
+			"/" + thickPendingExpiredPVC: {
+				pvc: &v1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              thickPendingExpiredPVC,
+						CreationTimestamp: metav1.NewTime(expiredTime),
+					},
+					Status: v1.PersistentVolumeClaimStatus{
+						Phase: v1.ClaimPending,
+					},
+				},
+			},
+			"/" + thickBoundNotExpiredPVC: {
+				pvc: &v1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              thickBoundNotExpiredPVC,
+						CreationTimestamp: metav1.NewTime(time.Now()),
+					},
+					Status: v1.PersistentVolumeClaimStatus{
+						Phase: v1.ClaimBound,
+					},
+				},
+			},
+		}
+		thinPVCs := map[string]*pvcCache{
+			"/" + thinBoundExpiredPVC: {
+				pvc: &v1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              thinBoundExpiredPVC,
+						CreationTimestamp: metav1.NewTime(expiredTime),
+					},
+					Status: v1.PersistentVolumeClaimStatus{
+						Phase: v1.ClaimBound,
+					},
+				},
+			},
+			"/" + thinPendingExpiredPVC: {
+				pvc: &v1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              thinPendingExpiredPVC,
+						CreationTimestamp: metav1.NewTime(expiredTime),
+					},
+					Status: v1.PersistentVolumeClaimStatus{
+						Phase: v1.ClaimPending,
+					},
+				},
+			},
+			"/" + thinBoundNotExpiredPVC: {
+				pvc: &v1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              thinBoundNotExpiredPVC,
+						CreationTimestamp: metav1.NewTime(time.Now()),
+					},
+					Status: v1.PersistentVolumeClaimStatus{
+						Phase: v1.ClaimBound,
+					},
+				},
+			},
+		}
+
+		const tpName = "thin-pool"
+		thinPools := map[string]*thinPoolCache{
+			tpName: {},
+		}
+		for pvcName, pvc := range thinPVCs {
+			thinPools[tpName].pvcs.Store(pvcName, pvc)
+		}
+
+		const lvgName = "lvg-name"
+		lvgs := map[string]*lvgCache{
+			lvgName: {},
+		}
+
+		for name, pvc := range thickPVCs {
+			lvgs[lvgName].thickPVCs.Store(name, pvc)
+		}
+		for name, tp := range thinPools {
+			lvgs[lvgName].thinPools.Store(name, tp)
+		}
+
+		ch.lvgs.Store(lvgName, lvgs[lvgName])
+		ch.pvcLVGs.Store("/"+thickBoundExpiredPVC, []string{lvgName})
+		ch.pvcLVGs.Store("/"+thickPendingExpiredPVC, []string{lvgName})
+		ch.pvcLVGs.Store("/"+thickBoundNotExpiredPVC, []string{lvgName})
+		ch.pvcLVGs.Store("/"+thinBoundExpiredPVC, []string{lvgName})
+		ch.pvcLVGs.Store("/"+thinBoundNotExpiredPVC, []string{lvgName})
+		ch.pvcLVGs.Store("/"+thinPendingExpiredPVC, []string{lvgName})
+
+		ch.clearBoundExpiredPVC()
+
+		lvgCh, _ := ch.lvgs.Load(lvgName)
+		_, found := lvgCh.(*lvgCache).thickPVCs.Load("/" + thickBoundExpiredPVC)
+		assert.False(t, found)
+		_, found = lvgCh.(*lvgCache).thickPVCs.Load("/" + thickPendingExpiredPVC)
+		assert.True(t, found)
+		_, found = lvgCh.(*lvgCache).thickPVCs.Load("/" + thickBoundNotExpiredPVC)
+		assert.True(t, found)
+
+		tpCh, _ := lvgCh.(*lvgCache).thinPools.Load(tpName)
+		_, found = tpCh.(*thinPoolCache).pvcs.Load("/" + thinBoundExpiredPVC)
+		assert.False(t, found)
+		_, found = tpCh.(*thinPoolCache).pvcs.Load("/" + thinPendingExpiredPVC)
+		assert.True(t, found)
+		_, found = tpCh.(*thinPoolCache).pvcs.Load("/" + thinBoundNotExpiredPVC)
+		assert.True(t, found)
+	})
+}
+
 func BenchmarkCache_DeleteLVG(b *testing.B) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "first",
@@ -33,7 +167,7 @@ func BenchmarkCache_DeleteLVG(b *testing.B) {
 }
 
 func BenchmarkCache_GetLVGReservedSpace(b *testing.B) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "first",
@@ -99,7 +233,7 @@ func BenchmarkCache_GetLVGReservedSpace(b *testing.B) {
 }
 
 func BenchmarkCache_AddPVC(b *testing.B) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 
 	lvg1 := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -167,7 +301,7 @@ func BenchmarkCache_AddPVC(b *testing.B) {
 }
 
 func BenchmarkCache_GetAllLVG(b *testing.B) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	lvgs := map[string]*lvgCache{
 		"first": {
 			lvg: &snc.LVMVolumeGroup{
@@ -201,7 +335,7 @@ func BenchmarkCache_GetAllLVG(b *testing.B) {
 }
 
 func BenchmarkCache_GetLVGNamesByNodeName(b *testing.B) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	lvgs := []string{
 		"first",
 		"second",
@@ -222,7 +356,7 @@ func BenchmarkCache_GetLVGNamesByNodeName(b *testing.B) {
 }
 
 func BenchmarkCache_TryGetLVG(b *testing.B) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	name := "test-name"
 
 	lvg := &snc.LVMVolumeGroup{
@@ -243,7 +377,7 @@ func BenchmarkCache_TryGetLVG(b *testing.B) {
 }
 
 func BenchmarkCache_AddLVG(b *testing.B) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	i := 0
 
 	b.RunParallel(func(pb *testing.PB) {
@@ -299,7 +433,7 @@ func BenchmarkCache_AddLVG(b *testing.B) {
 }
 
 func TestCache_UpdateLVG(t *testing.T) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	name := "test-lvg"
 	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -330,7 +464,7 @@ func TestCache_UpdateLVG(t *testing.T) {
 }
 
 func BenchmarkCache_UpdateLVG(b *testing.B) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	name := "test-name"
 	i := 0
 
@@ -367,7 +501,7 @@ func BenchmarkCache_UpdateLVG(b *testing.B) {
 }
 
 func BenchmarkCache_UpdatePVC(b *testing.B) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 	i := 0
 	lvg := &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
@@ -415,7 +549,7 @@ func BenchmarkCache_UpdatePVC(b *testing.B) {
 }
 
 func BenchmarkCache_FullLoad(b *testing.B) {
-	cache := NewCache(logger.Logger{})
+	cache := NewCache(logger.Logger{}, DefaultPVCExpiredDurationSec)
 
 	const (
 		nodeName = "test-node"
