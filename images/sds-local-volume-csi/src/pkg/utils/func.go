@@ -297,17 +297,21 @@ func GetLVGList(ctx context.Context, kc client.Client) (*snc.LVMVolumeGroupList,
 }
 
 func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity, contiguous bool) snc.LVMLogicalVolumeSpec {
+	return GetLLVSpec2(log, lvName, selectedLVG, storageClassLVGParametersMap[selectedLVG.Name], lvmType, llvSize.String(), contiguous)
+}
+
+func GetLLVSpec2(log *logger.Logger, lvName string, selectedLVG snc.LVMVolumeGroup, poolName string, lvmType string, llvSize string, contiguous bool) snc.LVMLogicalVolumeSpec {
 	lvmLogicalVolumeSpec := snc.LVMLogicalVolumeSpec{
 		ActualLVNameOnTheNode: lvName,
 		Type:                  lvmType,
-		Size:                  llvSize.String(),
+		Size:                  llvSize,
 		LVMVolumeGroupName:    selectedLVG.Name,
 	}
 
 	switch lvmType {
 	case internal.LVMTypeThin:
 		lvmLogicalVolumeSpec.Thin = &snc.LVMLogicalVolumeThinSpec{
-			PoolName: storageClassLVGParametersMap[selectedLVG.Name],
+			PoolName: poolName,
 		}
 		log.Info(fmt.Sprintf("[GetLLVSpec] Thin pool name: %s", lvmLogicalVolumeSpec.Thin.PoolName))
 	case internal.LVMTypeThick:

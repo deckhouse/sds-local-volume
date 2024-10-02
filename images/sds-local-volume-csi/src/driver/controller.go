@@ -20,8 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -264,9 +266,61 @@ func (d *Driver) ControllerGetCapabilities(_ context.Context, _ *csi.ControllerG
 	}, nil
 }
 
-func (d *Driver) CreateSnapshot(_ context.Context, _ *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
-	d.log.Info(" call method CreateSnapshot")
-	return nil, nil
+func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+	traceID := uuid.New().String()
+
+	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s] ========== CreateVolume ============", traceID))
+	d.log.Trace(request.String())
+
+	sourceVolID := request.GetSourceVolumeId()
+
+	sourceVol, err := utils.GetLVMLogicalVolume(ctx, d.cl, sourceVolID, "")
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMLogicalVolume", traceID, sourceVolID))
+		return nil, status.Errorf(codes.Internal, "error getting LVMLogicalVolume %s: %s", sourceVolID, err.Error())
+	}
+
+	// the snapshots are required to be created in the same node and device class as the source volume.
+
+	size := sourceVol.Spec.Size
+	poolName := sourceVol.Spec.Thin.PoolName
+	name := request.GetName()
+	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, sourceVol.Spec.LVMVolumeGroupName, sourceVol.Namespace)
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMVolumeGroup", traceID, name))
+		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
+	}
+
+	llvSpec := utils.GetLLVSpec2(d.log, name, *lvg, poolName, internal.LVMTypeThin, size, false)
+
+	_, err = utils.CreateLVMLogicalVolume(ctx, d.cl, d.log, traceID, name, llvSpec)
+	if err != nil {
+		if kerrors.IsAlreadyExists(err) {
+			d.log.Info(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] LVMLogicalVolume %s already exists. Skip creating", traceID, name, name))
+		} else {
+			d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error CreateLVMLogicalVolume", traceID, name))
+			return nil, err
+		}
+	}
+
+	sourceSizeQty, err := resource.ParseQuantity(sourceVol.Spec.Size)
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s] error parsing quantity %s", traceID, sourceVol.Spec.Size))
+		return nil, status.Errorf(codes.Internal, "error parsing quantity: %v", err)
+	}
+
+	return &csi.CreateSnapshotResponse{
+		Snapshot: &csi.Snapshot{
+			SnapshotId:     name,
+			SourceVolumeId: sourceVolID,
+			SizeBytes:      sourceSizeQty.Value(),
+			CreationTime: &timestamp.Timestamp{
+				Seconds: time.Now().Unix(),
+				Nanos:   0,
+			},
+			ReadyToUse: true,
+		},
+	}, nil
 }
 
 func (d *Driver) DeleteSnapshot(_ context.Context, _ *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
