@@ -291,7 +291,7 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
 	}
 
-	llvSpec := utils.GetLLVSpec2(d.log, name, *lvg, poolName, internal.LVMTypeThin, size, false)
+	llvSpec := utils.GetLLVSpec2(d.log, name, *lvg, poolName, internal.LVMTypeThin, size, false, sourceVol.Name)
 
 	_, err = utils.CreateLVMLogicalVolume(ctx, d.cl, d.log, traceID, name, llvSpec)
 	if err != nil {

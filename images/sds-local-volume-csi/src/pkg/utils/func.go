@@ -297,15 +297,16 @@ func GetLVGList(ctx context.Context, kc client.Client) (*snc.LVMVolumeGroupList,
 }
 
 func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity, contiguous bool) snc.LVMLogicalVolumeSpec {
-	return GetLLVSpec2(log, lvName, selectedLVG, storageClassLVGParametersMap[selectedLVG.Name], lvmType, llvSize.String(), contiguous)
+	return GetLLVSpec2(log, lvName, selectedLVG, storageClassLVGParametersMap[selectedLVG.Name], lvmType, llvSize.String(), contiguous, "")
 }
 
-func GetLLVSpec2(log *logger.Logger, lvName string, selectedLVG snc.LVMVolumeGroup, poolName string, lvmType string, llvSize string, contiguous bool) snc.LVMLogicalVolumeSpec {
+func GetLLVSpec2(log *logger.Logger, lvName string, selectedLVG snc.LVMVolumeGroup, poolName string, lvmType string, llvSize string, contiguous bool, source string) snc.LVMLogicalVolumeSpec {
 	lvmLogicalVolumeSpec := snc.LVMLogicalVolumeSpec{
 		ActualLVNameOnTheNode: lvName,
 		Type:                  lvmType,
 		Size:                  llvSize,
 		LVMVolumeGroupName:    selectedLVG.Name,
+		Source:                source,
 	}
 
 	switch lvmType {
