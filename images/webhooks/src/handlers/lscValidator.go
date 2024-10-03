@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
@@ -60,8 +61,7 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 	errMsg := ""
 	var lvmVolumeGroupUnique []string
 
-	thickExists := false
-	thinExists := false
+	var thickNames, thinNames []string
 	for _, lvmGroup := range lsc.Spec.LVM.LVMVolumeGroups {
 		lvgExists := false
 
@@ -89,11 +89,13 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 		}
 
 		if lvmGroup.Thin == nil {
-			thickExists = true
+			thickNames = append(thickNames, lvmGroup.Name)
 		} else {
-			thinExists = true
+			thinNames = append(thinNames, lvmGroup.Name)
 		}
 	}
+
+	thinExists, thickExists := len(thinNames) > 0, len(thickNames) > 0
 
 	if thinExists {
 		ctx := context.Background()
@@ -134,14 +136,14 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 	}
 
 	if thinExists && lsc.Spec.LVM.Type == "Thick" {
-		errMsg = "There must be only thick pools with Thick LVM type"
+		errMsg = fmt.Sprintf("There must be only thick pools with Thick LVM type. Found: %s.", strings.Join(thinNames, ", "))
 		klog.Info(errMsg)
 		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
 			nil
 	}
 
 	if thickExists && lsc.Spec.LVM.Type == "Thin" {
-		errMsg = "There must be only thin pools with Thin LVM type"
+		errMsg = fmt.Sprintf("There must be only thin pools with Thin LVM type. Found: %s.", strings.Join(thickNames, ", "))
 		klog.Info(errMsg)
 		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
 			nil
