@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -284,7 +285,10 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 
 	size := sourceVol.Spec.Size
 	poolName := sourceVol.Spec.Thin.PoolName
-	name := request.GetName()
+	// suggested name is in form "snapshot-{uuid}" and can't be used, because
+	// lvcreate: "Names starting "snapshot" are reserved."
+	name := strings.Replace(request.GetName(), "snapshot", "snap", 1)
+
 	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, sourceVol.Spec.LVMVolumeGroupName, sourceVol.Namespace)
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMVolumeGroup", traceID, name))
