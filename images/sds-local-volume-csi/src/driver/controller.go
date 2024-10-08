@@ -270,7 +270,7 @@ func (d *Driver) ControllerGetCapabilities(_ context.Context, _ *csi.ControllerG
 func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	traceID := uuid.New().String()
 
-	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s] ========== CreateVolume ============", traceID))
+	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s] ========== CreateSnapshot ============", traceID))
 	d.log.Trace(request.String())
 
 	sourceVolID := request.GetSourceVolumeId()
@@ -327,13 +327,26 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 	}, nil
 }
 
-func (d *Driver) DeleteSnapshot(_ context.Context, _ *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
-	d.log.Info(" call method DeleteSnapshot")
-	return nil, nil
+func (d *Driver) DeleteSnapshot(ctx context.Context, request *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+	if len(request.SnapshotId) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "SnapshotId ID cannot be empty")
+	}
+
+	traceID := uuid.New().String()
+	d.log.Trace(fmt.Sprintf("[DeleteSnapshot][traceID:%s] ========== DeleteSnapshot ============", traceID))
+	d.log.Trace(request.String())
+
+	if err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.SnapshotId); err != nil {
+		d.log.Error(err, "error DeleteLVMLogicalVolume")
+	}
+
+	d.log.Info(fmt.Sprintf("[Snapshot][traceID:%s][SnapshotId:%s] Snapshot deleted successfully", traceID, request.SnapshotId))
+	d.log.Info("[Snapshot][traceID:%s] ========== END Snapshot ============", traceID)
+	return &csi.DeleteSnapshotResponse{}, nil
 }
 
 func (d *Driver) ListSnapshots(_ context.Context, _ *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
-	d.log.Info(" call method ListSnapshots")
+	d.log.Info("call method ListSnapshots")
 	return nil, nil
 }
 
