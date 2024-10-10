@@ -219,14 +219,17 @@ func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.L
 }
 
 func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace string) (*snc.LVMVolumeGroup, error) {
-	var lvg snc.LVMVolumeGroup
+	lvg := &snc.LVMVolumeGroup{}
 
-	err := kc.Get(ctx, client.ObjectKey{
-		Name:      lvgName,
-		Namespace: namespace,
-	}, &lvg)
+	if err := kc.Get(
+		ctx,
+		client.ObjectKey{Name: lvgName, Namespace: namespace},
+		lvg,
+	); err != nil {
+		return nil, err
+	}
 
-	return &lvg, err
+	return lvg, nil
 }
 
 func GetLVMVolumeGroupFreeSpace(lvg snc.LVMVolumeGroup) (vgFreeSpace resource.Quantity) {
@@ -256,7 +259,12 @@ func ExpandLVMLogicalVolume(ctx context.Context, kc client.Client, llv *snc.LVML
 	return kc.Update(ctx, llv)
 }
 
-func GetStorageClassLVGsAndParameters(ctx context.Context, kc client.Client, log *logger.Logger, storageClassLVGParametersString string) (storageClassLVGs []snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
+func GetStorageClassLVGsAndParameters(
+	ctx context.Context,
+	kc client.Client,
+	log *logger.Logger,
+	storageClassLVGParametersString string,
+) (storageClassLVGs []snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
 	var storageClassLVGParametersList LVMVolumeGroups
 	err = yaml.Unmarshal([]byte(storageClassLVGParametersString), &storageClassLVGParametersList)
 	if err != nil {
@@ -296,11 +304,16 @@ func GetLVGList(ctx context.Context, kc client.Client) (*snc.LVMVolumeGroupList,
 	return listLvgs, kc.List(ctx, listLvgs)
 }
 
-func GetLLVSpec(log *logger.Logger, lvName string, selectedLVG snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string, llvSize resource.Quantity, contiguous bool) snc.LVMLogicalVolumeSpec {
-	return GetLLVSpec2(log, lvName, selectedLVG, storageClassLVGParametersMap[selectedLVG.Name], lvmType, llvSize.String(), contiguous, "")
-}
-
-func GetLLVSpec2(log *logger.Logger, lvName string, selectedLVG snc.LVMVolumeGroup, poolName string, lvmType string, llvSize string, contiguous bool, source string) snc.LVMLogicalVolumeSpec {
+func GetLLVSpec(
+	log *logger.Logger,
+	lvName string,
+	selectedLVG snc.LVMVolumeGroup,
+	poolName string,
+	lvmType string,
+	llvSize string,
+	contiguous bool,
+	source string,
+) snc.LVMLogicalVolumeSpec {
 	lvmLogicalVolumeSpec := snc.LVMLogicalVolumeSpec{
 		ActualLVNameOnTheNode: lvName,
 		Type:                  lvmType,
@@ -328,13 +341,13 @@ func GetLLVSpec2(log *logger.Logger, lvName string, selectedLVG snc.LVMVolumeGro
 	return lvmLogicalVolumeSpec
 }
 
-func SelectLVG(storageClassLVGs []snc.LVMVolumeGroup, nodeName string) (snc.LVMVolumeGroup, error) {
-	for _, lvg := range storageClassLVGs {
-		if lvg.Status.Nodes[0].Name == nodeName {
-			return lvg, nil
+func SelectLVG(storageClassLVGs []snc.LVMVolumeGroup, nodeName string) (*snc.LVMVolumeGroup, error) {
+	for i := 0; i < len(storageClassLVGs); i++ {
+		if storageClassLVGs[i].Status.Nodes[0].Name == nodeName {
+			return &storageClassLVGs[i], nil
 		}
 	}
-	return snc.LVMVolumeGroup{}, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found for node %s", nodeName)
+	return nil, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found for node %s", nodeName)
 }
 
 func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logger.Logger, llv *snc.LVMLogicalVolume, finalizer string) (bool, error) {
