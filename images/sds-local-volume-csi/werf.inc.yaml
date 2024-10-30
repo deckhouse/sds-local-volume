@@ -4,6 +4,7 @@
 ---
 image: {{ $.ImageName }}-golang-artifact
 from: {{ $.BASE_GOLANG }}
+final: false
 
 git:
   - add: /
