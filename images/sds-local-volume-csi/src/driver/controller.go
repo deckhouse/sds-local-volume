@@ -91,48 +91,76 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	var selectedLVG *v1alpha1.LVMVolumeGroup
 	var preferredNode string
-	var sourceVolumeId string
+	var sourceVolumeId, sourceVolumeKind string
 
 	if request.VolumeContentSource != nil {
-
 		switch s := request.VolumeContentSource.Type.(type) {
 		case *csi.VolumeContentSource_Snapshot:
+			sourceVolumeKind = "LVMLogicalVolumeSnapshot"
 			sourceVolumeId = s.Snapshot.SnapshotId
+
+			// get source volume
+			sourceVol, err := utils.GetLVMLogicalVolumeSnapshot(ctx, d.cl, sourceVolumeId, "")
+			if err != nil {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error getting source LVMLogicalVolumeSnapshot", traceID, sourceVolumeId))
+				return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolumeSnapshot %s: %s", sourceVolumeId, err.Error())
+			}
+
+			// check size
+			if llvSize.Value() < sourceVol.Status.Size.Value() {
+				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
+			}
+
+			selectedLVG, err = utils.GetLVMVolumeGroup(ctx, d.cl, sourceVol.Spec.LVMVolumeGroupName, "")
+			if err != nil {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Spec.LVMVolumeGroupName))
+				return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Spec.LVMVolumeGroupName, err.Error())
+			}
+
+			if _, ok := storageClassLVGParametersMap[selectedLVG.Name]; !ok {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] should use the same storage class as source", traceID, volumeID))
+				return nil, status.Errorf(codes.InvalidArgument, "should use the same storage class as source")
+			}
+
+			// prefer the same node as the source
+			preferredNode = selectedLVG.Status.Nodes[0].Name
+
 		case *csi.VolumeContentSource_Volume:
+			sourceVolumeKind = "LVMLogicalVolume"
 			sourceVolumeId = s.Volume.VolumeId
-		}
 
-		// get source volume
-		sourceVol, err := utils.GetLVMLogicalVolume(ctx, d.cl, sourceVolumeId, "")
-		if err != nil {
-			d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error getting source LVMLogicalVolume", traceID, sourceVolumeId))
-			return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolume %s: %s", sourceVolumeId, err.Error())
-		}
+			// get source volume
+			sourceVol, err := utils.GetLVMLogicalVolume(ctx, d.cl, sourceVolumeId, "")
+			if err != nil {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error getting source LVMLogicalVolume", traceID, sourceVolumeId))
+				return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolume %s: %s", sourceVolumeId, err.Error())
+			}
 
-		// check size
-		sourceSizeQty, err := resource.ParseQuantity(sourceVol.Spec.Size)
-		if err != nil {
-			d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error parsing quantity %s", traceID, sourceVol.Spec.Size))
-			return nil, status.Errorf(codes.Internal, "error parsing quantity: %v", err)
-		}
+			// check size
+			sourceSizeQty, err := resource.ParseQuantity(sourceVol.Spec.Size)
+			if err != nil {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error parsing quantity %s", traceID, sourceVol.Spec.Size))
+				return nil, status.Errorf(codes.Internal, "error parsing quantity: %v", err)
+			}
 
-		if llvSize.Value() < sourceSizeQty.Value() {
-			return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
-		}
+			if llvSize.Value() < sourceSizeQty.Value() {
+				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
+			}
 
-		selectedLVG, err = utils.GetLVMVolumeGroup(ctx, d.cl, sourceVol.Spec.LVMVolumeGroupName, "")
-		if err != nil {
-			d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Spec.Size))
-			return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Spec.LVMVolumeGroupName, err.Error())
-		}
+			selectedLVG, err = utils.GetLVMVolumeGroup(ctx, d.cl, sourceVol.Spec.LVMVolumeGroupName, "")
+			if err != nil {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Spec.LVMVolumeGroupName))
+				return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Spec.LVMVolumeGroupName, err.Error())
+			}
 
-		if _, ok := storageClassLVGParametersMap[selectedLVG.Name]; !ok {
-			d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] should use the same storage class as source", traceID, volumeID))
-			return nil, status.Errorf(codes.InvalidArgument, "should use the same storage class as source")
-		}
+			if _, ok := storageClassLVGParametersMap[selectedLVG.Name]; !ok {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] should use the same storage class as source", traceID, volumeID))
+				return nil, status.Errorf(codes.InvalidArgument, "should use the same storage class as source")
+			}
 
-		// prefer the same node as the source
-		preferredNode = selectedLVG.Status.Nodes[0].Name
+			// prefer the same node as the source
+			preferredNode = selectedLVG.Status.Nodes[0].Name
+		}
 	} else {
 		switch BindingMode {
 		case internal.BindingModeI:
@@ -174,7 +202,10 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		LvmType,
 		llvSize.String(),
 		contiguous,
-		sourceVolumeId,
+		&v1alpha1.LVMLogicalVolumeSource{
+			Name: sourceVolumeId,
+			Kind: sourceVolumeKind,
+		},
 	)
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] LVMLogicalVolumeSpec: %+v", traceID, volumeID, llvSpec))
 	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
@@ -338,8 +369,6 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 
 	// the snapshots are required to be created in the same node and device class as the source volume.
 
-	size := sourceVol.Spec.Size
-	poolName := sourceVol.Spec.Thin.PoolName
 	// suggested name is in form "snapshot-{uuid}" and can't be used, because
 	// lvcreate: "Names starting "snapshot" are reserved."
 	name := strings.Replace(request.GetName(), "snapshot", "snap", 1)
@@ -350,17 +379,34 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
 	}
 
-	llvSpec := utils.GetLLVSpec(d.log, name, *lvg, poolName, internal.LVMTypeThin, size, false, sourceVol.Name)
+	llvsSpec := v1alpha1.LVMLogicalVolumeSnapshotSpec{
+		LVMVolumeGroupName:   lvg.Name,
+		LVMLogicalVolumeName: sourceVolID,
+	}
 
-	_, err = utils.CreateLVMLogicalVolume(ctx, d.cl, d.log, traceID, name, llvSpec)
+	_, err = utils.CreateLVMLogicalVolumeSnapshot(ctx, d.cl, d.log, traceID, name, llvsSpec)
 	if err != nil {
 		if kerrors.IsAlreadyExists(err) {
-			d.log.Info(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] LVMLogicalVolume %s already exists. Skip creating", traceID, name, name))
+			d.log.Info(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] LVMLogicalVolumeSnapshot %s already exists. Skip creating", traceID, name, name))
 		} else {
 			d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error CreateLVMLogicalVolume", traceID, name))
 			return nil, err
 		}
 	}
+
+	attemptCounter, err := utils.WaitForLLVSStatusUpdate(ctx, d.cl, d.log, traceID, name)
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error WaitForStatusUpdate. DeleteLVMLogicalVolumeSnapshot %s", traceID, name, request.Name))
+
+		deleteErr := utils.DeleteLVMLogicalVolumeSnapshot(ctx, d.cl, d.log, traceID, request.Name)
+		if deleteErr != nil {
+			d.log.Error(deleteErr, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error DeleteLVMLogicalVolumeSnapshot", traceID, name))
+		}
+
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error creating LVMLogicalVolumeSnapshot", traceID, name))
+		return nil, err
+	}
+	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] finish wait CreateLVMLogicalVolume, attempt counter = %d", traceID, name, attemptCounter))
 
 	sourceSizeQty, err := resource.ParseQuantity(sourceVol.Spec.Size)
 	if err != nil {
@@ -391,7 +437,7 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, request *csi.DeleteSnapshot
 	d.log.Trace(fmt.Sprintf("[DeleteSnapshot][traceID:%s] ========== DeleteSnapshot ============", traceID))
 	d.log.Trace(request.String())
 
-	if err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.SnapshotId); err != nil {
+	if err := utils.DeleteLVMLogicalVolumeSnapshot(ctx, d.cl, d.log, traceID, request.SnapshotId); err != nil {
 		d.log.Error(err, "error DeleteLVMLogicalVolume")
 	}
 

@@ -15,7 +15,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.31.0
 	k8s.io/apiextensions-apiserver v0.31.0
-	k8s.io/apimachinery v0.31.0
+	k8s.io/apimachinery v0.31.2
 	k8s.io/client-go v0.31.0
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/mount-utils v0.31.0
@@ -71,3 +71,5 @@ require (
 replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.16
 
 replace github.com/deckhouse/sds-local-volume/api => ../../../api
+
+replace github.com/deckhouse/sds-node-configurator/api => ../../../../sds-node-configurator/api
