@@ -53,7 +53,6 @@ func CreateLVMLogicalVolumeSnapshot(
 	traceID, name string,
 	lvmLogicalVolumeSnapshotSpec snc.LVMLogicalVolumeSnapshotSpec,
 ) (*snc.LVMLogicalVolumeSnapshot, error) {
-
 	var err error
 	llvs := &snc.LVMLogicalVolumeSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
