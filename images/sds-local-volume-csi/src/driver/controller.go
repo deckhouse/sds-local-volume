@@ -382,6 +382,7 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 	}
 
 	llvsSpec := v1alpha1.LVMLogicalVolumeSnapshotSpec{
+		NodeName:             lvg.Status.Nodes[0].Name,
 		LVMVolumeGroupName:   lvg.Name,
 		LVMLogicalVolumeName: sourceVolID,
 	}
