@@ -18,7 +18,6 @@ package utils
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -37,15 +36,14 @@ import (
 )
 
 const (
-	LLVStatusCreated                   = "Created"
-	LLVSStatusCreated                  = "Created"
-	LLVStatusFailed                    = "Failed"
-	LLVSStatusFailed                   = "Failed"
-	LLVTypeThin                        = "Thin"
-	KubernetesAPIRequestLimit          = 3
-	KubernetesAPIRequestTimeout        = 1
-	SDSLocalVolumeCSIFinalizer         = "storage.deckhouse.io/sds-local-volume-csi"
-	SDSLocalVolumeSnapshotCSIFinalizer = "storage.deckhouse.io/sds-local-volume-snapshot-csi"
+	LLVStatusCreated            = "Created"
+	LLVSStatusCreated           = "Created"
+	LLVStatusFailed             = "Failed"
+	LLVSStatusFailed            = "Failed"
+	LLVTypeThin                 = "Thin"
+	KubernetesAPIRequestLimit   = 3
+	KubernetesAPIRequestTimeout = 1
+	SDSLocalVolumeCSIFinalizer  = "storage.deckhouse.io/sds-local-volume-csi"
 )
 
 func CreateLVMLogicalVolumeSnapshot(
@@ -61,7 +59,7 @@ func CreateLVMLogicalVolumeSnapshot(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            name,
 			OwnerReferences: []metav1.OwnerReference{},
-			Finalizers:      []string{SDSLocalVolumeSnapshotCSIFinalizer},
+			Finalizers:      []string{SDSLocalVolumeCSIFinalizer},
 		},
 		Spec: lvmLogicalVolumeSnapshotSpec,
 	}
@@ -84,7 +82,7 @@ func DeleteLVMLogicalVolumeSnapshot(ctx context.Context, kc client.Client, log *
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolumeSnapshot][traceID:%s][volumeID:%s] LVMLogicalVolumeSnapshot found: %+v (status: %+v)", traceID, lvmLogicalVolumeSnapshotName, llvs, llvs.Status))
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolumeSnapshot][traceID:%s][volumeID:%s] Removing finalizer %s if exists", traceID, lvmLogicalVolumeSnapshotName, SDSLocalVolumeCSIFinalizer))
 
-	removed, err := removeLLVSFinalizerIfExist(ctx, kc, log, llvs, SDSLocalVolumeSnapshotCSIFinalizer)
+	removed, err := removeLLVSFinalizerIfExist(ctx, kc, log, llvs, SDSLocalVolumeCSIFinalizer)
 	if err != nil {
 		return fmt.Errorf("remove finalizers from DeleteLVMLogicalVolumeSnapshot %s: %w", lvmLogicalVolumeSnapshotName, err)
 	}
@@ -131,12 +129,12 @@ func removeLLVSFinalizerIfExist(ctx context.Context, kc client.Client, log *logg
 				return false, ctx.Err()
 			default:
 				time.Sleep(KubernetesAPIRequestTimeout * time.Second)
-				freshLLV, getErr := GetLVMLogicalVolumeSnapshot(ctx, kc, llvs.Name, "")
+				freshLLVS, getErr := GetLVMLogicalVolumeSnapshot(ctx, kc, llvs.Name, "")
 				if getErr != nil {
 					return false, fmt.Errorf("[removeLLVSFinalizerIfExist] error getting LVMLogicalVolumeSnapshot %s after update conflict: %w", llvs.Name, getErr)
 				}
 				// Update the llvs struct with fresh data (without changing pointers because we need the new resource version outside of this function)
-				*llvs = *freshLLV
+				*llvs = *freshLLVS
 			}
 		}
 	}
@@ -338,44 +336,6 @@ func GetNodeWithMaxFreeSpace(lvgs []snc.LVMVolumeGroup, storageClassLVGParameter
 	return nodeName, *resource.NewQuantity(maxFreeSpace, resource.BinarySI), nil
 }
 
-// TODO: delete the method below?
-func GetLVMVolumeGroupParams(ctx context.Context, kc client.Client, log logger.Logger, lvmVG map[string]string, nodeName, lvmType string) (lvgName, vgName string, err error) {
-	listLvgs := &snc.LVMVolumeGroupList{
-		ListMeta: metav1.ListMeta{},
-		Items:    []snc.LVMVolumeGroup{},
-	}
-
-	err = kc.List(ctx, listLvgs)
-	if err != nil {
-		return "", "", fmt.Errorf("error getting LVMVolumeGroup list: %w", err)
-	}
-
-	for _, lvg := range listLvgs.Items {
-		log.Trace(fmt.Sprintf("[GetLVMVolumeGroupParams] process lvg: %+v", lvg))
-
-		_, ok := lvmVG[lvg.Name]
-		if ok {
-			log.Info(fmt.Sprintf("[GetLVMVolumeGroupParams] found lvg from storage class: %s", lvg.Name))
-			log.Info(fmt.Sprintf("[GetLVMVolumeGroupParams] lvg.Status.Nodes[0].Name: %s, prefferedNode: %s", lvg.Status.Nodes[0].Name, nodeName))
-			if lvg.Status.Nodes[0].Name == nodeName {
-				if lvmType == LLVTypeThin {
-					for _, thinPool := range lvg.Status.ThinPools {
-						for _, tp := range lvmVG {
-							if thinPool.Name == tp {
-								return lvg.Name, lvg.Spec.ActualVGNameOnTheNode, nil
-							}
-						}
-					}
-				}
-				return lvg.Name, lvg.Spec.ActualVGNameOnTheNode, nil
-			}
-		} else {
-			log.Info(fmt.Sprintf("[GetLVMVolumeGroupParams] skip lvg: %s", lvg.Name))
-		}
-	}
-	return "", "", errors.New("there are no matches")
-}
-
 func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace string) (*snc.LVMVolumeGroup, error) {
 	lvg := &snc.LVMVolumeGroup{}
 
@@ -466,16 +426,16 @@ func GetLLVSpec(
 	log *logger.Logger,
 	lvName string,
 	selectedLVG snc.LVMVolumeGroup,
-	poolName string,
+	storageClassLVGParametersMap map[string]string,
 	lvmType string,
-	llvSize string,
+	llvSize resource.Quantity,
 	contiguous bool,
 	source *snc.LVMLogicalVolumeSource,
 ) snc.LVMLogicalVolumeSpec {
 	lvmLogicalVolumeSpec := snc.LVMLogicalVolumeSpec{
 		ActualLVNameOnTheNode: lvName,
 		Type:                  lvmType,
-		Size:                  llvSize,
+		Size:                  llvSize.String(),
 		LVMVolumeGroupName:    selectedLVG.Name,
 		Source:                source,
 	}
@@ -483,7 +443,7 @@ func GetLLVSpec(
 	switch lvmType {
 	case internal.LVMTypeThin:
 		lvmLogicalVolumeSpec.Thin = &snc.LVMLogicalVolumeThinSpec{
-			PoolName: poolName,
+			PoolName: storageClassLVGParametersMap[selectedLVG.Name],
 		}
 		log.Info(fmt.Sprintf("[GetLLVSpec] Thin pool name: %s", lvmLogicalVolumeSpec.Thin.PoolName))
 	case internal.LVMTypeThick:

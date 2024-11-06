@@ -36,6 +36,11 @@ import (
 	"sds-local-volume-csi/pkg/utils"
 )
 
+const (
+	sourceVolumeKindSnapshot = "LVMLogicalVolumeSnapshot"
+	sourceVolumeKindVolume   = "LVMLogicalVolume"
+)
+
 func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	traceID := uuid.New().String()
 
@@ -91,19 +96,20 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	var selectedLVG *v1alpha1.LVMVolumeGroup
 	var preferredNode string
-	var sourceVolumeId, sourceVolumeKind string
+	var sourceVolume *v1alpha1.LVMLogicalVolumeSource
 
 	if request.VolumeContentSource != nil {
+		sourceVolume := &v1alpha1.LVMLogicalVolumeSource{}
 		switch s := request.VolumeContentSource.Type.(type) {
 		case *csi.VolumeContentSource_Snapshot:
-			sourceVolumeKind = "LVMLogicalVolumeSnapshot"
-			sourceVolumeId = s.Snapshot.SnapshotId
+			sourceVolume.Kind = sourceVolumeKindSnapshot
+			sourceVolume.Name = s.Snapshot.SnapshotId
 
 			// get source volume
-			sourceVol, err := utils.GetLVMLogicalVolumeSnapshot(ctx, d.cl, sourceVolumeId, "")
+			sourceVol, err := utils.GetLVMLogicalVolumeSnapshot(ctx, d.cl, sourceVolume.Name, "")
 			if err != nil {
-				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error getting source LVMLogicalVolumeSnapshot", traceID, sourceVolumeId))
-				return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolumeSnapshot %s: %s", sourceVolumeId, err.Error())
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error getting source LVMLogicalVolumeSnapshot", traceID, sourceVolume.Name))
+				return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolumeSnapshot %s: %s", sourceVolume.Name, err.Error())
 			}
 
 			// check size
@@ -124,16 +130,15 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 			// prefer the same node as the source
 			preferredNode = selectedLVG.Status.Nodes[0].Name
-
 		case *csi.VolumeContentSource_Volume:
-			sourceVolumeKind = "LVMLogicalVolume"
-			sourceVolumeId = s.Volume.VolumeId
+			sourceVolume.Kind = sourceVolumeKindVolume
+			sourceVolume.Name = s.Volume.VolumeId
 
 			// get source volume
-			sourceVol, err := utils.GetLVMLogicalVolume(ctx, d.cl, sourceVolumeId, "")
+			sourceVol, err := utils.GetLVMLogicalVolume(ctx, d.cl, sourceVolume.Name, "")
 			if err != nil {
-				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error getting source LVMLogicalVolume", traceID, sourceVolumeId))
-				return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolume %s: %s", sourceVolumeId, err.Error())
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error getting source LVMLogicalVolume", traceID, sourceVolume.Name))
+				return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolume %s: %s", sourceVolume.Name, err.Error())
 			}
 
 			// check size
@@ -198,14 +203,11 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		d.log,
 		lvName,
 		*selectedLVG,
-		storageClassLVGParametersMap[selectedLVG.Name],
+		storageClassLVGParametersMap,
 		LvmType,
-		llvSize.String(),
+		*llvSize,
 		contiguous,
-		&v1alpha1.LVMLogicalVolumeSource{
-			Name: sourceVolumeId,
-			Kind: sourceVolumeKind,
-		},
+		sourceVolume,
 	)
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] LVMLogicalVolumeSpec: %+v", traceID, volumeID, llvSpec))
 	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
