@@ -71,5 +71,3 @@ require (
 replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.16
 
 replace github.com/deckhouse/sds-local-volume/api => ../../../api
-
-replace github.com/deckhouse/sds-node-configurator/api => ../../../../sds-node-configurator/api
