@@ -117,10 +117,10 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
 			}
 
-			selectedLVG, err = utils.GetLVMVolumeGroup(ctx, d.cl, sourceVol.Spec.LVMVolumeGroupName, "")
+			selectedLVG, err = utils.SelectLVGByActualNameOnTheNode(storageClassLVGs, sourceVol.Spec.ActualVGNameOnTheNode)
 			if err != nil {
-				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Spec.LVMVolumeGroupName))
-				return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Spec.LVMVolumeGroupName, err.Error())
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Spec.ActualVGNameOnTheNode))
+				return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Spec.ActualVGNameOnTheNode, err.Error())
 			}
 
 			if _, ok := storageClassLVGParametersMap[selectedLVG.Name]; !ok {
@@ -129,7 +129,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			}
 
 			// prefer the same node as the source
-			preferredNode = selectedLVG.Status.Nodes[0].Name
+			preferredNode = sourceVol.Spec.NodeName
 		case *csi.VolumeContentSource_Volume:
 			sourceVolume.Kind = sourceVolumeKindVolume
 			sourceVolume.Name = s.Volume.VolumeId
@@ -152,7 +152,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
 			}
 
-			selectedLVG, err = utils.GetLVMVolumeGroup(ctx, d.cl, sourceVol.Spec.LVMVolumeGroupName, "")
+			selectedLVG, err = utils.SelectLVGByName(storageClassLVGs, sourceVol.Spec.LVMVolumeGroupName)
 			if err != nil {
 				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Spec.LVMVolumeGroupName))
 				return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Spec.LVMVolumeGroupName, err.Error())
@@ -382,9 +382,10 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 	}
 
 	llvsSpec := v1alpha1.LVMLogicalVolumeSnapshotSpec{
-		NodeName:             lvg.Status.Nodes[0].Name,
-		LVMVolumeGroupName:   lvg.Name,
-		LVMLogicalVolumeName: sourceVolID,
+		NodeName:                    lvg.Status.Nodes[0].Name,
+		ActualVGNameOnTheNode:       lvg.Spec.ActualVGNameOnTheNode,
+		ActualLVNameOnTheNode:       sourceVol.Spec.ActualLVNameOnTheNode,
+		ActualSnapshotNameOnTheNode: name,
 	}
 
 	_, err = utils.CreateLVMLogicalVolumeSnapshot(ctx, d.cl, d.log, traceID, name, llvsSpec)

@@ -467,6 +467,24 @@ func SelectLVG(storageClassLVGs []snc.LVMVolumeGroup, nodeName string) (*snc.LVM
 	return nil, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found for node %s", nodeName)
 }
 
+func SelectLVGByName(storageClassLVGs []snc.LVMVolumeGroup, name string) (*snc.LVMVolumeGroup, error) {
+	for i := 0; i < len(storageClassLVGs); i++ {
+		if storageClassLVGs[i].Name == name {
+			return &storageClassLVGs[i], nil
+		}
+	}
+	return nil, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found with name %s", name)
+}
+
+func SelectLVGByActualNameOnTheNode(storageClassLVGs []snc.LVMVolumeGroup, actualNameOnTheNode string) (*snc.LVMVolumeGroup, error) {
+	for i := 0; i < len(storageClassLVGs); i++ {
+		if storageClassLVGs[i].Spec.ActualVGNameOnTheNode == actualNameOnTheNode {
+			return &storageClassLVGs[i], nil
+		}
+	}
+	return nil, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found with actualNameOnTheNode %s", actualNameOnTheNode)
+}
+
 func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logger.Logger, llv *snc.LVMLogicalVolume, finalizer string) (bool, error) {
 	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
 		removed := false
