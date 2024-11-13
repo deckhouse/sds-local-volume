@@ -476,9 +476,10 @@ func SelectLVGByName(storageClassLVGs []snc.LVMVolumeGroup, name string) (*snc.L
 	return nil, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found with name %s", name)
 }
 
-func SelectLVGByActualNameOnTheNode(storageClassLVGs []snc.LVMVolumeGroup, actualNameOnTheNode string) (*snc.LVMVolumeGroup, error) {
+func SelectLVGByActualNameOnTheNode(storageClassLVGs []snc.LVMVolumeGroup, nodeName string, actualNameOnTheNode string) (*snc.LVMVolumeGroup, error) {
 	for i := 0; i < len(storageClassLVGs); i++ {
-		if storageClassLVGs[i].Spec.ActualVGNameOnTheNode == actualNameOnTheNode {
+		if storageClassLVGs[i].Spec.Local.NodeName == nodeName &&
+			storageClassLVGs[i].Spec.ActualVGNameOnTheNode == actualNameOnTheNode {
 			return &storageClassLVGs[i], nil
 		}
 	}

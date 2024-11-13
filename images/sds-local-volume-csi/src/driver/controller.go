@@ -117,7 +117,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
 			}
 
-			selectedLVG, err = utils.SelectLVGByActualNameOnTheNode(storageClassLVGs, sourceVol.Spec.ActualVGNameOnTheNode)
+			selectedLVG, err = utils.SelectLVGByActualNameOnTheNode(storageClassLVGs, sourceVol.Spec.NodeName, sourceVol.Spec.ActualVGNameOnTheNode)
 			if err != nil {
 				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Spec.ActualVGNameOnTheNode))
 				return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Spec.ActualVGNameOnTheNode, err.Error())
@@ -164,7 +164,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			}
 
 			// prefer the same node as the source
-			preferredNode = selectedLVG.Status.Nodes[0].Name
+			preferredNode = selectedLVG.Spec.Local.NodeName
 		}
 	} else {
 		switch BindingMode {
