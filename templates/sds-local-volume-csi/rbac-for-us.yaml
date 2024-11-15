@@ -12,6 +12,7 @@ rules:
     resources:
       - lvmvolumegroups
       - lvmlogicalvolumes
+      - lvmlogicalvolumesnapshots
     verbs:
       - get
       - list
