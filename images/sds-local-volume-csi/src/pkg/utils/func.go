@@ -181,9 +181,8 @@ func WaitForLLVSStatusUpdate(
 			if llvs.Status.Phase == LLVSStatusCreated {
 				log.Trace(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot created but size does not match the requested size yet. Waiting...", traceID, lvmLogicalVolumeSnapshotName, attemptCounter))
 				return attemptCounter, nil
-			} else {
-				log.Trace(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot status is not 'Created' yet. Waiting...", traceID, lvmLogicalVolumeSnapshotName, attemptCounter))
 			}
+			log.Trace(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot status is not 'Created' yet. Waiting...", traceID, lvmLogicalVolumeSnapshotName, attemptCounter))
 		}
 	}
 }
