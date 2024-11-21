@@ -53,7 +53,6 @@ func CreateLVMLogicalVolumeSnapshot(
 	traceID, name string,
 	lvmLogicalVolumeSnapshotSpec snc.LVMLogicalVolumeSnapshotSpec,
 ) (*snc.LVMLogicalVolumeSnapshot, error) {
-	var err error
 	llvs := &snc.LVMLogicalVolumeSnapshot{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            name,
@@ -65,8 +64,7 @@ func CreateLVMLogicalVolumeSnapshot(
 
 	log.Trace(fmt.Sprintf("[CreateLVMLogicalVolumeSnapshot][traceID:%s][volumeID:%s] LVMLogicalVolumeSnapshot: %+v", traceID, name, llvs))
 
-	err = kc.Create(ctx, llvs)
-	return llvs, err
+	return llvs, kc.Create(ctx, llvs)
 }
 
 func DeleteLVMLogicalVolumeSnapshot(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeSnapshotName string) error {
@@ -149,12 +147,12 @@ func WaitForLLVSStatusUpdate(
 	lvmLogicalVolumeSnapshotName string,
 ) (int, error) {
 	var attemptCounter int
-	log.Info(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Waiting for LVM Logical Volume Snapshot status update", traceID, lvmLogicalVolumeSnapshotName))
+	log.Info(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Waiting for LVM Logical Volume Snapshot status update", traceID, lvmLogicalVolumeSnapshotName))
 	for {
 		attemptCounter++
 		select {
 		case <-ctx.Done():
-			log.Warning(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] context done. Failed to wait for LVM Logical Volume Snapshot status update", traceID, lvmLogicalVolumeSnapshotName))
+			log.Warning(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] context done. Failed to wait for LVM Logical Volume Snapshot status update", traceID, lvmLogicalVolumeSnapshotName))
 			return attemptCounter, ctx.Err()
 		default:
 			time.Sleep(500 * time.Millisecond)
@@ -166,11 +164,11 @@ func WaitForLLVSStatusUpdate(
 		}
 
 		if attemptCounter%10 == 0 {
-			log.Info(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt: %d,LVM Logical Volume Snapshot: %+v", traceID, lvmLogicalVolumeSnapshotName, attemptCounter, llvs))
+			log.Info(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt: %d,LVM Logical Volume Snapshot: %+v", traceID, lvmLogicalVolumeSnapshotName, attemptCounter, llvs))
 		}
 
 		if llvs.Status != nil {
-			log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot status: %+v, full LVMLogicalVolumeSnapshot resource: %+v", traceID, lvmLogicalVolumeSnapshotName, attemptCounter, llvs.Status, llvs))
+			log.Trace(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot status: %+v, full LVMLogicalVolumeSnapshot resource: %+v", traceID, lvmLogicalVolumeSnapshotName, attemptCounter, llvs.Status, llvs))
 
 			if llvs.DeletionTimestamp != nil {
 				return attemptCounter, fmt.Errorf("failed to create LVM logical volume snapshot on node for LVMLogicalVolumeSnapshot %s, reason: LVMLogicalVolumeSnapshot is being deleted", lvmLogicalVolumeSnapshotName)
@@ -181,9 +179,10 @@ func WaitForLLVSStatusUpdate(
 			}
 
 			if llvs.Status.Phase == LLVSStatusCreated {
-				log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot created but size does not match the requested size yet. Waiting...", traceID, lvmLogicalVolumeSnapshotName, attemptCounter))
+				log.Trace(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot created but size does not match the requested size yet. Waiting...", traceID, lvmLogicalVolumeSnapshotName, attemptCounter))
+				return attemptCounter, nil
 			} else {
-				log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot status is not 'Created' yet. Waiting...", traceID, lvmLogicalVolumeSnapshotName, attemptCounter))
+				log.Trace(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot status is not 'Created' yet. Waiting...", traceID, lvmLogicalVolumeSnapshotName, attemptCounter))
 			}
 		}
 	}

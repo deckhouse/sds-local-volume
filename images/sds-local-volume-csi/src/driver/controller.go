@@ -99,7 +99,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	var sourceVolume *v1alpha1.LVMLogicalVolumeSource
 
 	if request.VolumeContentSource != nil {
-		sourceVolume := &v1alpha1.LVMLogicalVolumeSource{}
+		sourceVolume = &v1alpha1.LVMLogicalVolumeSource{}
 		switch s := request.VolumeContentSource.Type.(type) {
 		case *csi.VolumeContentSource_Snapshot:
 			sourceVolume.Kind = sourceVolumeKindSnapshot
@@ -112,15 +112,20 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 				return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolumeSnapshot %s: %s", sourceVolume.Name, err.Error())
 			}
 
+			if sourceVol.Status == nil || sourceVol.Status.Phase != internal.LLVSStatusCreated {
+				d.log.Error(nil, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] source LVMLogicalVolumeSnapshot is not in Created phase", traceID, sourceVolume.Name))
+				return nil, status.Errorf(codes.FailedPrecondition, "LVMLogicalVolumeSnapshot %s is not in Created phase", sourceVolume.Name)
+			}
+
 			// check size
 			if llvSize.Value() < sourceVol.Status.Size.Value() {
 				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
 			}
 
-			selectedLVG, err = utils.SelectLVGByActualNameOnTheNode(storageClassLVGs, sourceVol.Spec.NodeName, sourceVol.Spec.ActualVGNameOnTheNode)
+			selectedLVG, err = utils.SelectLVGByActualNameOnTheNode(storageClassLVGs, sourceVol.Status.NodeName, sourceVol.Status.ActualVGNameOnTheNode)
 			if err != nil {
-				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Spec.ActualVGNameOnTheNode))
-				return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Spec.ActualVGNameOnTheNode, err.Error())
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Status.ActualVGNameOnTheNode))
+				return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Status.ActualVGNameOnTheNode, err.Error())
 			}
 
 			if _, ok := storageClassLVGParametersMap[selectedLVG.Name]; !ok {
@@ -129,7 +134,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			}
 
 			// prefer the same node as the source
-			preferredNode = sourceVol.Spec.NodeName
+			preferredNode = sourceVol.Status.NodeName
 		case *csi.VolumeContentSource_Volume:
 			sourceVolume.Kind = sourceVolumeKindVolume
 			sourceVolume.Name = s.Volume.VolumeId
@@ -361,34 +366,34 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s] ========== CreateSnapshot ============", traceID))
 	d.log.Trace(request.String())
 
-	sourceVolID := request.GetSourceVolumeId()
-
-	sourceVol, err := utils.GetLVMLogicalVolume(ctx, d.cl, sourceVolID, "")
+	llv, err := utils.GetLVMLogicalVolume(ctx, d.cl, request.SourceVolumeId, "")
 	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMLogicalVolume", traceID, sourceVolID))
-		return nil, status.Errorf(codes.Internal, "error getting LVMLogicalVolume %s: %s", sourceVolID, err.Error())
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMLogicalVolume", traceID, request.SourceVolumeId))
+		return nil, status.Errorf(codes.Internal, "error getting LVMLogicalVolume %s: %s", request.SourceVolumeId, err.Error())
 	}
 
 	// the snapshots are required to be created in the same node and device class as the source volume.
 
-	// suggested name is in form "snapshot-{uuid}" and can't be used, because
+	// suggested name is in form "snapshot-{uuid}" and it can't be used, because
 	// lvcreate: "Names starting "snapshot" are reserved."
-	name := strings.Replace(request.GetName(), "snapshot", "snap", 1)
+	name := strings.Replace(request.Name, "snapshot", "snap", 1)
 
-	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, sourceVol.Spec.LVMVolumeGroupName, sourceVol.Namespace)
-	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMVolumeGroup", traceID, name))
-		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
+	actualNameOnTheNode := request.Parameters[internal.ActualNameOnTheNodeKey]
+	if actualNameOnTheNode == "" {
+		actualNameOnTheNode = name
 	}
 
-	llvsSpec := v1alpha1.LVMLogicalVolumeSnapshotSpec{
-		NodeName:                    lvg.Status.Nodes[0].Name,
-		ActualVGNameOnTheNode:       lvg.Spec.ActualVGNameOnTheNode,
-		ActualLVNameOnTheNode:       sourceVol.Spec.ActualLVNameOnTheNode,
-		ActualSnapshotNameOnTheNode: name,
-	}
-
-	_, err = utils.CreateLVMLogicalVolumeSnapshot(ctx, d.cl, d.log, traceID, name, llvsSpec)
+	_, err = utils.CreateLVMLogicalVolumeSnapshot(
+		ctx,
+		d.cl,
+		d.log,
+		traceID,
+		name,
+		v1alpha1.LVMLogicalVolumeSnapshotSpec{
+			ActualSnapshotNameOnTheNode: actualNameOnTheNode,
+			LVMLogicalVolumeName:        llv.Name,
+		},
+	)
 	if err != nil {
 		if kerrors.IsAlreadyExists(err) {
 			d.log.Info(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] LVMLogicalVolumeSnapshot %s already exists. Skip creating", traceID, name, name))
@@ -412,16 +417,16 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 	}
 	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] finish wait CreateLVMLogicalVolume, attempt counter = %d", traceID, name, attemptCounter))
 
-	sourceSizeQty, err := resource.ParseQuantity(sourceVol.Spec.Size)
+	sourceSizeQty, err := resource.ParseQuantity(llv.Spec.Size)
 	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s] error parsing quantity %s", traceID, sourceVol.Spec.Size))
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s] error parsing quantity %s", traceID, llv.Spec.Size))
 		return nil, status.Errorf(codes.Internal, "error parsing quantity: %v", err)
 	}
 
 	return &csi.CreateSnapshotResponse{
 		Snapshot: &csi.Snapshot{
 			SnapshotId:     name,
-			SourceVolumeId: sourceVolID,
+			SourceVolumeId: request.SourceVolumeId,
 			SizeBytes:      sourceSizeQty.Value(),
 			CreationTime: &timestamp.Timestamp{
 				Seconds: time.Now().Unix(),
