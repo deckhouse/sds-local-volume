@@ -146,6 +146,10 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 				return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolume %s: %s", sourceVolume.Name, err.Error())
 			}
 
+			if sourceVol.Spec.Type != internal.LVMTypeThin {
+				return nil, status.Errorf(codes.InvalidArgument, "Source LVMLogicalVolume '%s' is not of 'Thin' type", sourceVol.Name)
+			}
+
 			// check size
 			sourceSizeQty, err := resource.ParseQuantity(sourceVol.Spec.Size)
 			if err != nil {
@@ -370,6 +374,10 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMLogicalVolume", traceID, request.SourceVolumeId))
 		return nil, status.Errorf(codes.Internal, "error getting LVMLogicalVolume %s: %s", request.SourceVolumeId, err.Error())
+	}
+
+	if llv.Spec.Type != internal.LVMTypeThin {
+		return nil, status.Errorf(codes.InvalidArgument, "Source LVMLogicalVolume '%s' is not of 'Thin' type", request.SourceVolumeId)
 	}
 
 	// the snapshots are required to be created in the same node and device class as the source volume.
