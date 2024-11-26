@@ -481,7 +481,7 @@ func SelectLVGByActualNameOnTheNode(storageClassLVGs []snc.LVMVolumeGroup, nodeN
 			return &storageClassLVGs[i], nil
 		}
 	}
-	return nil, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found with actualNameOnTheNode %s", actualNameOnTheNode)
+	return nil, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found with actualNameOnTheNode %s on node %s", actualNameOnTheNode, nodeName)
 }
 
 func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logger.Logger, llv *snc.LVMLogicalVolume, finalizer string) (bool, error) {
