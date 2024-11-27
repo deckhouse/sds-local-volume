@@ -4,236 +4,251 @@ description: "Модуль sds-local-volume: общие концепции и п
 moduleStatus: preview
 ---
 
-Модуль управляет локальным блочным хранилищем на базе `LVM`. Модуль позволяет создавать `StorageClass` в `Kubernetes` через создание [пользовательских ресурсов Kubernetes](./cr.html) `LocalStorageClass` (пример создания ниже).
-Для создания `Storage Class` потребуются настроенные на узлах кластера `LVMVolumeGroup`. Настройка `LVM` осуществляется модулем [sds-node-configurator](../../sds-node-configurator/stable/).
-> **Внимание!** Перед включением модуля `sds-local-volume` необходимо включить модуль `sds-node-configurator`.
->
+Модуль предназначен для управления локальным блочным хранилищем на базе LVM. С его помощью можно создавать StorageClass в Kubernetes, используя [пользовательские ресурсы](./cr.html) типа `LocalStorageClass` (пример представлен ниже).
+
+Для создания `Storage Class` необходимо предварительно настроить `LVMVolumeGroup` на узлах кластера. Настройка LVM выполняется модулем [sds-node-configurator](../../sds-node-configurator/stable/).
+
+{{< alert level="warning" >}}
+Перед включением модуля `sds-local-volume` необходимо включить модуль `sds-node-configurator`.
+{{< /alert >}}
+
+{{< alert level="info" >}}
 После включения модуля `sds-local-volume` необходимо создать StorageClass'ы.
+{{< /alert >}}
 
-> **Внимание!** Создание `StorageClass` для CSI-драйвера local.csi.storage.deckhouse.io пользователем запрещено.
+{{< alert level="warning" >}}
+Создание StorageClass для CSI-драйвера local.csi.storage.deckhouse.io пользователем запрещено.
+{{< /alert >}}
 
-Поддерживаются два режима — LVM и LVMThin.
-Каждый из них имеет свои достоинства и недостатки, подробнее о различиях читайте в [FAQ](./faq.html#когда-следует-использовать-lvm-а-когда-lvmthin).
+Модуль поддерживает два режима работы: LVM и LVMThin.
+У каждого из них есть свои особенности, преимущества и ограничения. Подробнее о различиях можно узнать в [FAQ](./faq.html#когда-следует-использовать-lvm-а-когда-lvmthin).
 
 ## Быстрый старт
 
-Все команды следует выполнять на машине, имеющей доступ к API Kubernetes с правами администратора.
+Все команды выполняются на машине с доступом к API Kubernetes и правами администратора.
 
 ### Включение модулей
 
-- Включить модуль sds-node-configurator
+Включение модуля `sds-node-configurator`:
 
-```yaml
-kubectl apply -f - <<EOF
-apiVersion: deckhouse.io/v1alpha1
-kind: ModuleConfig
-metadata:
-  name: sds-node-configurator
-spec:
-  enabled: true
-  version: 1
-EOF
-```
+1. Создайте ресурс ModuleConfig для активации модуля:
 
-- Дождаться, когда модуль перейдет в состояние `Ready`. На этом этапе НЕ нужно проверять поды в namespace `d8-sds-node-configurator`.
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: deckhouse.io/v1alpha1
+   kind: ModuleConfig
+   metadata:
+     name: sds-node-configurator
+   spec:
+     enabled: true
+     version: 1
+   EOF
+   ```
 
-```shell
-kubectl get modules sds-node-configurator -w
- ```
+1. Дождитесь состояния модуля `Ready`. На этом этапе не требуется проверять поды в пространстве имен `d8-sds-node-configurator`.
 
-- Включить модуль `sds-local-volume`. Возможные настройки модуля рекомендуем посмотреть в [конфигурации](./configuration.html). В примере ниже модуль запускается с настройками по умолчанию. Это приведет к тому, что на всех узлах кластера будут запущены служебные поды компонентов `sds-local-volume`.
+   ```shell
+   kubectl get modules sds-node-configurator -w
+   ```
 
-```yaml
-kubectl apply -f - <<EOF
-apiVersion: deckhouse.io/v1alpha1
-kind: ModuleConfig
-metadata:
-  name: sds-local-volume
-spec:
-  enabled: true
-  version: 1
-EOF
-```
+Включение модуля `sds-local-volume`:
 
-- Дождаться, когда модуль перейдет в состояние `Ready`.
+1. Активируйте модуль `sds-local-volume`. Перед включением рекомендуется ознакомиться с [доступными настройками](./configuration.html). Пример ниже запускает модуль с настройками по умолчанию, что приведет к созданию служебных подов компонента `sds-local-volume` на всех узлах кластера:
 
-  ```shell
-  kubectl get mc sds-local-volume -w
-  ```
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: deckhouse.io/v1alpha1
+   kind: ModuleConfig
+   metadata:
+     name: sds-local-volume
+   spec:
+     enabled: true
+     version: 1
+   EOF
+   ```
 
-- Проверить, что в namespace `d8-sds-local-volume` и `d8-sds-node-configurator` все поды в состоянии `Running` или `Completed` и запущены на всех узлах, где планируется использовать ресурсы `LVM`.
+1. Дождитесь состояния модуля `Ready`.
 
-```shell
-kubectl -n d8-sds-local-volume get pod -owide -w
-kubectl -n d8-sds-node-configurator get pod -o wide -w
-```
+   ```shell
+   kubectl get modules sds-local-volume -w
+   ```
+
+1. Убедитесь, что в пространствах имен `d8-sds-local-volume` и `d8-sds-node-configurator` все поды находятся в статусе `Running` или `Completed` и запущены на всех узлах, где планируется использовать ресурсы `LVM`.
+
+   ```shell
+   kubectl -n d8-sds-local-volume get pod -owide -w
+   kubectl -n d8-sds-node-configurator get pod -o wide -w
+   ```
 
 ### Подготовка узлов к созданию хранилищ на них
-Для создания хранилищ на узлах необходимо, чтобы на выбранных узлах были запущены pod-ы `sds-local-volume-csi-node`. 
 
-По умолчанию pod-ы выедут на всех узлах кластера, проверить их наличие можно командой:
+Для корректной работы хранилищ на узлах необходимо, чтобы поды `sds-local-volume-csi-node` были запущены на выбранных узлах.
+
+По умолчанию эти поды запускаются на всех узлах кластера. Проверить их наличие можно с помощью команды:
 
 ```shell
- kubectl -n d8-sds-local-volume get pod -owide
- ```
+kubectl -n d8-sds-local-volume get pod -owide
+```
 
-> Расположение данных pod-ов определяется специальными метками (nodeSelector), которые указываются в поле `spec.settings.dataNodes.nodeSelector` в настройках модуля. Для получения более подробной информации о настройке, пожалуйста, перейдите по [ссылке](./faq.html#я-не-хочу-чтобы-модуль-использовался-на-всех-узлах-кластера-как-мне-выбрать-желаемые-узлы)
+> Размещение подов `sds-local-volume-csi-node` управляется специальными метками (nodeSelector). Эти метки задаются в параметре `spec.settings.dataNodes.nodeSelector` в настройках модуля. Для получения подробной информации о настройке и выборе узлов для работы модуля перейдите по [ссылке](./faq.html#я-не-хочу-чтобы-модуль-использовался-на-всех-узлах-кластера-как-мне-выбрать-желаемые-узлы).
 
 ### Настройка хранилища на узлах
-Необходимо на этих узлах создать группы томов `LVM` с помощью пользовательских ресурсов `LVMVolumeGroup`. В быстром старте будем создавать обычное `Thick` хранилище.
 
-> Пожалуйста, перед созданием `LVMVolumeGroup` убедитесь, что на данном узле запущен pod `sds-local-volume-csi-node`. Это можно сделать командой:
-> 
-> ```shell
-> kubectl -n d8-sds-local-volume get pod -owide
-> ```
+Для настройки хранилища на узлах необходимо создать группы томов LVM с использованием ресурсов `LVMVolumeGroup`. В данном примере создается Thick хранилище.
 
-Приступим к настройке хранилища:
+{{< alert level="warning" >}}
+Перед созданием ресурса `LVMVolumeGroup` убедитесь, что на данном узле запущен под `sds-local-volume-csi-node`. Это можно сделать командой:
 
-- Получить все ресурсы [BlockDevice](../../sds-node-configurator/stable/cr.html#blockdevice), которые доступны в вашем кластере:
+```shell
+kubectl -n d8-sds-local-volume get pod -owide
+```
 
-  ```shell
-  kubectl get bd
+{{< /alert >}}
+
+#### Шаги настройки
+
+1. Получите все ресурсы [BlockDevice](../../sds-node-configurator/stable/cr.html#blockdevice), которые доступны в вашем кластере:
+
+   ```shell
+   kubectl get bd
   
-  NAME                                           NODE       CONSUMABLE   SIZE           PATH
-  dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa   worker-0   false        976762584Ki    /dev/nvme1n1
-  dev-0cfc0d07f353598e329d34f3821bed992c1ffbcd   worker-0   false        894006140416   /dev/nvme0n1p6
-  dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0   worker-1   false        976762584Ki    /dev/nvme1n1
-  dev-b103062f879a2349a9c5f054e0366594568de68d   worker-1   false        894006140416   /dev/nvme0n1p6
-  dev-53d904f18b912187ac82de29af06a34d9ae23199   worker-2   false        976762584Ki    /dev/nvme1n1
-  dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1   worker-2   false        894006140416   /dev/nvme0n1p6
-  ```
+   NAME                                           NODE       CONSUMABLE   SIZE           PATH
+   dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa   worker-0   false        976762584Ki    /dev/nvme1n1
+   dev-0cfc0d07f353598e329d34f3821bed992c1ffbcd   worker-0   false        894006140416   /dev/nvme0n1p6
+   dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0   worker-1   false        976762584Ki    /dev/nvme1n1
+   dev-b103062f879a2349a9c5f054e0366594568de68d   worker-1   false        894006140416   /dev/nvme0n1p6
+   dev-53d904f18b912187ac82de29af06a34d9ae23199   worker-2   false        976762584Ki    /dev/nvme1n1
+   dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1   worker-2   false        894006140416   /dev/nvme0n1p6
+   ```
 
-- Создать ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-0`:
+1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-0`:
 
-```yaml
-kubectl apply -f - <<EOF
-apiVersion: storage.deckhouse.io/v1alpha1
-kind: LVMVolumeGroup
-metadata:
-  name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LVMVolumeGroup resource name will be used to create LocalStorageClass in the future
-spec:
-  type: Local
-  local:
-    nodeName: "worker-0"
-  blockDeviceSelector:
-    matchExpressions:
-      - key: kubernetes.io/metadata.name
-        operator: In
-        values:
-          - dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa
-          - dev-0cfc0d07f353598e329d34f3821bed992c1ffbcd
-  actualVGNameOnTheNode: "vg-1" # the name of the LVM VG to be created from the above block devices on the node 
-EOF
-```
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroup
+   metadata:
+     name: "vg-1-on-worker-0" # The name can be any fully qualified resource name in Kubernetes. This LVMVolumeGroup resource name will be used to create LocalStorageClass in the future
+   spec:
+     type: Local
+     local:
+       nodeName: "worker-0"
+     blockDeviceSelector:
+       matchExpressions:
+         - key: kubernetes.io/metadata.name
+           operator: In
+           values:
+             - dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa
+             - dev-0cfc0d07f353598e329d34f3821bed992c1ffbcd
+     actualVGNameOnTheNode: "vg-1" # the name of the LVM VG to be created from the above block devices on the node 
+   EOF
+   ```
 
-- Дождаться, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Operational`:
+1. Дождитесь, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Ready`:
 
-```shell
-kubectl get lvg vg-1-on-worker-0 -w
-```
+   ```shell
+   kubectl get lvg vg-1-on-worker-0 -w
+   ```
 
-- Если ресурс перешел в состояние `Operational`, то это значит, что на узле `worker-0` из блочных устройств `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
+Если ресурс перешел в состояние `Ready`, это значит, что на узле `worker-0` из блочных устройств `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
 
-- Далее создать ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-1`:
+1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-1`:
 
-```yaml
-kubectl apply -f - <<EOF
-apiVersion: storage.deckhouse.io/v1alpha1
-kind: LVMVolumeGroup
-metadata:
-  name: "vg-1-on-worker-1"
-spec:
-  type: Local
-  local:
-    nodeName: "worker-1"
-  blockDeviceSelector:
-    matchExpressions:
-      - key: kubernetes.io/metadata.name
-        operator: In
-        values:
-          - dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0
-          - dev-b103062f879a2349a9c5f054e0366594568de68d
-  actualVGNameOnTheNode: "vg-1"
-EOF
-```
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroup
+   metadata:
+     name: "vg-1-on-worker-1"
+   spec:
+     type: Local
+     local:
+       nodeName: "worker-1"
+     blockDeviceSelector:
+       matchExpressions:
+         - key: kubernetes.io/metadata.name
+           operator: In
+           values:
+             - dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0
+             - dev-b103062f879a2349a9c5f054e0366594568de68d
+     actualVGNameOnTheNode: "vg-1"
+   EOF
+   ```
 
-- Дождаться, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Operational`:
+1. Дождитесь, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Ready`:
 
-```shell
-kubectl get lvg vg-1-on-worker-1 -w
-```
+   ```shell
+   kubectl get lvg vg-1-on-worker-1 -w
+   ```
 
-- Если ресурс перешел в состояние `Operational`, то это значит, что на узле `worker-1` из блочного устройства `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
+Если ресурс перешел в состояние `Ready`, это значит, что на узле `worker-1` из блочного устройства `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
 
-- Далее создать ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-2`:
+1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-2`:
 
-```yaml
-kubectl apply -f - <<EOF
-apiVersion: storage.deckhouse.io/v1alpha1
-kind: LVMVolumeGroup
-metadata:
-  name: "vg-1-on-worker-2"
-spec:
-  type: Local
-  local:
-    nodeName: "worker-2"
-  blockDeviceSelector:
-    matchExpressions:
-      - key: kubernetes.io/metadata.name
-        operator: In
-        values:
-          - dev-53d904f18b912187ac82de29af06a34d9ae23199
-          - dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1
-  actualVGNameOnTheNode: "vg-1"
-EOF
-```
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroup
+   metadata:
+     name: "vg-1-on-worker-2"
+   spec:
+     type: Local
+     local:
+       nodeName: "worker-2"
+     blockDeviceSelector:
+       matchExpressions:
+         - key: kubernetes.io/metadata.name
+           operator: In
+           values:
+             - dev-53d904f18b912187ac82de29af06a34d9ae23199
+             - dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1
+     actualVGNameOnTheNode: "vg-1"
+   EOF
+   ```
 
-- Дождаться, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Operational`:
+1. Дождитесь, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Ready`:
 
-```shell
-kubectl get lvg vg-1-on-worker-2 -w
-```
+   ```shell
+   kubectl get lvg vg-1-on-worker-2 -w
+   ```
 
-- Если ресурс перешел в состояние `Operational`, то это значит, что на узле `worker-2` из блочного устройства `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
+Если ресурс перешел в состояние `Ready`, то это значит, что на узле `worker-2` из блочного устройства `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
 
-- Создать ресурс [LocalStorageClass](./cr.html#localstorageclass):
+1. Создайте ресурс [LocalStorageClass](./cr.html#localstorageclass):
 
-```yaml
-kubectl apply -f -<<EOF
-apiVersion: storage.deckhouse.io/v1alpha1
-kind: LocalStorageClass
-metadata:
-  name: local-storage-class
-spec:
-  lvm:
-    lvmVolumeGroups:
-      - name: vg-1-on-worker-0
-      - name: vg-1-on-worker-1
-      - name: vg-1-on-worker-2
-    type: Thick
-  reclaimPolicy: Delete
-  volumeBindingMode: WaitForFirstConsumer
-EOF
-```
+   ```yaml
+   kubectl apply -f -<<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: local-storage-class
+   spec:
+     lvm:
+       lvmVolumeGroups:
+         - name: vg-1-on-worker-0
+         - name: vg-1-on-worker-1
+         - name: vg-1-on-worker-2
+       type: Thick
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+   EOF
+   ```
 
-- Дождаться, когда созданный ресурс `LocalStorageClass` перейдет в состояние `Created`:
+1. Дождитесь, когда созданный ресурс `LocalStorageClass` перейдет в состояние `Created`:
 
-```shell
-kubectl get lsc local-storage-class -w
-```
+   ```shell
+   kubectl get lsc local-storage-class -w
+   ```
 
-- Проверить, что соответствующий `StorageClass` создался:
+1. Проверьте, что соответствующий StorageClass создался:
 
-```shell
-kubectl get sc local-storage-class
-```
+   ```shell
+   kubectl get sc local-storage-class
+   ```
 
-- Если `StorageClass` с именем `local-storage-class` появился, значит настройка модуля `sds-local-volume` завершена. Теперь пользователи могут создавать PV, указывая `StorageClass` с именем `local-storage-class`.
+Если StorageClass с именем `local-storage-class` появился, значит настройка модуля `sds-local-volume` завершена. Теперь пользователи могут создавать PV, указывая StorageClass с именем `local-storage-class`.
 
 ## Системные требования и рекомендации
 
-### Требования
-
-- Использование стоковых ядер, поставляемых вместе с [поддерживаемыми дистрибутивами](https://deckhouse.ru/documentation/v1/supported_versions.html#linux);
-- Не использовать другой SDS (Software defined storage) для предоставления дисков нашему SDS
+- Используйте стоковые ядра, поставляемые вместе с [поддерживаемыми дистрибутивами](https://deckhouse.ru/documentation/v1/supported_versions.html#linux).
+- Не используйте другой SDS (Software defined storage) для предоставления дисков SDS Deckhouse.
