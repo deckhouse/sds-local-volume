@@ -70,7 +70,7 @@ Enabling the `sds-local-volume` module:
 1. Wait for the module to become `Ready`.
 
    ```shell
-   kubectl get mc sds-local-volume -w
+   kubectl get modules sds-local-volume -w
    ```
 
 1. Make sure that all pods in `d8-sds-local-volume` and `d8-sds-node-configurator` namespaces are `Running` or `Completed` and are running on all nodes where `LVM` resources are intended to be used.
