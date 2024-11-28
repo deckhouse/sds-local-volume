@@ -118,14 +118,24 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			}
 
 			// check size
-			if llvSize.Value() < sourceVol.Status.Size.Value() {
+			if llvSize.Value() == 0 {
+				*llvSize = sourceVol.Status.Size
+			} else if llvSize.Value() < sourceVol.Status.Size.Value() {
 				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
 			}
 
 			selectedLVG, err = utils.SelectLVGByActualNameOnTheNode(storageClassLVGs, sourceVol.Status.NodeName, sourceVol.Status.ActualVGNameOnTheNode)
 			if err != nil {
-				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Status.ActualVGNameOnTheNode))
-				return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Status.ActualVGNameOnTheNode, err.Error())
+				d.log.Error(
+					err,
+					fmt.Sprintf(
+						"[CreateVolume][traceID:%s] source LVMVolumeGroup %s from node %s is not found in storage class LVGs",
+						traceID,
+						sourceVol.Status.ActualVGNameOnTheNode,
+						sourceVol.Status.NodeName,
+					),
+				)
+				return nil, status.Errorf(codes.FailedPrecondition, "error getting LVMVolumeGroup %s: %s", sourceVol.Status.ActualVGNameOnTheNode, err.Error())
 			}
 
 			if _, ok := storageClassLVGParametersMap[selectedLVG.Name]; !ok {
@@ -157,7 +167,10 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 				return nil, status.Errorf(codes.Internal, "error parsing quantity: %v", err)
 			}
 
-			if llvSize.Value() < sourceSizeQty.Value() {
+			// check size
+			if llvSize.Value() == 0 {
+				*llvSize = sourceSizeQty
+			} else if llvSize.Value() < sourceSizeQty.Value() {
 				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
 			}
 
