@@ -8,17 +8,18 @@ The module manages local block storage based on LVM. It enables the creation of 
 
 To create a StorageClass, you must first configure `LVMVolumeGroup` on the cluster nodes. The LVM configuration is handled by the [sds-node-configurator](../../sds-node-configurator/stable/) module.
 
-{{< alert level="warning" >}}
-Before enabling the `sds-local-volume` module, you must enable the `sds-node-configurator` module.
-{{< /alert >}}
+## Module setup steps
 
-{{< alert level="info" >}}
-After you enable the `sds-local-volume` module in the Deckhouse Kubernetes Platform configuration, you have to create StorageClasses.
-{{< /alert >}}
+To ensure the correct operation of the `sds-local-volume` module, follow these steps:
 
-{{< alert level="warning" >}}
-The user is not allowed to create a StorageClass for the local.csi.storage.deckhouse.io CSI driver.
-{{< /alert >}}
+- Configure `LVMVolumeGroup`.
+  Before creating a Storage Class, you need to configure the `LVMVolumeGroup` on the cluster nodes. Configuration is done using the [sds-node-configurator](../../sds-node-configurator/stable/) module.
+
+- Enable the `sds-node-configurator` module.
+  Ensure that the `sds-node-configurator` module is enabled **before** enabling the `sds-local-volume` module.
+
+- Create the corresponding StorageClasses.
+  The creation of StorageClasses for the CSI driver `local.csi.storage.deckhouse.io` is **prohibited** for users.
 
 The module supports two operation modes: LVM and LVMThin.  
 Each mode has its own features, advantages, and limitations. For more details on the differences, refer to the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvmthin).
@@ -246,7 +247,7 @@ The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `
    kubectl get sc local-storage-class
    ```
 
-If StorageClass with the name `local-storage-class` is shown, then the configuration of the `sds-local-volume` module is complete. Now users can create PVs by specifying StorageClass with the name `local-storage-class`.
+If StorageClass with the name `local-storage-class` is shown, then the configuration of the `sds-local-volume` module is complete. Now users can create PVCs by specifying StorageClass with the name `local-storage-class`.
 
 ## System requirements and recommendations
 
