@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -395,9 +394,9 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 
 	// the snapshots are required to be created in the same node and device class as the source volume.
 
-	// suggested name is in form "snapshot-{uuid}" and it can't be used, because
-	// lvcreate: "Names starting "snapshot" are reserved."
-	name := strings.Replace(request.Name, "snapshot", "snap", 1)
+	// suggested name is in form "{prefix}-{uuid}", where {prefix} is specified as external-snapshotter argument
+	// {prefix} can not be the default "snapshot", since it's reserved keyword in LVM
+	name := request.Name
 
 	actualNameOnTheNode := request.Parameters[internal.ActualNameOnTheNodeKey]
 	if actualNameOnTheNode == "" {
