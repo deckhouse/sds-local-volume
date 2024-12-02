@@ -4,7 +4,7 @@ description: "The sds-local-volume module: General Concepts and Principles."
 moduleStatus: preview
 ---
 
-The module manages local block storage based on LVM. It enables the creation of StorageClasses in Kubernetes using [custom resources](./cr.html) of type `LocalStorageClass` (an example is provided below).
+The module manages local block storage based on LVM. It enables the creation of StorageClasses in Kubernetes using [LocalStorageClass](cr.html#localstorageclass) custom resources.
 
 To create a StorageClass, you must first configure `LVMVolumeGroup` on the cluster nodes. The LVM configuration is handled by the [sds-node-configurator](../../sds-node-configurator/stable/) module.
 
@@ -13,12 +13,15 @@ To create a StorageClass, you must first configure `LVMVolumeGroup` on the clust
 To ensure the correct operation of the `sds-local-volume` module, follow these steps:
 
 - Configure `LVMVolumeGroup`.
-  Before creating a Storage Class, you need to configure the `LVMVolumeGroup` on the cluster nodes. Configuration is done using the [sds-node-configurator](../../sds-node-configurator/stable/) module.
 
-- Enable the `sds-node-configurator` module.
+  Before creating a StorageClass, you need to create the [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource of the `sds-node-configurator` module on the cluster nodes.
+
+- Enable the [sds-node-configurator](../../sds-node-configurator/stable/) module.
+
   Ensure that the `sds-node-configurator` module is enabled **before** enabling the `sds-local-volume` module.
 
 - Create the corresponding StorageClasses.
+
   The creation of StorageClasses for the CSI driver `local.csi.storage.deckhouse.io` is **prohibited** for users.
 
 The module supports two operation modes: LVM and LVMThin.  
@@ -32,7 +35,7 @@ Note that all commands must be run on a machine that has administrator access to
 
 Enabling the `sds-node-configurator` module:
 
-1. Create a ModuleConfig resource to activate the module:
+1. Create a ModuleConfig resource to enable the module:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -48,9 +51,9 @@ Enabling the `sds-node-configurator` module:
 
 1. Wait for the module to become `Ready`. At this stage, there is no need to check the pods in the `d8-sds-node-configurator`.
 
-```shell
-kubectl get modules sds-node-configurator -w
-```
+   ```shell
+   kubectl get modules sds-node-configurator -w
+   ```
 
 Enabling the `sds-local-volume` module:
 
@@ -100,9 +103,9 @@ You need to create LVM volume groups on the nodes using `LVMVolumeGroup` custom 
 {{< alert level="warning" >}}
 Please ensure that the `sds-local-volume-csi-node` pod is running on the node before creating the `LVMVolumeGroup`. You can do this using the command:
 
- ```shell
- kubectl -n d8-sds-local-volume get pod -owide
- ```
+```shell
+kubectl -n d8-sds-local-volume get pod -owide
+```
 
 {{< /alert >}}
 

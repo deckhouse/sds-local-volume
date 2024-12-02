@@ -10,14 +10,17 @@ moduleStatus: preview
 
 Для корректной работы модуля `sds-local-volume` выполните следующие шаги:
 
-- Настройте `LVMVolumeGroup`.  
-Перед созданием Storage Class необходимо настроить `LVMVolumeGroup` на узлах кластера. Настройка выполняется с помощью модуля [sds-node-configurator](../../sds-node-configurator/stable/).
+- Настройте LVMVolumeGroup.
 
-- Включите модуль `sds-node-configurator`.  
-Убедитесь, что модуль `sds-node-configurator` включен **до** включения модуля `sds-local-volume`.  
+  Перед созданием StorageClass необходимо создать ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) модуля `sds-node-configurator` на узлах кластера.
+
+- Включите модуль [sds-node-configurator](../../sds-node-configurator/stable/).
+
+  Убедитесь, что модуль `sds-node-configurator` включен **до** включения модуля `sds-local-volume`.
 
 - Создайте соответствующие StorageClass'ы.
-Создание StorageClass для CSI-драйвера `local.csi.storage.deckhouse.io` пользователем **запрещено**.
+
+  Создание StorageClass для CSI-драйвера `local.csi.storage.deckhouse.io` пользователем **запрещено**.
 
 Модуль поддерживает два режима работы: LVM и LVMThin.
 У каждого из них есть свои особенности, преимущества и ограничения. Подробнее о различиях можно узнать в [FAQ](./faq.html#когда-следует-использовать-lvm-а-когда-lvmthin).
@@ -30,7 +33,7 @@ moduleStatus: preview
 
 Включение модуля `sds-node-configurator`:
 
-1. Создайте ресурс ModuleConfig для активации модуля:
+1. Создайте ресурс ModuleConfig для включения модуля:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -93,7 +96,7 @@ kubectl -n d8-sds-local-volume get pod -owide
 
 ### Настройка хранилища на узлах
 
-Для настройки хранилища на узлах необходимо создать группы томов LVM с использованием ресурсов `LVMVolumeGroup`. В данном примере создается Thick хранилище.
+Для настройки хранилища на узлах необходимо создать группы томов LVM с использованием ресурсов `LVMVolumeGroup`. В данном примере создается хранилище Thick.
 
 {{< alert level="warning" >}}
 Перед созданием ресурса `LVMVolumeGroup` убедитесь, что на данном узле запущен под `sds-local-volume-csi-node`. Это можно сделать командой:
