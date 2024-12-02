@@ -4,7 +4,7 @@ description: "Модуль sds-local-volume: общие концепции и п
 moduleStatus: preview
 ---
 
-Модуль предназначен для управления локальным блочным хранилищем на базе LVM. С его помощью можно создавать StorageClass в Kubernetes, используя [пользовательские ресурсы](./cr.html) типа `LocalStorageClass` (пример представлен ниже).
+Модуль предназначен для управления локальным блочным хранилищем на базе LVM. С его помощью можно создавать StorageClass в Kubernetes, используя ресурс [LocalStorageClass](cr.html#localstorageclass).
 
 ## Шаги настройки модуля
 
