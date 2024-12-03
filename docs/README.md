@@ -94,7 +94,7 @@ By default, the pods will be scheduled on all nodes in the cluster. You can veri
 kubectl -n d8-sds-local-volume get pod -owide
 ```
 
-> The location of the pod data is determined by special labels (nodeSelector) specified in the `spec.settings.dataNodes.nodeSelector` field in the module settings. For more detailed information on the configuration, please follow the [link](./faq.html#i-dont-want-the-module-to-be-used-on-all-nodes-of-the-cluster-how-can-i-select-the-desired-nodes).
+The location of the pod data is determined by special labels (nodeSelector) specified in the [spec.settings.dataNodes.nodeSelector](configuration.html#parameters-datanodes-nodeselector) field in the module settings. Read more in the [module FAQ](./faq.html#i-dont-want-the-module-to-be-used-on-all-nodes-of-the-cluster-how-can-i-select-the-desired-nodes).
 
 ### Configuring storage on nodes
 
@@ -154,7 +154,7 @@ kubectl -n d8-sds-local-volume get pod -owide
    kubectl get lvg vg-1-on-worker-0 -w
    ```
 
-The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block devices has been created on the `worker-0` node.
+   The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block devices has been created on the `worker-0` node.
 
 1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for `worker-1`:
 
@@ -185,7 +185,7 @@ The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `
    kubectl get lvg vg-1-on-worker-1 -w
    ```
 
-The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the `worker-1` node.
+   The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the `worker-1` node.
 
 1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for `worker-2`:
 
@@ -216,7 +216,7 @@ The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `
    kubectl get lvg vg-1-on-worker-2 -w
    ```
 
-The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the `worker-2` node.
+   The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the `worker-2` node.
 
 1. Create a [LocalStorageClass](./cr.html#localstorageclass) resource:
 
