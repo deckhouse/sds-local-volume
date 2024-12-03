@@ -6,13 +6,13 @@ moduleStatus: preview
 
 The module manages local block storage based on LVM. It enables the creation of StorageClasses in Kubernetes using [LocalStorageClass](cr.html#localstorageclass) custom resources.
 
-To create a StorageClass, you must first configure `LVMVolumeGroup` on the cluster nodes. The LVM configuration is handled by the [sds-node-configurator](../../sds-node-configurator/stable/) module.
+To create a StorageClass, you must first configure LVMVolumeGroup on the cluster nodes. The LVM configuration is handled by the [sds-node-configurator](../../sds-node-configurator/stable/) module.
 
 ## Module setup steps
 
 To ensure the correct operation of the `sds-local-volume` module, follow these steps:
 
-- Configure `LVMVolumeGroup`.
+- Configure LVMVolumeGroup.
 
   Before creating a StorageClass, you need to create the [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource of the `sds-node-configurator` module on the cluster nodes.
 
@@ -77,7 +77,7 @@ Enabling the `sds-local-volume` module:
    kubectl get modules sds-local-volume -w
    ```
 
-1. Make sure that all pods in `d8-sds-local-volume` and `d8-sds-node-configurator` namespaces are `Running` or `Completed` and are running on all nodes where `LVM` resources are intended to be used.
+1. Make sure that all pods in `d8-sds-local-volume` and `d8-sds-node-configurator` namespaces are `Running` or `Completed` and are running on all nodes where LVM resources are intended to be used.
 
    ```shell
    kubectl -n d8-sds-local-volume get pod -owide -w
@@ -98,7 +98,7 @@ kubectl -n d8-sds-local-volume get pod -owide
 
 ### Configuring storage on nodes
 
-You need to create LVM volume groups on the nodes using `LVMVolumeGroup` custom resources. As part of this quickstart guide, we will create a regular Thick storage.
+You need to create LVM volume groups on the nodes using LVMVolumeGroup custom resources. As part of this quickstart guide, we will create a regular storage Thick.
 
 {{< alert level="warning" >}}
 Please ensure that the `sds-local-volume-csi-node` pod is running on the node before creating the `LVMVolumeGroup`. You can do this using the command:
@@ -125,7 +125,7 @@ kubectl -n d8-sds-local-volume get pod -owide
    dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1   worker-2   false        894006140416   /dev/nvme0n1p6
    ```
 
-1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for `worker-0`:
+1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for worker-0:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -148,15 +148,15 @@ kubectl -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
-1. Wait for the created `LVMVolumeGroup` resource to become `Ready`:
+1. Wait for the created LVMVolumeGroup resource to become `Ready`:
 
    ```shell
    kubectl get lvg vg-1-on-worker-0 -w
    ```
 
-The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block devices has been created on the `worker-0` node.
+The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block devices has been created on the worker-0 node.
 
-1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for `worker-1`:
+1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for worker-1:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -179,15 +179,15 @@ The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `
    EOF
    ```
 
-1. Wait for the created `LVMVolumeGroup` resource to become `Ready`:
+1. Wait for the created LVMVolumeGroup resource to become `Ready`:
 
    ```shell
    kubectl get lvg vg-1-on-worker-1 -w
    ```
 
-The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the `worker-1` node.
+The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the worker-1 node.
 
-1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for `worker-2`:
+1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for worker-2:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -210,13 +210,13 @@ The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `
    EOF
    ```
 
-1. Wait for the created `LVMVolumeGroup` resource to become `Ready`:
+1. Wait for the created LVMVolumeGroup resource to become `Ready`:
 
    ```shell
    kubectl get lvg vg-1-on-worker-2 -w
    ```
 
-The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the `worker-2` node.
+The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the worker-2 node.
 
 1. Create a [LocalStorageClass](./cr.html#localstorageclass) resource:
 
@@ -238,7 +238,7 @@ The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `
    EOF
    ```
 
-1. Wait for the created `LocalStorageClass` resource to become `Created`:
+1. Wait for the created LocalStorageClass resource to become `Created`:
 
    ```shell
    kubectl get lsc local-storage-class -w

@@ -75,7 +75,7 @@ moduleStatus: preview
    kubectl get modules sds-local-volume -w
    ```
 
-1. Убедитесь, что в пространствах имен `d8-sds-local-volume` и `d8-sds-node-configurator` все поды находятся в статусе `Running` или `Completed` и запущены на всех узлах, где планируется использовать ресурсы `LVM`.
+1. Убедитесь, что в пространствах имен `d8-sds-local-volume` и `d8-sds-node-configurator` все поды находятся в статусе `Running` или `Completed` и запущены на всех узлах, где планируется использовать ресурсы LVM.
 
    ```shell
    kubectl -n d8-sds-local-volume get pod -owide -w
@@ -96,10 +96,10 @@ kubectl -n d8-sds-local-volume get pod -owide
 
 ### Настройка хранилища на узлах
 
-Для настройки хранилища на узлах необходимо создать группы томов LVM с использованием ресурсов `LVMVolumeGroup`. В данном примере создается хранилище Thick.
+Для настройки хранилища на узлах необходимо создать группы томов LVM с использованием ресурсов LVMVolumeGroup. В данном примере создается хранилище Thick.
 
 {{< alert level="warning" >}}
-Перед созданием ресурса `LVMVolumeGroup` убедитесь, что на данном узле запущен под `sds-local-volume-csi-node`. Это можно сделать командой:
+Перед созданием ресурса LVMVolumeGroup убедитесь, что на данном узле запущен под `sds-local-volume-csi-node`. Это можно сделать командой:
 
 ```shell
 kubectl -n d8-sds-local-volume get pod -owide
@@ -123,7 +123,7 @@ kubectl -n d8-sds-local-volume get pod -owide
    dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1   worker-2   false        894006140416   /dev/nvme0n1p6
    ```
 
-1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-0`:
+1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла worker-0:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -146,15 +146,15 @@ kubectl -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
-1. Дождитесь, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Ready`:
+1. Дождитесь, когда созданный ресурс LVMVolumeGroup перейдет в состояние `Ready`:
 
    ```shell
    kubectl get lvg vg-1-on-worker-0 -w
    ```
 
-Если ресурс перешел в состояние `Ready`, это значит, что на узле `worker-0` из блочных устройств `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
+Если ресурс перешел в состояние `Ready`, это значит, что на узле worker-0 из блочных устройств `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
 
-1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-1`:
+1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла worker-1:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -177,15 +177,15 @@ kubectl -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
-1. Дождитесь, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Ready`:
+1. Дождитесь, когда созданный ресурс LVMVolumeGroup перейдет в состояние `Ready`:
 
    ```shell
    kubectl get lvg vg-1-on-worker-1 -w
    ```
 
-Если ресурс перешел в состояние `Ready`, это значит, что на узле `worker-1` из блочного устройства `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
+Если ресурс перешел в состояние `Ready`, это значит, что на узле worker-1 из блочного устройства `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
 
-1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-2`:
+1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла worker-2:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -208,13 +208,13 @@ kubectl -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
-1. Дождитесь, когда созданный ресурс `LVMVolumeGroup` перейдет в состояние `Ready`:
+1. Дождитесь, когда созданный ресурс LVMVolumeGroup перейдет в состояние `Ready`:
 
    ```shell
    kubectl get lvg vg-1-on-worker-2 -w
    ```
 
-Если ресурс перешел в состояние `Ready`, то это значит, что на узле `worker-2` из блочного устройства `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
+Если ресурс перешел в состояние `Ready`, то это значит, что на узле worker-2 из блочного устройства `/dev/nvme1n1` и `/dev/nvme0n1p6` была создана LVM VG с именем `vg-1`.
 
 1. Создайте ресурс [LocalStorageClass](./cr.html#localstorageclass):
 
@@ -236,7 +236,7 @@ kubectl -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
-1. Дождитесь, когда созданный ресурс `LocalStorageClass` перейдет в состояние `Created`:
+1. Дождитесь, когда созданный ресурс LocalStorageClass перейдет в состояние `Created`:
 
    ```shell
    kubectl get lsc local-storage-class -w
