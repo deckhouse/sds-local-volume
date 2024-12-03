@@ -392,6 +392,40 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 		return nil, status.Errorf(codes.InvalidArgument, "Source LVMLogicalVolume '%s' is not of 'Thin' type", request.SourceVolumeId)
 	}
 
+	if llv.Status == nil || llv.Status.ActualSize.Value() == 0 {
+		return nil, status.Errorf(codes.FailedPrecondition, "Source LVMLogicalVolume '%s' ActualSize is unknown", request.SourceVolumeId)
+	}
+
+	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LVMVolumeGroupName)
+	if err != nil {
+		d.log.Error(
+			err,
+			fmt.Sprintf(
+				"[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMVolumeGroup %s",
+				traceID,
+				request.SourceVolumeId,
+				llv.Spec.LVMVolumeGroupName,
+			),
+		)
+		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", llv.Spec.LVMVolumeGroupName, err.Error())
+	}
+
+	freeSpace, err := utils.GetLVMThinPoolFreeSpace(*lvg, llv.Spec.Thin.PoolName)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get free space for thin pool %s in lvg %s: %v", llv.Spec.Thin.PoolName, lvg.Name, err)
+	}
+
+	if freeSpace.Value() < llv.Status.ActualSize.Value() {
+		return nil, status.Errorf(
+			codes.FailedPrecondition,
+			"not enough space in pool %s (lvg %s): %s; need at least %s",
+			llv.Spec.Thin.PoolName,
+			lvg.Name,
+			freeSpace.String(),
+			llv.Status.ActualSize.String(),
+		)
+	}
+
 	// the snapshots are required to be created in the same node and device class as the source volume.
 
 	// suggested name is in form "{prefix}-{uuid}", where {prefix} is specified as external-snapshotter argument
@@ -522,7 +556,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		}, nil
 	}
 
-	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LVMVolumeGroupName, llv.Namespace)
+	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LVMVolumeGroupName)
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error getting LVMVolumeGroup", traceID, volumeID))
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)

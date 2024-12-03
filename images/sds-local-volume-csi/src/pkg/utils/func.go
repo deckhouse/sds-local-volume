@@ -333,12 +333,12 @@ func GetNodeWithMaxFreeSpace(lvgs []snc.LVMVolumeGroup, storageClassLVGParameter
 	return nodeName, *resource.NewQuantity(maxFreeSpace, resource.BinarySI), nil
 }
 
-func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName, namespace string) (*snc.LVMVolumeGroup, error) {
+func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName string) (*snc.LVMVolumeGroup, error) {
 	lvg := &snc.LVMVolumeGroup{}
 
 	if err := kc.Get(
 		ctx,
-		client.ObjectKey{Name: lvgName, Namespace: namespace},
+		client.ObjectKey{Name: lvgName, Namespace: ""},
 		lvg,
 	); err != nil {
 		return nil, err
