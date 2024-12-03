@@ -125,7 +125,7 @@ kubectl -n d8-sds-local-volume get pod -owide
    dev-6c5abbd549100834c6b1668c8f89fb97872ee2b1   worker-2   false        894006140416   /dev/nvme0n1p6
    ```
 
-1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for worker-0:
+1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for `worker-0`:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -154,9 +154,9 @@ kubectl -n d8-sds-local-volume get pod -owide
    kubectl get lvg vg-1-on-worker-0 -w
    ```
 
-The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block devices has been created on the worker-0 node.
+The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block devices has been created on the `worker-0` node.
 
-1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for worker-1:
+1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for `worker-1`:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -185,9 +185,9 @@ The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `
    kubectl get lvg vg-1-on-worker-1 -w
    ```
 
-The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the worker-1 node.
+The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the `worker-1` node.
 
-1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for worker-2:
+1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for `worker-2`:
 
    ```yaml
    kubectl apply -f - <<EOF
@@ -216,7 +216,7 @@ The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `
    kubectl get lvg vg-1-on-worker-2 -w
    ```
 
-The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the worker-2 node.
+The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the `worker-2` node.
 
 1. Create a [LocalStorageClass](./cr.html#localstorageclass) resource:
 
