@@ -92,7 +92,8 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 
 	_, ok = ValidFSTypes[strings.ToLower(fsType)]
 	if !ok {
-		return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes))
+		d.log.Error(fmt.Errorf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes), "Invalid fsType")
+		return nil, status.Errorf(codes.InvalidArgument, "invalid fsType")
 	}
 
 	formatOptions := []string{}
@@ -270,7 +271,8 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 
 		_, ok = ValidFSTypes[strings.ToLower(fsType)]
 		if !ok {
-			return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes))
+			d.log.Error(fmt.Errorf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes), "Invalid fsType")
+			return nil, status.Errorf(codes.InvalidArgument, "Invalid fsType")
 		}
 
 		mountOptions = collectMountOptions(fsType, mountVolume.GetMountFlags(), mountOptions)
