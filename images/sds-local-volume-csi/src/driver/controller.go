@@ -20,8 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/deckhouse/sds-node-configurator/api/v1alpha1"
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -32,6 +35,11 @@ import (
 	"sds-local-volume-csi/pkg/utils"
 )
 
+const (
+	sourceVolumeKindSnapshot = "LVMLogicalVolumeSnapshot"
+	sourceVolumeKindVolume   = "LVMLogicalVolume"
+)
+
 func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	traceID := uuid.New().String()
 
@@ -39,7 +47,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	d.log.Trace(request.String())
 	d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s] ========== CreateVolume ============", traceID))
 
-	if request.GetParameters()[internal.TypeKey] != internal.Lvm {
+	if request.Parameters[internal.TypeKey] != internal.Lvm {
 		return nil, status.Error(codes.InvalidArgument, "Unsupported Storage Class type")
 	}
 
@@ -51,22 +59,22 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		return nil, status.Error(codes.InvalidArgument, "Volume Capability cannot de empty")
 	}
 
-	BindingMode := request.GetParameters()[internal.BindingModeKey]
+	BindingMode := request.Parameters[internal.BindingModeKey]
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] storage class BindingMode: %s", traceID, volumeID, BindingMode))
 
-	LvmType := request.GetParameters()[internal.LvmTypeKey]
+	LvmType := request.Parameters[internal.LvmTypeKey]
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] storage class LvmType: %s", traceID, volumeID, LvmType))
 
-	if len(request.GetParameters()[internal.LVMVolumeGroupKey]) == 0 {
+	if len(request.Parameters[internal.LVMVolumeGroupKey]) == 0 {
 		err := errors.New("no LVMVolumeGroups specified in a storage class's parameters")
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] no LVMVolumeGroups were found for the request: %+v", traceID, volumeID, request))
-		return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "no LVMVolumeGroups specified in a storage class's parameters")
 	}
 
-	storageClassLVGs, storageClassLVGParametersMap, err := utils.GetStorageClassLVGsAndParameters(ctx, d.cl, d.log, request.GetParameters()[internal.LVMVolumeGroupKey])
+	storageClassLVGs, storageClassLVGParametersMap, err := utils.GetStorageClassLVGsAndParameters(ctx, d.cl, d.log, request.Parameters[internal.LVMVolumeGroupKey])
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error GetStorageClassLVGs", traceID, volumeID))
-		return nil, status.Errorf(codes.Internal, err.Error())
+		return nil, status.Errorf(codes.Internal, "error during GetStorageClassLVGs")
 	}
 
 	contiguous := utils.IsContiguous(request, LvmType)
@@ -85,39 +93,143 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	llvSize := resource.NewQuantity(request.CapacityRange.GetRequiredBytes(), resource.BinarySI)
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] llv size: %s", traceID, volumeID, llvSize.String()))
 
+	var selectedLVG *v1alpha1.LVMVolumeGroup
 	var preferredNode string
-	switch BindingMode {
-	case internal.BindingModeI:
-		d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] BindingMode is %s. Start selecting node", traceID, volumeID, internal.BindingModeI))
-		selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(storageClassLVGs, storageClassLVGParametersMap, LvmType)
-		if err != nil {
-			d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error GetNodeMaxVGSize", traceID, volumeID))
-		}
+	var sourceVolume *v1alpha1.LVMLogicalVolumeSource
 
-		preferredNode = selectedNodeName
-		d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Selected node: %s, free space %s", traceID, volumeID, selectedNodeName, freeSpace.String()))
-		if LvmType == internal.LVMTypeThick {
-			if llvSize.Value() > freeSpace.Value() {
-				return nil, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), freeSpace.String())
+	if request.VolumeContentSource != nil {
+		sourceVolume = &v1alpha1.LVMLogicalVolumeSource{}
+		switch s := request.VolumeContentSource.Type.(type) {
+		case *csi.VolumeContentSource_Snapshot:
+			sourceVolume.Kind = sourceVolumeKindSnapshot
+			sourceVolume.Name = s.Snapshot.SnapshotId
+
+			// get source volume
+			sourceVol, err := utils.GetLVMLogicalVolumeSnapshot(ctx, d.cl, sourceVolume.Name, "")
+			if err != nil {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error getting source LVMLogicalVolumeSnapshot", traceID, sourceVolume.Name))
+				return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolumeSnapshot %s: %s", sourceVolume.Name, err.Error())
+			}
+
+			if sourceVol.Status == nil || sourceVol.Status.Phase != internal.LLVSStatusCreated {
+				d.log.Error(nil, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] source LVMLogicalVolumeSnapshot is not in Created phase", traceID, sourceVolume.Name))
+				return nil, status.Errorf(codes.FailedPrecondition, "LVMLogicalVolumeSnapshot %s is not in Created phase", sourceVolume.Name)
+			}
+
+			// check size
+			if llvSize.Value() == 0 {
+				*llvSize = sourceVol.Status.Size
+			} else if llvSize.Value() < sourceVol.Status.Size.Value() {
+				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
+			}
+
+			selectedLVG, err = utils.SelectLVGByActualNameOnTheNode(storageClassLVGs, sourceVol.Status.NodeName, sourceVol.Status.ActualVGNameOnTheNode)
+			if err != nil {
+				d.log.Error(
+					err,
+					fmt.Sprintf(
+						"[CreateVolume][traceID:%s] source LVMVolumeGroup %s from node %s is not found in storage class LVGs",
+						traceID,
+						sourceVol.Status.ActualVGNameOnTheNode,
+						sourceVol.Status.NodeName,
+					),
+				)
+				return nil, status.Errorf(codes.FailedPrecondition, "error getting LVMVolumeGroup %s: %s", sourceVol.Status.ActualVGNameOnTheNode, err.Error())
+			}
+
+			if _, ok := storageClassLVGParametersMap[selectedLVG.Name]; !ok {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] should use the same storage class as source", traceID, volumeID))
+				return nil, status.Errorf(codes.InvalidArgument, "should use the same storage class as source")
+			}
+
+			// prefer the same node as the source
+			preferredNode = sourceVol.Status.NodeName
+		case *csi.VolumeContentSource_Volume:
+			sourceVolume.Kind = sourceVolumeKindVolume
+			sourceVolume.Name = s.Volume.VolumeId
+
+			// get source volume
+			sourceVol, err := utils.GetLVMLogicalVolume(ctx, d.cl, sourceVolume.Name, "")
+			if err != nil {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error getting source LVMLogicalVolume", traceID, sourceVolume.Name))
+				return nil, status.Errorf(codes.NotFound, "error getting LVMLogicalVolume %s: %s", sourceVolume.Name, err.Error())
+			}
+
+			if sourceVol.Spec.Type != internal.LVMTypeThin {
+				return nil, status.Errorf(codes.InvalidArgument, "Source LVMLogicalVolume '%s' is not of 'Thin' type", sourceVol.Name)
+			}
+
+			// check size
+			sourceSizeQty, err := resource.ParseQuantity(sourceVol.Spec.Size)
+			if err != nil {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error parsing quantity %s", traceID, sourceVol.Spec.Size))
+				return nil, status.Errorf(codes.Internal, "error parsing quantity: %v", err)
+			}
+
+			// check size
+			if llvSize.Value() == 0 {
+				*llvSize = sourceSizeQty
+			} else if llvSize.Value() < sourceSizeQty.Value() {
+				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
+			}
+
+			selectedLVG, err = utils.SelectLVGByName(storageClassLVGs, sourceVol.Spec.LVMVolumeGroupName)
+			if err != nil {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s] error getting LVMVolumeGroup %s", traceID, sourceVol.Spec.LVMVolumeGroupName))
+				return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", sourceVol.Spec.LVMVolumeGroupName, err.Error())
+			}
+
+			if _, ok := storageClassLVGParametersMap[selectedLVG.Name]; !ok {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] should use the same storage class as source", traceID, volumeID))
+				return nil, status.Errorf(codes.InvalidArgument, "should use the same storage class as source")
+			}
+
+			// prefer the same node as the source
+			preferredNode = selectedLVG.Spec.Local.NodeName
+		}
+	} else {
+		switch BindingMode {
+		case internal.BindingModeI:
+			d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] BindingMode is %s. Start selecting node", traceID, volumeID, internal.BindingModeI))
+			selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(storageClassLVGs, storageClassLVGParametersMap, LvmType)
+			if err != nil {
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error GetNodeMaxVGSize", traceID, volumeID))
+			}
+
+			preferredNode = selectedNodeName
+			d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Selected node: %s, free space %s", traceID, volumeID, selectedNodeName, freeSpace.String()))
+			if LvmType == internal.LVMTypeThick {
+				if llvSize.Value() > freeSpace.Value() {
+					return nil, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), freeSpace.String())
+				}
+			}
+		case internal.BindingModeWFFC:
+			d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] BindingMode is %s. Get preferredNode", traceID, volumeID, internal.BindingModeWFFC))
+			if len(request.AccessibilityRequirements.Preferred) != 0 {
+				t := request.AccessibilityRequirements.Preferred[0].Segments
+				preferredNode = t[internal.TopologyKey]
 			}
 		}
-	case internal.BindingModeWFFC:
-		d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] BindingMode is %s. Get preferredNode", traceID, volumeID, internal.BindingModeWFFC))
-		if len(request.AccessibilityRequirements.Preferred) != 0 {
-			t := request.AccessibilityRequirements.Preferred[0].Segments
-			preferredNode = t[internal.TopologyKey]
+
+		d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] preferredNode: %s. Select LVG", traceID, volumeID, preferredNode))
+		selectedLVG, err = utils.SelectLVG(storageClassLVGs, preferredNode)
+		d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] selectedLVG: %+v", traceID, volumeID, selectedLVG))
+		if err != nil {
+			d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error SelectLVG", traceID, volumeID))
+			return nil, status.Errorf(codes.Internal, "error during SelectLVG")
 		}
 	}
 
-	d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] preferredNode: %s. Select LVG", traceID, volumeID, preferredNode))
-	selectedLVG, err := utils.SelectLVG(storageClassLVGs, preferredNode)
-	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] selectedLVG: %+v", traceID, volumeID, selectedLVG))
-	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error SelectLVG", traceID, volumeID))
-		return nil, status.Errorf(codes.Internal, err.Error())
-	}
-
-	llvSpec := utils.GetLLVSpec(d.log, lvName, selectedLVG, storageClassLVGParametersMap, LvmType, *llvSize, contiguous)
+	llvSpec := utils.GetLLVSpec(
+		d.log,
+		lvName,
+		*selectedLVG,
+		storageClassLVGParametersMap,
+		LvmType,
+		*llvSize,
+		contiguous,
+		sourceVolume,
+	)
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] LVMLogicalVolumeSpec: %+v", traceID, volumeID, llvSpec))
 	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
 	if err != nil {
@@ -264,18 +376,141 @@ func (d *Driver) ControllerGetCapabilities(_ context.Context, _ *csi.ControllerG
 	}, nil
 }
 
-func (d *Driver) CreateSnapshot(_ context.Context, _ *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
-	d.log.Info(" call method CreateSnapshot")
-	return nil, nil
+func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+	traceID := uuid.New().String()
+
+	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s] ========== CreateSnapshot ============", traceID))
+	d.log.Trace(request.String())
+
+	llv, err := utils.GetLVMLogicalVolume(ctx, d.cl, request.SourceVolumeId, "")
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMLogicalVolume", traceID, request.SourceVolumeId))
+		return nil, status.Errorf(codes.Internal, "error getting LVMLogicalVolume %s: %s", request.SourceVolumeId, err.Error())
+	}
+
+	if llv.Spec.Type != internal.LVMTypeThin {
+		return nil, status.Errorf(codes.InvalidArgument, "Source LVMLogicalVolume '%s' is not of 'Thin' type", request.SourceVolumeId)
+	}
+
+	if llv.Status == nil || llv.Status.ActualSize.Value() == 0 {
+		return nil, status.Errorf(codes.FailedPrecondition, "Source LVMLogicalVolume '%s' ActualSize is unknown", request.SourceVolumeId)
+	}
+
+	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LVMVolumeGroupName)
+	if err != nil {
+		d.log.Error(
+			err,
+			fmt.Sprintf(
+				"[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMVolumeGroup %s",
+				traceID,
+				request.SourceVolumeId,
+				llv.Spec.LVMVolumeGroupName,
+			),
+		)
+		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", llv.Spec.LVMVolumeGroupName, err.Error())
+	}
+
+	freeSpace, err := utils.GetLVMThinPoolFreeSpace(*lvg, llv.Spec.Thin.PoolName)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get free space for thin pool %s in lvg %s: %v", llv.Spec.Thin.PoolName, lvg.Name, err)
+	}
+
+	if freeSpace.Value() < llv.Status.ActualSize.Value() {
+		return nil, status.Errorf(
+			codes.FailedPrecondition,
+			"not enough space in pool %s (lvg %s): %s; need at least %s",
+			llv.Spec.Thin.PoolName,
+			lvg.Name,
+			freeSpace.String(),
+			llv.Status.ActualSize.String(),
+		)
+	}
+
+	// the snapshots are required to be created in the same node and device class as the source volume.
+
+	// suggested name is in form "{prefix}-{uuid}", where {prefix} is specified as external-snapshotter argument
+	// {prefix} can not be the default "snapshot", since it's reserved keyword in LVM
+	name := request.Name
+
+	actualNameOnTheNode := request.Parameters[internal.ActualNameOnTheNodeKey]
+	if actualNameOnTheNode == "" {
+		actualNameOnTheNode = name
+	}
+
+	_, err = utils.CreateLVMLogicalVolumeSnapshot(
+		ctx,
+		d.cl,
+		d.log,
+		traceID,
+		name,
+		v1alpha1.LVMLogicalVolumeSnapshotSpec{
+			ActualSnapshotNameOnTheNode: actualNameOnTheNode,
+			LVMLogicalVolumeName:        llv.Name,
+		},
+	)
+	if err != nil {
+		if kerrors.IsAlreadyExists(err) {
+			d.log.Info(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] LVMLogicalVolumeSnapshot %s already exists. Skip creating", traceID, name, name))
+		} else {
+			d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error CreateLVMLogicalVolume", traceID, name))
+			return nil, err
+		}
+	}
+
+	attemptCounter, err := utils.WaitForLLVSStatusUpdate(ctx, d.cl, d.log, traceID, name)
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error WaitForStatusUpdate. DeleteLVMLogicalVolumeSnapshot %s", traceID, name, request.Name))
+
+		deleteErr := utils.DeleteLVMLogicalVolumeSnapshot(ctx, d.cl, d.log, traceID, request.Name)
+		if deleteErr != nil {
+			d.log.Error(deleteErr, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error DeleteLVMLogicalVolumeSnapshot", traceID, name))
+		}
+
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error creating LVMLogicalVolumeSnapshot", traceID, name))
+		return nil, err
+	}
+	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] finish wait CreateLVMLogicalVolume, attempt counter = %d", traceID, name, attemptCounter))
+
+	sourceSizeQty, err := resource.ParseQuantity(llv.Spec.Size)
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s] error parsing quantity %s", traceID, llv.Spec.Size))
+		return nil, status.Errorf(codes.Internal, "error parsing quantity: %v", err)
+	}
+
+	return &csi.CreateSnapshotResponse{
+		Snapshot: &csi.Snapshot{
+			SnapshotId:     name,
+			SourceVolumeId: request.SourceVolumeId,
+			SizeBytes:      sourceSizeQty.Value(),
+			CreationTime: &timestamp.Timestamp{
+				Seconds: time.Now().Unix(),
+				Nanos:   0,
+			},
+			ReadyToUse: true,
+		},
+	}, nil
 }
 
-func (d *Driver) DeleteSnapshot(_ context.Context, _ *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
-	d.log.Info(" call method DeleteSnapshot")
-	return nil, nil
+func (d *Driver) DeleteSnapshot(ctx context.Context, request *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+	if len(request.SnapshotId) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "SnapshotId ID cannot be empty")
+	}
+
+	traceID := uuid.New().String()
+	d.log.Trace(fmt.Sprintf("[DeleteSnapshot][traceID:%s] ========== DeleteSnapshot ============", traceID))
+	d.log.Trace(request.String())
+
+	if err := utils.DeleteLVMLogicalVolumeSnapshot(ctx, d.cl, d.log, traceID, request.SnapshotId); err != nil {
+		d.log.Error(err, "error DeleteLVMLogicalVolume")
+	}
+
+	d.log.Info(fmt.Sprintf("[Snapshot][traceID:%s][SnapshotId:%s] Snapshot deleted successfully", traceID, request.SnapshotId))
+	d.log.Info("[Snapshot][traceID:%s] ========== END Snapshot ============", traceID)
+	return &csi.DeleteSnapshotResponse{}, nil
 }
 
 func (d *Driver) ListSnapshots(_ context.Context, _ *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
-	d.log.Info(" call method ListSnapshots")
+	d.log.Info("call method ListSnapshots")
 	return nil, nil
 }
 
@@ -321,7 +556,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		}, nil
 	}
 
-	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LVMVolumeGroupName, llv.Namespace)
+	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LVMVolumeGroupName)
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error getting LVMVolumeGroup", traceID, volumeID))
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)

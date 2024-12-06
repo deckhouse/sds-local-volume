@@ -333,3 +333,55 @@ while [[ $kubectl_completed_check -eq 0 ]]; do
 done
 echo "Data migration completed"
 ```
+
+## How to Create Volume Snapshots?
+
+You can read more about snapshots [here](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).
+
+### Step 1: Enabling the snapshot-controller
+
+First, you need to enable the snapshot-controller:
+
+```shell
+kubectl apply -f -<<EOF
+apiVersion: deckhouse.io/v1alpha1
+kind: ModuleConfig
+metadata:
+  name: snapshot-controller
+spec:
+  enabled: true
+  version: 1
+EOF
+
+```
+
+### Step 2: Creating a Volume Snapshot
+
+Now you can create volume snapshots. To do this, execute the following command with the necessary parameters:
+
+```shell
+kubectl apply -f -<<EOF
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: my-snapshot
+  namespace: <name of the namespace where the PVC is located>
+spec:
+  volumeSnapshotClassName: sds-local-volume-snapshot-class
+  source:
+    persistentVolumeClaimName: <name of the PVC to snapshot>
+EOF
+```
+
+Note that `sds-local-volume-snapshot-class` is created automatically, and it's `deletionPolicy` is `Delete`, which means that `VolumeSnapshotContent` should be deleted when its bound `VolumeSnapshot` is deleted.
+
+
+### Step 3: Checking the Snapshot Status
+
+To check the status of the created snapshot, execute the command:
+
+```shell
+kubectl get volumesnapshot
+```
+
+This command will display a list of all snapshots and their current status.
