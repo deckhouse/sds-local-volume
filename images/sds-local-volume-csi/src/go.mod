@@ -4,8 +4,8 @@ go 1.22.3
 
 require (
 	github.com/container-storage-interface/spec v1.10.0
-	github.com/deckhouse/sds-local-volume/api v0.0.0-20240924121602-33d927d23154
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20241104200552-c02b44d9b6a0
+	github.com/deckhouse/sds-local-volume/api v0.0.0-20241030133552-b9f48131ef9f
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20241205120718-db6ffba1689b
 	github.com/go-logr/logr v1.4.2
 	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
@@ -15,7 +15,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.31.0
 	k8s.io/apiextensions-apiserver v0.31.0
-	k8s.io/apimachinery v0.31.0
+	k8s.io/apimachinery v0.31.3
 	k8s.io/client-go v0.31.0
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/mount-utils v0.31.0
