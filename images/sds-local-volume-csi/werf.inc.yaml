@@ -37,7 +37,7 @@ shell:
     - export DEBIAN_FRONTEND=noninteractive
     - |
       apt-get update \
-      && apt-get -y install lvm2 e2fsprogs xfsprogs \
+      && apt-get -y install lvm2 e2fsprogs xfsprogs bash \
       && apt-get clean \
       && rm -rf /var/lib/apt/lists/*
 
