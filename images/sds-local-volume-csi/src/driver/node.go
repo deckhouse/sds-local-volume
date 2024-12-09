@@ -105,7 +105,7 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	}
 	if fsType == internal.FSTypeXfs && needLegacySupport {
 		d.log.Info("[NodeStageVolume] legacy xfs support is on")
-		formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0")
+		formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0", "-i", "nrext64=0")
 	}
 
 	mountOptions := collectMountOptions(fsType, mountVolume.GetMountFlags(), []string{})
@@ -133,6 +133,7 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	lvmType := context[internal.LvmTypeKey]
 	lvmThinPoolName := context[internal.ThinPoolNameKey]
 
+	d.log.Trace(fmt.Sprintf("formatOptions = %s", formatOptions))
 	d.log.Trace(fmt.Sprintf("mountOptions = %s", mountOptions))
 	d.log.Trace(fmt.Sprintf("lvmType = %s", lvmType))
 	d.log.Trace(fmt.Sprintf("lvmThinPoolName = %s", lvmThinPoolName))
@@ -440,5 +441,5 @@ func needLegacyXFSSupport() (bool, error) {
 		return false, fmt.Errorf("unexpected kernel version (minor part): %s", fullVersion)
 	}
 
-	return major < 5 || major == 5 && minor <= 4, nil
+	return major < 5 || major == 5 && minor <= 15, nil
 }
