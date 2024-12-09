@@ -105,7 +105,7 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	}
 	if fsType == internal.FSTypeXfs && needLegacySupport {
 		d.log.Info("[NodeStageVolume] legacy xfs support is on")
-		formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0")
+		formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0", "-i", "nrext64=0")
 	}
 
 	mountOptions := collectMountOptions(fsType, mountVolume.GetMountFlags(), []string{})
