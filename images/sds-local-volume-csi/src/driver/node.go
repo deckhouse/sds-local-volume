@@ -133,6 +133,7 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	lvmType := context[internal.LvmTypeKey]
 	lvmThinPoolName := context[internal.ThinPoolNameKey]
 
+	d.log.Trace(fmt.Sprintf("formatOptions = %s", formatOptions))
 	d.log.Trace(fmt.Sprintf("mountOptions = %s", mountOptions))
 	d.log.Trace(fmt.Sprintf("lvmType = %s", lvmType))
 	d.log.Trace(fmt.Sprintf("lvmThinPoolName = %s", lvmThinPoolName))

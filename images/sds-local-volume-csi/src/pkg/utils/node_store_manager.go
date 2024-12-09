@@ -59,6 +59,10 @@ func NewStore(logger *logger.Logger) *Store {
 func (s *Store) NodeStageVolumeFS(source, target string, fsType string, mountOpts []string, formatOpts []string, lvmType, lvmThinPoolName string) error {
 	s.Log.Trace(" ----== Start NodeStageVolumeFS ==---- ")
 
+	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Format options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+	s.Log.Trace(fmt.Sprintf("[format] params device=%s fs=%s formatOptions=%v", source, fsType, formatOpts))
+	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Format options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
+
 	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
 	s.Log.Trace(fmt.Sprintf("[mount] params source=%s target=%s fs=%s mountOptions=%v", source, target, fsType, mountOpts))
 	s.Log.Trace("≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈ Mount options ≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈≈")
