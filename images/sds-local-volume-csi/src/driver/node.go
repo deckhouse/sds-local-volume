@@ -440,5 +440,5 @@ func needLegacyXFSSupport() (bool, error) {
 		return false, fmt.Errorf("unexpected kernel version (minor part): %s", fullVersion)
 	}
 
-	return major < 5 || major == 5 && minor <= 4, nil
+	return major < 5 || major == 5 && minor <= 15, nil
 }
