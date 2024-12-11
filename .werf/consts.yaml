@@ -7,6 +7,5 @@
 
 # component versions
 {{- $versions := dict }}
-# {{- $_ := set $versions "DRBD" "9.2.10" }}
 
 {{- $_ := set $ "VERSIONS" $versions }}
