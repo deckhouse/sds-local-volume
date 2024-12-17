@@ -1,10 +1,6 @@
-{{- $_ := set . "BASE_GOLANG" "registry.deckhouse.io/base_images/golang:1.23.1-alpine3.20@sha256:716820a183116e643839611ff9eca9bd1c92d2bf8f7a5eda2f9fd16e8acbaa72" }}
-{{- $_ := set . "BASE_SCRATCH"    "registry.deckhouse.io/base_images/scratch@sha256:b054705fcc9f2205777d80a558d920c0b4209efdc3163c22b5bfcb5dda1db5fc" }}
-
 ---
 image: {{ $.ImageName }}-golang-artifact
-from: {{ $.BASE_GOLANG }}
-fromCacheVersion: 202408091334349
+from: {{ $.Root.BASE_GOLANG_1_23 }}
 final: false
 
 git:
@@ -28,7 +24,7 @@ shell:
 
 ---
 image: {{ $.ImageName }}
-from: {{ $.BASE_SCRATCH }}
+from: {{ $.Root.BASE_SCRATCH }}
 
 import:
   - image: {{ $.ImageName }}-golang-artifact
