@@ -5,8 +5,6 @@ package driver
 import (
 	"context"
 	"fmt"
-	"sds-local-volume-csi/internal"
-	"sds-local-volume-csi/pkg/utils"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -17,6 +15,9 @@ import (
 	"google.golang.org/grpc/status"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	"sds-local-volume-csi/internal"
+	"sds-local-volume-csi/pkg/utils"
 )
 
 func init() {

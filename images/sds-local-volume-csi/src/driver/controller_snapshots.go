@@ -8,13 +8,12 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
-func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+func (d *Driver) CreateSnapshot(_ context.Context, _ *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	d.log.Info("call method CreateSnapshot")
 	return nil, nil
-
 }
 
-func (d *Driver) DeleteSnapshot(ctx context.Context, request *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+func (d *Driver) DeleteSnapshot(_ context.Context, _ *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
 	d.log.Info("call method DeleteSnapshot")
 	return nil, nil
 }
