@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -147,18 +146,13 @@ func (d *Driver) Run(ctx context.Context) error {
 	d.ready = true
 	d.log.Info(fmt.Sprintf("grpc_addr %s http_addr %s starting server", grpcAddr, d.address))
 
-	var eg errgroup.Group
-	eg.Go(func() error {
-		go func() {
-			<-ctx.Done()
-			d.log.Info("server stopped")
-			d.readyMu.Lock()
-			d.ready = false
-			d.readyMu.Unlock()
-			d.srv.GracefulStop()
-		}()
-		return d.srv.Serve(grpcListener)
-	})
-
-	return eg.Wait()
+	go func() {
+		<-ctx.Done()
+		d.log.Info("server stopped")
+		d.readyMu.Lock()
+		d.ready = false
+		d.readyMu.Unlock()
+		d.srv.GracefulStop()
+	}()
+	return d.srv.Serve(grpcListener)
 }
