@@ -18,10 +18,8 @@ package driver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -62,9 +60,8 @@ type Driver struct {
 	hostID            string
 	waitActionTimeout time.Duration
 
-	srv     *grpc.Server
-	httpSrv http.Server
-	log     *logger.Logger
+	srv *grpc.Server
+	log *logger.Logger
 
 	readyMu      sync.Mutex // protects ready
 	ready        bool
@@ -147,28 +144,10 @@ func (d *Driver) Run(ctx context.Context) error {
 	csi.RegisterControllerServer(d.srv, d)
 	csi.RegisterNodeServer(d.srv, d)
 
-	httpListener, err := net.Listen("tcp", d.address)
-	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	d.httpSrv = http.Server{
-		Handler: mux,
-	}
-
 	d.ready = true
 	d.log.Info(fmt.Sprintf("grpc_addr %s http_addr %s starting server", grpcAddr, d.address))
 
 	var eg errgroup.Group
-	eg.Go(func() error {
-		<-ctx.Done()
-		return d.httpSrv.Shutdown(context.Background())
-	})
 	eg.Go(func() error {
 		go func() {
 			<-ctx.Done()
@@ -179,13 +158,6 @@ func (d *Driver) Run(ctx context.Context) error {
 			d.srv.GracefulStop()
 		}()
 		return d.srv.Serve(grpcListener)
-	})
-	eg.Go(func() error {
-		err := d.httpSrv.Serve(httpListener)
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return err
 	})
 
 	return eg.Wait()
