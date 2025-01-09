@@ -1,4 +1,21 @@
 ---
+image: {{ $.ImageName }}-src-artifact
+from: {{ $.BASE_ALT }}
+final: false
+
+git:
+  - add: /images/{{ $.ImageName }}
+    to: /
+    stageDependencies:
+      install:
+        - "**/*"
+    includePaths:
+      - patches
+
+shell:
+  install:
+    - echo "src artifact"
+---
 image: {{ $.ImageName }}-golang-artifact
 from: {{ $.Root.BASE_GOLANG_1_23 }}
 final: false
