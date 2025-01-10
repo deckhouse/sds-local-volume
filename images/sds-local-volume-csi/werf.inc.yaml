@@ -29,7 +29,7 @@ import:
   - image: {{ $.ImageName }}-src-artifact
     add: /
     to: /
-    before: setup
+    before: install #setup
 
 mount:
   - fromPath: ~/go-pkg-cache
@@ -48,7 +48,7 @@ import:
   - image: {{ $.ImageName }}-golang-artifact
     add: /{{ $.ImageName }}
     to: /{{ $.ImageName }}
-    before: setup
+    before: install #setup
 
 shell:
   beforeInstall:
