@@ -1,26 +1,44 @@
+# Required for external analytics. Do not remove!
+---
+image: {{ $.ImageName }}-src-artifact
+from: {{ $.Root.BASE_ALT }}
+final: false
+
+git:
+  - add: /images/{{ $.ImageName }}/src
+    to: /src/images/{{ $.ImageName }}/src
+    stageDependencies:
+      install:
+        - "**/*"
+  - add: /api
+    to: /src/api
+    stageDependencies:
+      install:
+        - "**/*"
+
+shell:
+  install:
+    - echo "src artifact"
+
 ---
 image: {{ $.ImageName }}-golang-artifact
 from: {{ $.Root.BASE_GOLANG_1_23 }}
 final: false
 
-git:
-  - add: /
+import:
+  - image: {{ $.ImageName }}-src-artifact
+    add: /
     to: /
-    includePaths:
-      - api
-      - images/sds-local-volume-csi/src
-    stageDependencies:
-      setup:
-        - "**/*"
+    before: setup
 
 mount:
   - fromPath: ~/go-pkg-cache
     to: /go/pkg
 shell:
   setup:
-    - cd /images/sds-local-volume-csi/src/cmd
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /sds-local-volume-csi
-    - chmod +x /sds-local-volume-csi
+    - cd /src/images/{{ $.ImageName }}/src/cmd
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
+    - chmod +x /{{ $.ImageName }}
 
 ---
 image: {{ $.ImageName }}
@@ -28,8 +46,8 @@ from: {{ $.Root.BASE_ALT_P11 }}
 
 import:
   - image: {{ $.ImageName }}-golang-artifact
-    add: /sds-local-volume-csi
-    to: /sds-local-volume-csi
+    add: /{{ $.ImageName }}
+    to: /{{ $.ImageName }}
     before: setup
 
 shell:
@@ -42,4 +60,4 @@ shell:
       && rm -rf /var/lib/apt/lists/*
 
 docker:
-  ENTRYPOINT: ["/sds-local-volume-csi"]
+  ENTRYPOINT: ["/{{ $.ImageName }}"] #["/sds-local-volume-csi"]

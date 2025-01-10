@@ -1,24 +1,46 @@
 {{- $csiBinaries := "/usr/bin/curl" }}
+# Required for external analytics. Do not remove!
+---
+image: {{ $.ImageName }}-src-artifact
+from: {{ $.Root.BASE_ALT }}
+final: false
+
+git:
+  - add: /images/{{ $.ImageName }}/src
+    to: /src/images/{{ $.ImageName }}/src
+    stageDependencies:
+      install:
+        - "**/*"
+  - add: /api
+    to: /src/api
+    stageDependencies:
+      install:
+        - "**/*"
+
+shell:
+  install:
+    - echo "src artifact"
+
 ---
 image: {{ $.ImageName }}-golang-artifact
 from: {{ $.Root.BASE_GOLANG_1_23 }}
 final: false
 
-git:
-  - add: /images/sds-local-volume-scheduler-extender/src
-    to: /src
-    stageDependencies:
-      setup:
-        - "**/*"
+import:
+  - image: {{ $.ImageName }}-src-artifact
+    add: /
+    to: /
+    before: setup
+
 mount:
   - fromPath: ~/go-pkg-cache
     to: /go/pkg
 shell:
   setup:
-    - cd /src/cmd
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o sds-local-volume-scheduler-extender
-    - mv sds-local-volume-scheduler-extender /sds-local-volume-scheduler-extender
-    - chmod +x /sds-local-volume-scheduler-extender
+    - cd /src/images/{{ $.ImageName }}/src/cmd
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
+#    - mv sds-local-volume-scheduler-extender /sds-local-volume-scheduler-extender
+    - chmod +x /{{ $.ImageName }}
 
 ---
 image: {{ $.ImageName }}-binaries-artifact
@@ -66,8 +88,8 @@ fromImage: {{ $.ImageName }}-distroless
 
 import:
   - image: {{ $.ImageName }}-golang-artifact
-    add: /sds-local-volume-scheduler-extender
-    to: /sds-local-volume-scheduler-extender
+    add: /{{ $.ImageName }}
+    to: /{{ $.ImageName }}
     before: setup
   - image: {{ $.ImageName }}-binaries-artifact
     add: /relocate
@@ -76,4 +98,4 @@ import:
     includePaths:
       - '**/*'
 docker:
-  ENTRYPOINT: ["/sds-local-volume-scheduler-extender"]
+  ENTRYPOINT: ["/{{ $.ImageName }}"]
