@@ -50,7 +50,7 @@ final: false
 shell:
   install:
     # Make BASE_ALT BASE_ALT_DEV
-    - apt-get install -y make automake pkg-config gcc libtool git curl
+    #- apt-get install -y automake pkg-config gcc libtool git curl
     - /binary_replace.sh -i "{{ $csiBinaries }}" -o /relocate
 
 ---
@@ -59,9 +59,6 @@ from: {{ $.Root.BASE_ALT_P11 }}
 final: false
 
 shell:
-  beforeInstall:
-    # Make BASE_ALT BASE_ALT_DEV
-    - apt-get install -y make automake pkg-config gcc libtool git curl
   install:
     - mkdir -p /relocate/bin /relocate/sbin /relocate/etc /relocate/etc/ssl /relocate/usr/bin /relocate/usr/sbin /relocate/usr/share
     - cp -pr /tmp /relocate
