@@ -47,8 +47,19 @@ image: {{ $.ImageName }}-binaries-artifact
 from: {{ $.Root.BASE_ALT_P11 }}
 final: false
 
+git:
+  - add: /tools/dev_images/additional_tools/binary_replace.sh
+    to: /binary_replace.sh
+    stageDependencies:
+      install:
+        - '**/*'
+
 shell:
   install:
+    - apt-get update
+    - apt-get -y install glibc-utils mount nfs-utils
+    - rm -rf /var/lib/apt/lists/* /var/cache/apt/* && mkdir -p /var/lib/apt/lists/partial /var/cache/apt/archives/partial
+    - chmod +x /binary_replace.sh
     - /binary_replace.sh -i "{{ $csiBinaries }}" -o /relocate
 
 ---
