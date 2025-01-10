@@ -59,7 +59,7 @@ from: {{ $.Root.BASE_ALT_P11 }}
 final: false
 
 shell:
-  before install:
+  beforeInstall:
     # Make BASE_ALT BASE_ALT_DEV
     - apt-get install -y make automake pkg-config gcc libtool git curl
   install:

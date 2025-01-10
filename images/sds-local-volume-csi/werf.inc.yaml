@@ -61,4 +61,4 @@ shell:
       && rm -rf /var/lib/apt/lists/*
 
 docker:
-  ENTRYPOINT: ["/{{ $.ImageName }}"] #["/sds-local-volume-csi"]
+  ENTRYPOINT: ["/{{ $.ImageName }}"]
