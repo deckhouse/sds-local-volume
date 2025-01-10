@@ -31,7 +31,8 @@ git:
     #   - api
     #   - src
     stageDependencies:
-      setup:
+      #setup:
+      install:
         - "**/*"
 
 mount:

@@ -30,7 +30,7 @@ import:
   - image: {{ $.ImageName }}-src-artifact
     add: /
     to: /
-    before: setup
+    before: install #setup
 
 mount:
   - fromPath: ~/go-pkg-cache
@@ -80,7 +80,7 @@ import:
   - image: {{ $.ImageName }}-distroless-artifact
     add: /relocate
     to: /
-    before: setup
+    before: install #setup
 
 ---
 image: {{ $.ImageName }}
@@ -90,7 +90,7 @@ import:
   - image: {{ $.ImageName }}-golang-artifact
     add: /{{ $.ImageName }}
     to: /{{ $.ImageName }}
-    before: setup
+    before: install #setup
   - image: {{ $.ImageName }}-binaries-artifact
     add: /relocate
     to: /
