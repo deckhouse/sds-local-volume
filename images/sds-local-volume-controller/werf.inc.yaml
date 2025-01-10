@@ -1,20 +1,24 @@
 ---
 image: {{ $.ImageName }}-src-artifact
-from: {{ $.BASE_ALT }}
+from: {{ $.Root.BASE_ALT }}
 final: false
 
 git:
-  - add: /images/{{ $.ImageName }}
-    to: /
+  - add: /images/{{ $.ImageName }}/src
+    to: /src/images/{{ $.ImageName }}/src
     stageDependencies:
       install:
         - "**/*"
-    includePaths:
-      - patches
+  - add: /api
+    to: /src/api
+    stageDependencies:
+      install:
+        - "**/*"
 
 shell:
   install:
     - echo "src artifact"
+
 ---
 image: {{ $.ImageName }}-golang-artifact
 from: {{ $.Root.BASE_GOLANG_1_23 }}
@@ -23,9 +27,9 @@ final: false
 git:
   - add: /
     to: /
-    includePaths:
-      - api
-      - images/sds-local-volume-controller/src
+    # includePaths:
+    #   - api
+    #   - src
     stageDependencies:
       setup:
         - "**/*"
@@ -35,9 +39,9 @@ mount:
     to: /go/pkg
 shell:
   setup:
-    - cd /images/sds-local-volume-controller/src/cmd
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /sds-local-volume-controller
-    - chmod +x /sds-local-volume-controller
+    - cd /src/images/{{ $.ImageName }}/src/cmd
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
+    - chmod +x /{{ $.ImageName }}
 
 ---
 image: {{ $.ImageName }}
@@ -45,9 +49,9 @@ from: {{ $.Root.BASE_SCRATCH }}
 
 import:
   - image: {{ $.ImageName }}-golang-artifact
-    add: /sds-local-volume-controller
-    to: /sds-local-volume-controller
+    add: /{{ $.ImageName }}
+    to: /{{ $.ImageName }}
     before: setup
 
 docker:
-  ENTRYPOINT: ["/sds-local-volume-controller"]
+  ENTRYPOINT: ["/{{ $.ImageName }}"]

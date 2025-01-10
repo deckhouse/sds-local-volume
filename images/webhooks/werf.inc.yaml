@@ -1,32 +1,54 @@
+# Required for external analytics. Do not remove!
+---
+image: {{ $.ImageName }}-src-artifact
+from: {{ $.Root.BASE_ALT }}
+final: false
+
+git:
+  - add: /images/{{ $.ImageName }}/src
+    to: /src/images/{{ $.ImageName }}/src
+    stageDependencies:
+      install:
+        - "**/*"
+  - add: /api
+    to: /src/api
+    stageDependencies:
+      install:
+        - "**/*"
+
+shell:
+  install:
+    - echo "src artifact"
+
 ---
 image: {{ $.ImageName }}-golang-artifact
 from: {{ $.Root.BASE_GOLANG_1_23 }}
 final: false
 
-git:
-  - add: /images/webhooks/src
-    to: /src
-    stageDependencies:
-      setup:
-        - "**/*"
+import:
+  - image: {{ $.ImageName }}-src-artifact
+    add: /
+    to: /
+    before: setup
+
 mount:
   - fromPath: ~/go-pkg-cache
     to: /go/pkg
 shell:
   setup:
-    - cd /src
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o webhooks
-    - mv webhooks /webhooks
-    - chmod +x /webhooks
+    - cd /src/images/{{ $.ImageName }}/src
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
+#    - mv webhooks /webhooks
+    - chmod +x /{{ $.ImageName }}
 ---
 image: {{ $.ImageName }}
 from: {{ $.Root.BASE_SCRATCH }}
 
 import:
   - image: {{ $.ImageName }}-golang-artifact
-    add: /webhooks
-    to: /webhooks
+    add: /{{ $.ImageName }}
+    to: /{{ $.ImageName }}
     before: setup
 
 docker:
-  ENTRYPOINT: ["/webhooks"]
+  ENTRYPOINT: ["/{{ $.ImageName }}"]
