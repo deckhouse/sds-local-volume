@@ -44,20 +44,24 @@ shell:
 
 ---
 image: {{ $.ImageName }}-binaries-artifact
-from: {{ $.Root.BASE_ALT_DEV }}
+from: {{ $.Root.BASE_ALT_P11 }}
 final: false
 
 shell:
   install:
-    - apt-get install curl
+    # Make BASE_ALT BASE_ALT_DEV
+    - apt-get install -y make automake pkg-config gcc libtool git curl
     - /binary_replace.sh -i "{{ $csiBinaries }}" -o /relocate
 
 ---
 image: {{ $.ImageName }}-distroless-artifact
-from: {{ $.Root.BASE_ALT_DEV }}
+from: {{ $.Root.BASE_ALT_P11 }}
 final: false
 
 shell:
+  before install:
+    # Make BASE_ALT BASE_ALT_DEV
+    - apt-get install -y make automake pkg-config gcc libtool git curl
   install:
     - mkdir -p /relocate/bin /relocate/sbin /relocate/etc /relocate/etc/ssl /relocate/usr/bin /relocate/usr/sbin /relocate/usr/share
     - cp -pr /tmp /relocate
