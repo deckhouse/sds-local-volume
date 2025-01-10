@@ -49,8 +49,6 @@ final: false
 
 shell:
   install:
-    # Make BASE_ALT BASE_ALT_DEV
-    #- apt-get install -y automake pkg-config gcc libtool git curl
     - /binary_replace.sh -i "{{ $csiBinaries }}" -o /relocate
 
 ---
@@ -63,7 +61,7 @@ shell:
     - mkdir -p /relocate/bin /relocate/sbin /relocate/etc /relocate/etc/ssl /relocate/usr/bin /relocate/usr/sbin /relocate/usr/share
     - cp -pr /tmp /relocate
     - cp -pr /etc/passwd /etc/group /etc/hostname /etc/hosts /etc/shadow /etc/protocols /etc/services /etc/nsswitch.conf /relocate/etc
-    - cp -pr /usr/share/ca-certificates /relocate/usr/share
+    #- cp -pr /usr/share/ca-certificates /relocate/usr/share
     - cp -pr /usr/share/zoneinfo /relocate/usr/share
     # changed from /etc/ssl/* to ALTLinux specific
     - cp -pr /etc/pki/tls/cert.pem /relocate/etc/ssl
