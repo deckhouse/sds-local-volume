@@ -53,10 +53,10 @@ import:
 shell:
   beforeInstall:
     - export DEBIAN_FRONTEND=noninteractive
+    - apt-get update
     - apt-get install -y curl # make automake pkg-config gcc libtool git
     - |
-      apt-get update \
-      && apt-get -y install lvm2 e2fsprogs xfsprogs \
+      apt-get -y install lvm2 e2fsprogs xfsprogs \
       && apt-get clean \
       && rm -rf /var/lib/apt/lists/*
 
