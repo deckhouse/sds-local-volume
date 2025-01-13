@@ -57,7 +57,7 @@ git:
 shell:
   install:
     - apt-get update
-    - apt-get -y install glibc-utils mount nfs-utils
+    - apt-get -y install glibc-utils mount nfs-utils curl
     - rm -rf /var/lib/apt/lists/* /var/cache/apt/* && mkdir -p /var/lib/apt/lists/partial /var/cache/apt/archives/partial
     - chmod +x /binary_replace.sh
     - /binary_replace.sh -i "{{ $csiBinaries }}" -o /relocate
