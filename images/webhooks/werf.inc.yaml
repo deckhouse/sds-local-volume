@@ -27,9 +27,9 @@ final: false
 
 import:
   - image: {{ $.ImageName }}-src-artifact
-    add: /
-    to: /
-    before: install #setup
+    add: /src
+    to: /src
+    before: install
 
 mount:
   - fromPath: ~/go-pkg-cache
@@ -38,7 +38,6 @@ shell:
   setup:
     - cd /src/images/{{ $.ImageName }}/src
     - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
-#    - mv webhooks /webhooks
     - chmod +x /{{ $.ImageName }}
 ---
 image: {{ $.ImageName }}
@@ -48,7 +47,7 @@ import:
   - image: {{ $.ImageName }}-golang-artifact
     add: /{{ $.ImageName }}
     to: /{{ $.ImageName }}
-    before: install #setup
+    before: install
 
 docker:
   ENTRYPOINT: ["/{{ $.ImageName }}"]

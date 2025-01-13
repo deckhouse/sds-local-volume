@@ -28,8 +28,8 @@ final: false
 
 import:
   - image: {{ $.ImageName }}-src-artifact
-    add: /
-    to: /
+    add: /src
+    to: /src
     before: install
 
 mount:
@@ -39,7 +39,6 @@ shell:
   setup:
     - cd /src/images/{{ $.ImageName }}/src/cmd
     - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
-#    - mv sds-local-volume-scheduler-extender /sds-local-volume-scheduler-extender
     - chmod +x /{{ $.ImageName }}
 
 ---
