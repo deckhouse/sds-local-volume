@@ -26,8 +26,8 @@ final: false
 
 import:
   - image: {{ $.ImageName }}-src-artifact
-    add: /
-    to: /
+    add: /src
+    to: /src
     before: install
 
 mount:
