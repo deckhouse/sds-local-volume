@@ -1,6 +1,6 @@
 module webhooks
 
-go 1.22.3
+go 1.23.4
 
 require (
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20241030133552-b9f48131ef9f
