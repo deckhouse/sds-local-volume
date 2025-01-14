@@ -54,14 +54,14 @@ shell:
   beforeInstall:
     - export DEBIAN_FRONTEND=noninteractive
     - apt-get update
-    - apt-get install -y curl # make automake pkg-config gcc libtool git
+    - apt-get install -y curl
     - |
       apt-get -y install lvm2 e2fsprogs xfsprogs \
       && apt-get clean \
       && rm -rf /var/lib/apt/lists/*
-    - echo "deckhouse:x:64535:64535:deckhouse:/:/sbin/nologin" >> /relocate/etc/passwd
-    - echo "deckhouse:x:64535:" >> /relocate/etc/group
-    - echo "deckhouse:!::0:::::" >> /relocate/etc/shadow
+    - echo "deckhouse:x:64535:64535:deckhouse:/:/sbin/nologin" >> /etc/passwd
+    - echo "deckhouse:x:64535:" >> /etc/group
+    - echo "deckhouse:!::0:::::" >> /etc/shadow
 
 docker:
   ENTRYPOINT: ["/{{ $.ImageName }}"]
