@@ -1,26 +1,44 @@
+# Required for external analytics. Do not remove!
+---
+image: {{ $.ImageName }}-src-artifact
+from: {{ $.Root.BASE_ALT_P11 }}
+final: false
+
+git:
+  - add: /images/{{ $.ImageName }}/src
+    to: /src/images/{{ $.ImageName }}/src
+    stageDependencies:
+      install:
+        - "**/*"
+  - add: /api
+    to: /src/api
+    stageDependencies:
+      install:
+        - "**/*"
+
+shell:
+  install:
+    - echo "src artifact"
+
 ---
 image: {{ $.ImageName }}-golang-artifact
 from: {{ $.Root.BASE_GOLANG_1_23 }}
 final: false
 
-git:
-  - add: /
-    to: /
-    includePaths:
-      - api
-      - images/sds-local-volume-csi/src
-    stageDependencies:
-      setup:
-        - "**/*"
+import:
+  - image: {{ $.ImageName }}-src-artifact
+    add: /src
+    to: /src
+    before: install
 
 mount:
   - fromPath: ~/go-pkg-cache
     to: /go/pkg
 shell:
   setup:
-    - cd /images/sds-local-volume-csi/src/cmd
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /sds-local-volume-csi
-    - chmod +x /sds-local-volume-csi
+    - cd /src/images/{{ $.ImageName }}/src/cmd
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
+    - chmod +x /{{ $.ImageName }}
 
 ---
 image: {{ $.ImageName }}
@@ -28,18 +46,23 @@ from: {{ $.Root.BASE_ALT_P11 }}
 
 import:
   - image: {{ $.ImageName }}-golang-artifact
-    add: /sds-local-volume-csi
-    to: /sds-local-volume-csi
-    before: setup
+    add: /{{ $.ImageName }}
+    to: /{{ $.ImageName }}
+    before: install
 
 shell:
   beforeInstall:
     - export DEBIAN_FRONTEND=noninteractive
+    - apt-get update
+    - apt-get install -y curl
     - |
-      apt-get update \
-      && apt-get -y install lvm2 e2fsprogs xfsprogs \
+      apt-get -y install lvm2 e2fsprogs xfsprogs \
       && apt-get clean \
       && rm -rf /var/lib/apt/lists/*
+    - echo "deckhouse:x:64535:64535:deckhouse:/:/sbin/nologin" >> /etc/passwd
+    - echo "deckhouse:x:64535:" >> /etc/group
+    - echo "deckhouse:!::0:::::" >> /etc/shadow
 
 docker:
-  ENTRYPOINT: ["/sds-local-volume-csi"]
+  ENTRYPOINT: ["/{{ $.ImageName }}"]
+  USER: deckhouse:deckhouse

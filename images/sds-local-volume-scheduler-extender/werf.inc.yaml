@@ -1,42 +1,75 @@
 {{- $csiBinaries := "/usr/bin/curl" }}
+# Required for external analytics. Do not remove!
+---
+image: {{ $.ImageName }}-src-artifact
+from: {{ $.Root.BASE_ALT }}
+final: false
+
+git:
+  - add: /images/{{ $.ImageName }}/src
+    to: /src/images/{{ $.ImageName }}/src
+    stageDependencies:
+      install:
+        - "**/*"
+  - add: /api
+    to: /src/api
+    stageDependencies:
+      install:
+        - "**/*"
+
+shell:
+  install:
+    - echo "src artifact"
+
 ---
 image: {{ $.ImageName }}-golang-artifact
 from: {{ $.Root.BASE_GOLANG_1_23 }}
 final: false
 
-git:
-  - add: /images/sds-local-volume-scheduler-extender/src
+import:
+  - image: {{ $.ImageName }}-src-artifact
+    add: /src
     to: /src
-    stageDependencies:
-      setup:
-        - "**/*"
+    before: install
+
 mount:
   - fromPath: ~/go-pkg-cache
     to: /go/pkg
 shell:
   setup:
-    - cd /src/cmd
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o sds-local-volume-scheduler-extender
-    - mv sds-local-volume-scheduler-extender /sds-local-volume-scheduler-extender
-    - chmod +x /sds-local-volume-scheduler-extender
+    - cd /src/images/{{ $.ImageName }}/src/cmd
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
+    - chmod +x /{{ $.ImageName }}
 
 ---
 image: {{ $.ImageName }}-binaries-artifact
-from: {{ $.Root.BASE_ALT_DEV }}
+from: {{ $.Root.BASE_ALT }}
 final: false
+
+git:
+  - add: /tools/dev_images/additional_tools/binary_replace.sh
+    to: /binary_replace.sh
+    stageDependencies:
+      install:
+        - '**/*'
 
 shell:
   install:
-    - apt-get install curl
+    - apt-get update
+    - apt-get -y install glibc-utils mount nfs-utils curl
+    - rm -rf /var/lib/apt/lists/* /var/cache/apt/* && mkdir -p /var/lib/apt/lists/partial /var/cache/apt/archives/partial
+    - chmod +x /binary_replace.sh
     - /binary_replace.sh -i "{{ $csiBinaries }}" -o /relocate
 
 ---
 image: {{ $.ImageName }}-distroless-artifact
-from: {{ $.Root.BASE_ALT_DEV }}
+from: {{ $.Root.BASE_ALT }}
 final: false
 
 shell:
   install:
+    - apt-get update
+    - apt-get -y install ca-certificates tzdata
     - mkdir -p /relocate/bin /relocate/sbin /relocate/etc /relocate/etc/ssl /relocate/usr/bin /relocate/usr/sbin /relocate/usr/share
     - cp -pr /tmp /relocate
     - cp -pr /etc/passwd /etc/group /etc/hostname /etc/hosts /etc/shadow /etc/protocols /etc/services /etc/nsswitch.conf /relocate/etc
@@ -58,7 +91,7 @@ import:
   - image: {{ $.ImageName }}-distroless-artifact
     add: /relocate
     to: /
-    before: setup
+    before: install
 
 ---
 image: {{ $.ImageName }}
@@ -66,9 +99,9 @@ fromImage: {{ $.ImageName }}-distroless
 
 import:
   - image: {{ $.ImageName }}-golang-artifact
-    add: /sds-local-volume-scheduler-extender
-    to: /sds-local-volume-scheduler-extender
-    before: setup
+    add: /{{ $.ImageName }}
+    to: /{{ $.ImageName }}
+    before: install
   - image: {{ $.ImageName }}-binaries-artifact
     add: /relocate
     to: /
@@ -76,4 +109,5 @@ import:
     includePaths:
       - '**/*'
 docker:
-  ENTRYPOINT: ["/sds-local-volume-scheduler-extender"]
+  ENTRYPOINT: ["/{{ $.ImageName }}"]
+  USER: deckhouse:deckhouse
