@@ -1,3 +1,5 @@
+{{- $csiBinaries := "/usr/bin/curl" }}
+# Required for external analytics. Do not remove!
 ---
 image: {{ $.ImageName }}-src-artifact
 from: {{ $.Root.BASE_ALT }}
