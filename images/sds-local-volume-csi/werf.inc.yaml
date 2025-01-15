@@ -58,7 +58,7 @@ git:
 shell:
   install:
     - apt-get update
-    - apt-get -y install glibc-utils glibc-core glibc-nss mount nfs-utils curl ca-certificates tzdata curl lvm2 e2fsprogs xfsprogs
+    - apt-get -y install glibc-utils glibc-core glibc-nss mount nfs-utils curl curl lvm2 e2fsprogs xfsprogs
     - rm -rf /var/lib/apt/lists/* /var/cache/apt/* && mkdir -p /var/lib/apt/lists/partial /var/cache/apt/archives/partial
     - chmod +x /binary_replace.sh
     - /binary_replace.sh -i "{{ $csiBinaries }}" -o /relocate
@@ -71,7 +71,7 @@ final: false
 shell:
   install:
     - apt-get update
-    - apt-get -y install
+    - apt-get -y install ca-certificates tzdata 
     - mkdir -p /relocate/bin /relocate/sbin /relocate/etc /relocate/etc/ssl /relocate/usr/bin /relocate/usr/sbin /relocate/usr/share
     - cp -pr /tmp /relocate
     - cp -pr /etc/passwd /etc/group /etc/hostname /etc/hosts /etc/shadow /etc/protocols /etc/services /etc/nsswitch.conf /relocate/etc
