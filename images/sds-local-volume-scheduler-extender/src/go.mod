@@ -3,8 +3,8 @@ module sds-local-volume-scheduler-extender
 go 1.23.4
 
 require (
-	github.com/deckhouse/sds-local-volume/api v0.0.0-20241030133552-b9f48131ef9f
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20241205120718-db6ffba1689b
+	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20250114161813-c1a8b09cd47d
 	github.com/go-logr/logr v1.4.2
 	github.com/go-logr/zapr v1.3.0
 	github.com/spf13/cobra v1.8.1
