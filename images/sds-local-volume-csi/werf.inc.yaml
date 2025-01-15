@@ -45,7 +45,7 @@ shell:
 
 ---
 image: {{ $.ImageName }}-binaries-artifact
-from: {{ $.Root.BASE_ALT }}
+from: {{ $.Root.BASE_ALT_P11 }}
 final: false
 
 git:
