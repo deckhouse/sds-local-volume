@@ -3,8 +3,8 @@ module webhooks
 go 1.23.4
 
 require (
-	github.com/deckhouse/sds-local-volume/api v0.0.0-20241030133552-b9f48131ef9f
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20241205120718-db6ffba1689b
+	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20250114161813-c1a8b09cd47d
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slok/kubewebhook/v2 v2.6.0
 	k8s.io/api v0.30.3
