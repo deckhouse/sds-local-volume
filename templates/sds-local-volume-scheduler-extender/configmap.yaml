@@ -1,5 +1,3 @@
-{{- $dhVersion := .Values.global.deckhouseVersion }}
-{{- $dhVersionIsDev := or (hasPrefix "dev" $dhVersion) (hasSuffix "dev" $dhVersion) }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -24,7 +22,8 @@ data:
     log-level: "4"
     {{- end }}
 
-{{- if and (not $dhVersionIsDev) (semverCompare "<1.64" $dhVersion) }}
+{{- $dhVersionIsDev := or (hasPrefix "dev" .Values.global.deckhouseVersion) (hasSuffix "dev" .Values.global.deckhouseVersion) }}
+{{- if and (not $dhVersionIsDev) (semverCompare "<1.64" .Values.global.deckhouseVersion) }}
 ---
 apiVersion: v1
 kind: ConfigMap
