@@ -1,4 +1,7 @@
-{{- if or (or (hasPrefix "dev" .Values.global.deckhouseVersion) (hasSuffix "dev" .Values.global.deckhouseVersion)) (semverCompare ">=1.64" .Values.global.deckhouseVersion) }}
+{{- $dhVersion := .Values.global.deckhouseVersion }}
+{{- $dhVersionIsDev := or (hasPrefix "dev" $dhVersion) (hasSuffix "dev" $dhVersion) }}
+
+{{- if or $dhVersionIsDev (semverCompare ">=1.64" $dhVersion) }}
 apiVersion: deckhouse.io/v1alpha1
 kind: KubeSchedulerWebhookConfiguration
 metadata:

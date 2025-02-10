@@ -1,4 +1,7 @@
-{{- if and (not (or (hasPrefix "dev" .Values.global.deckhouseVersion) (hasSuffix "dev" .Values.global.deckhouseVersion))) (semverCompare "<1.64" .Values.global.deckhouseVersion) }}
+{{- $dhVersion := .Values.global.deckhouseVersion }}
+{{- $dhVersionIsDev := or (hasPrefix "dev" $dhVersion) (hasSuffix "dev" $dhVersion) }}
+
+{{- if and (not $dhVersionIsDev) (semverCompare "<1.64" $dhVersion) }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
