@@ -1,7 +1,6 @@
 ---
 title: "The sds-local-volume module"
 description: "The sds-local-volume module: General Concepts and Principles."
-moduleStatus: preview
 ---
 
 The module manages local block storage based on LVM. It enables the creation of StorageClasses in Kubernetes using [LocalStorageClass](cr.html#localstorageclass) custom resources.
