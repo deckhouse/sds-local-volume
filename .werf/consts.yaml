@@ -5,8 +5,8 @@
 {{- $_ := set $ "BASE_GOLANG_1_23" "registry.deckhouse.io/base_images/golang:1.23.4-bookworm@sha256:a9147a48ac5e925a66764afae7cf4b1cfd37a6e94ad7519eca74c1fd8993ae45" }}
 {{- $_ := set $ "BASE_SCRATCH"     "registry.deckhouse.io/base_images/scratch@sha256:653ae76965c98c8cd1c8c9ff7725316d2983986f896655b30e0f44d2f8b2dd7e" }}
 
-# Edition module settings, default EE
-{{- $_ := set . "MODULE_EDITION" (env "MODULE_EDITION" "EE") }}
+# Edition module settings, default ce
+{{- $_ := set . "MODULE_EDITION" (env "MODULE_EDITION" "ce") }}
 
 # component versions
 {{- $versions := dict }}
