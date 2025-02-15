@@ -26,7 +26,7 @@ require (
 require (
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-00010101000000-000000000000
+	github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-20250215220933-9c8f9f5ab53d
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
