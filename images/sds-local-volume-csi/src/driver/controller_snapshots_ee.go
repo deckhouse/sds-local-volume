@@ -20,10 +20,6 @@ import (
 	"sds-local-volume-csi/pkg/utils"
 )
 
-func init() {
-	capabilities = append(capabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
-}
-
 func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	traceID := uuid.New().String()
 

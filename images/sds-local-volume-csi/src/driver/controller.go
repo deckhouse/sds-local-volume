@@ -31,20 +31,14 @@ import (
 
 	"sds-local-volume-csi/internal"
 	"sds-local-volume-csi/pkg/utils"
+
+	"github.com/deckhouse/sds-local-volume/lib/go/common/pkg/feature"
 )
 
 const (
 	sourceVolumeKindSnapshot = "LVMLogicalVolumeSnapshot"
 	sourceVolumeKindVolume   = "LVMLogicalVolume"
 )
-
-var capabilities = []csi.ControllerServiceCapability_RPC_Type{
-	csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
-	csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
-	csi.ControllerServiceCapability_RPC_GET_CAPACITY,
-	csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
-	csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
-}
 
 func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	traceID := uuid.New().String()
@@ -358,7 +352,20 @@ func (d *Driver) GetCapacity(_ context.Context, _ *csi.GetCapacityRequest) (*csi
 func (d *Driver) ControllerGetCapabilities(_ context.Context, _ *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	d.log.Info("method ControllerGetCapabilities")
 
+	var capabilities = []csi.ControllerServiceCapability_RPC_Type{
+		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+		csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
+		csi.ControllerServiceCapability_RPC_GET_CAPACITY,
+		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
+	}
+
+	if feature.SnapshotsEnabled() {
+		capabilities = append(capabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
+	}
+
 	csiCaps := make([]*csi.ControllerServiceCapability, len(capabilities))
+
 	for i, capability := range capabilities {
 		csiCaps[i] = &csi.ControllerServiceCapability{
 			Type: &csi.ControllerServiceCapability_Rpc{
