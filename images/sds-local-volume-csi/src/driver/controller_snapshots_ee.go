@@ -1,4 +1,4 @@
-//go:build EE
+//go:build ee
 
 package driver
 
