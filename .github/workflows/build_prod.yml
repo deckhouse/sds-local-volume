@@ -14,6 +14,10 @@ on:
     tags:
       - '**'
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   prod_ce_setup_build:
     runs-on: [self-hosted, regular, selectel]
@@ -22,14 +26,13 @@ jobs:
       - name: SET VAR
         run: |
           echo "MODULES_MODULE_SOURCE=$MODULES_REGISTRY/$MODULE_SOURCE_NAME/ce/modules" >> "$GITHUB_ENV"
-          echo "MODULE_EDITION=CE" >> "$GITHUB_ENV"
+          echo "MODULE_EDITION=ce" >> "$GITHUB_ENV"
       - run: |
           echo $MODULES_REGISTRY
           echo $MODULES_MODULE_NAME
           echo $MODULES_MODULE_SOURCE
           echo $MODULES_MODULE_TAG
           echo $MODULE_EDITION
-        shell: bash
         name: Show vars
 
       - uses: actions/checkout@v4
@@ -57,14 +60,13 @@ jobs:
       - name: SET VAR
         run: |
           echo "MODULES_MODULE_SOURCE=$MODULES_REGISTRY/$MODULE_SOURCE_NAME/ee/modules" >> "$GITHUB_ENV"
-          echo "MODULE_EDITION=EE" >> "$GITHUB_ENV"
+          echo "MODULE_EDITION=ee" >> "$GITHUB_ENV"
       - run: |
           echo $MODULES_REGISTRY
           echo $MODULES_MODULE_NAME
           echo $MODULES_MODULE_SOURCE
           echo $MODULES_MODULE_TAG
           echo $MODULE_EDITION
-        shell: bash
         name: Show vars
 
       - uses: actions/checkout@v4
@@ -92,14 +94,13 @@ jobs:
       - name: SET VAR
         run: |
           echo "MODULES_MODULE_SOURCE=$MODULES_REGISTRY/$MODULE_SOURCE_NAME/fe/modules" >> "$GITHUB_ENV"
-          echo "MODULE_EDITION=EE" >> "$GITHUB_ENV"
+          echo "MODULE_EDITION=ee" >> "$GITHUB_ENV"
       - run: |
           echo $MODULES_REGISTRY
           echo $MODULES_MODULE_NAME
           echo $MODULES_MODULE_SOURCE
           echo $MODULES_MODULE_TAG
           echo $MODULE_EDITION
-        shell: bash
         name: Show vars
 
       - uses: actions/checkout@v4
@@ -127,14 +128,13 @@ jobs:
       - name: SET VAR
         run: |
           echo "MODULES_MODULE_SOURCE=$MODULES_REGISTRY/$MODULE_SOURCE_NAME/se/modules" >> "$GITHUB_ENV"
-          echo "MODULE_EDITION=EE" >> "$GITHUB_ENV"
+          echo "MODULE_EDITION=se" >> "$GITHUB_ENV"
       - run: |
           echo $MODULES_REGISTRY
           echo $MODULES_MODULE_NAME
           echo $MODULES_MODULE_SOURCE
           echo $MODULES_MODULE_TAG
           echo $MODULE_EDITION
-        shell: bash
         name: Show vars
 
       - uses: actions/checkout@v4
@@ -162,14 +162,13 @@ jobs:
       - name: SET VAR
         run: |
           echo "MODULES_MODULE_SOURCE=$MODULES_REGISTRY/$MODULE_SOURCE_NAME/se-plus/modules" >> "$GITHUB_ENV"
-          echo "MODULE_EDITION=EE" >> "$GITHUB_ENV"
+          echo "MODULE_EDITION=seplus" >> "$GITHUB_ENV"
       - run: |
           echo $MODULES_REGISTRY
           echo $MODULES_MODULE_NAME
           echo $MODULES_MODULE_SOURCE
           echo $MODULES_MODULE_TAG
           echo $MODULE_EDITION
-        shell: bash
         name: Show vars
 
       - uses: actions/checkout@v4

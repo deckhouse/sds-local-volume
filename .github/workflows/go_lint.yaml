@@ -1,7 +1,7 @@
 name: Go linter for images
 
 env:
-  GO_BUILD_TAGS: "CE EE"
+  GO_BUILD_TAGS: "ce se seplus ee csepro"
 
 on:
   pull_request:
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23.4'
+          go-version: '1.23.5'
 
       - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
