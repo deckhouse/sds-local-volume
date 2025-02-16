@@ -17,6 +17,11 @@ git:
     stageDependencies:
       install:
         - "**/*"
+  - add: /lib/go
+    to: /src/lib/go
+    stageDependencies:
+      install:
+        - "**/*"
 
 shell:
   install:
