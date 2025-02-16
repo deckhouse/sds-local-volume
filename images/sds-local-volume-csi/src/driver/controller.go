@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/deckhouse/sds-local-volume/lib/go/common/pkg/feature"
 	"github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -31,8 +32,6 @@ import (
 
 	"sds-local-volume-csi/internal"
 	"sds-local-volume-csi/pkg/utils"
-
-	"github.com/deckhouse/sds-local-volume/lib/go/common/pkg/feature"
 )
 
 const (

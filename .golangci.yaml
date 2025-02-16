@@ -17,8 +17,6 @@ linters-settings:
       - prefix(sds-local-volume-csi)
       - prefix(sds-local-volume-scheduler-extender)
       - prefix(webhooks)
-  errcheck:
-    ignore: fmt:.*,[rR]ead|[wW]rite|[cC]lose,io:Copy
 
 linters:
   disable-all: true
