@@ -5,6 +5,7 @@ go 1.23.4
 require (
 	github.com/container-storage-interface/spec v1.10.0
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
+	github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-20250215220933-9c8f9f5ab53d
 	github.com/deckhouse/sds-node-configurator/api v0.0.0-20250114161813-c1a8b09cd47d // THIS MUST BE CHANGED TO ACTUAL MAIN BEFORE MERGE
 	github.com/go-logr/logr v1.4.2
 	github.com/golang/protobuf v1.5.4
@@ -22,8 +23,6 @@ require (
 	k8s.io/utils v0.0.0-20240902221715-702e33fdd3c3
 	sigs.k8s.io/controller-runtime v0.19.0
 )
-
-require github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-20250218123134-3e9df3f7d5bf
 
 require (
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
