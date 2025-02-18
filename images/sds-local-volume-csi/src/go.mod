@@ -23,6 +23,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.19.0
 )
 
+require github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-20250218123134-3e9df3f7d5bf
+
 require (
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
