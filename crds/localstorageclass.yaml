@@ -98,6 +98,9 @@ spec:
                         - rule: |
                             (!has(self.contiguous) || (has(self.contiguous) && self.contiguous == oldSelf.contiguous))
                           message: Field 'contiguous' is immutable and cannot be added if not specified at creation.
+                        - rule: |
+                            (!has(oldSelf.volumeCleanupMethod) || has(self.volumeCleanupMethod))
+                          message: "Field 'volumeCleanupMethod' cannot be removed."                          
                       description: |
                         Settings for Logical Volumes in a LVMVolumeGroup resource.
                       properties:
@@ -108,6 +111,15 @@ spec:
                               message: Value is immutable.
                           description: |
                             If true, the Logical Volume will be created with the contiguous flag. Note: This flag should be used with caution because it may lead to poor scheduling of pods using the Persistent Volume. Our scheduler checks the free space in VG and selects nodes with the most free space for pods. However, it cannot determine the maximum amount of sequential free space available. Consequently, there may be situations where a pod is scheduled to a node, but the volume cannot be created due to insufficient contiguous free space. If such a situation arises, manual intervention will be required.
+                        volumeCleanupMethod:
+                          type: string
+                          enum: [Disable, SinglePass, ThreePass, Discard]
+                          description: |
+                            The method of the volume cleanup before deletion.
+                            - `Disable`: Do not perform any additional actions when deleting the volume. The data may remain accessible to the next user.
+                            - `SinglePass`: The volume will be overwritten with random data once before deletion. This option is not recommended for solid-state drives, as it reduces the lifespan of the drive.
+                            - `ThreePass`: The volume will be overwritten with random data three times before deletion. This option is also not recommended for solid-state drives, as it reduces the lifespan of the drive.
+                            - `Discard`: All blocks of the volume will be marked as free using the `discard`` system call before deletion. This option is only applicable to solid-state drives.
                     lvmVolumeGroups:
                       type: array
                       description: |
