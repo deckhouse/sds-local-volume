@@ -75,12 +75,14 @@ spec:
       maxAllowed:
         cpu: 70m
         memory: 100Mi
+{{- if .Values.sdsLocalVolume.internal.featureSnapshotsEnabled }}
     - containerName: csi-snapshotter
       minAllowed:
         {{- include "csi_snapshotter_resources" . | nindent 8 }}
       maxAllowed:
         cpu: 20m
         memory: 50Mi
+{{- end }}
     - containerName: csi-livenessprobe
       minAllowed:
         {{- include "csi_livenessprobe_resources" . | nindent 8 }}
@@ -465,6 +467,7 @@ spec:
         volumeMounts:
           - mountPath: /csi/
             name: socket-dir
+{{- if .Values.sdsLocalVolume.internal.featureSnapshotsEnabled }}
       - args:
           - --timeout=1m
           - --csi-address=$(ADDRESS)
@@ -495,6 +498,7 @@ spec:
         volumeMounts:
           - mountPath: /csi/
             name: socket-dir
+{{- end }}
       - args:
           - --v=5
           - --csi-address=$(ADDRESS)
