@@ -6,6 +6,9 @@ properties:
     type: object
     default: {}
     properties:
+      featureSnapshotsEnabled:
+        type: boolean
+        default: true
       pythonVersions:
         type: array
         default: []
