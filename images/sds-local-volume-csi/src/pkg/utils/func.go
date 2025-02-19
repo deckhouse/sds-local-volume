@@ -273,7 +273,7 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 		llvThickSpec.Contiguous = llv.Spec.Thick.Contiguous
 	}
 	if volumeCleanup != "disable" {
-		llvThickSpec.VolumeCleanup = volumeCleanup
+		llvThickSpec.VolumeCleanup = &volumeCleanup
 	}
 	llv.Spec.Thick = llvThickSpec
 	kc.Update(ctx, llv)
