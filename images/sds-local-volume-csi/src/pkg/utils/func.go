@@ -268,10 +268,8 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 		return fmt.Errorf("get LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
 	}
 
-	if llv.Spec.Thick.VolumeCleanup != volumeCleanup {
-		llv.Spec.Thick.VolumeCleanup = volumeCleanup
-		kc.Update(ctx, llv)
-	}
+	llv.Spec.Thick.VolumeCleanup = volumeCleanup
+	kc.Update(ctx, llv)
 
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] LVMLogicalVolume found: %+v (status: %+v)", traceID, lvmLogicalVolumeName, llv, llv.Status))
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Removing finalizer %s if exists", traceID, lvmLogicalVolumeName, SDSLocalVolumeCSIFinalizer))
