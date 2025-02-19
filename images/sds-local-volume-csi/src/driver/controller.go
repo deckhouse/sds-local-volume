@@ -320,6 +320,7 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.VolumeId, volumeCleanup)
 	if err != nil {
 		d.log.Error(err, "error DeleteLVMLogicalVolume")
+		return nil, err
 	}
 	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] Volume deleted successfully", traceID, request.VolumeId))
 	d.log.Info("[DeleteVolume][traceID:%s] ========== END DeleteVolume ============", traceID)
