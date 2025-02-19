@@ -24,8 +24,13 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -198,6 +203,46 @@ func GetLVMLogicalVolumeSnapshot(ctx context.Context, kc client.Client, lvmLogic
 	return &llvs, err
 }
 
+func GetLSCBeforeLLVDelete(log logger.Logger, cl client.Client, ctx context.Context, volumeId, traceID string) (*slv.LocalStorageClass, error) {
+	log.Info("[DeleteVolume][traceID:%s] Fetching PersistentVolume with VolumeId: %s", traceID, volumeId)
+	var pv corev1.PersistentVolume
+	if err := cl.Get(ctx, client.ObjectKey{Name: volumeId}, &pv); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Error(err, "[DeleteVolume][traceID:%s] PersistentVolume %s not found: %v", traceID, volumeId, err)
+			return nil, status.Errorf(codes.NotFound, "PersistentVolume %s not found: %v", volumeId, err)
+		}
+		log.Error(err, "[DeleteVolume][traceID:%s] Failed to fetch PersistentVolume: %v", traceID, err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch PersistentVolume %s: %v", volumeId, err)
+	}
+
+	log.Info("[DeleteVolume][traceID:%s] PersistentVolume %s successfully fetched", traceID, volumeId)
+
+	storageClassName := pv.Spec.StorageClassName
+	if storageClassName == "" {
+		log.Error(nil, "[DeleteVolume][traceID:%s] PersistentVolume %s does not have a StorageClassName defined", traceID, volumeId)
+		return nil, status.Error(codes.InvalidArgument, "PersistentVolume does not have a StorageClassName defined")
+	}
+	log.Info("[DeleteVolume][traceID:%s] StorageClassName for PersistentVolume %s: %s", traceID, volumeId, storageClassName)
+
+	log.Info("[DeleteVolume][traceID:%s] Fetching LocalStorageClass with name: %s", traceID, storageClassName)
+
+	var localStorageClass slv.LocalStorageClass
+
+	err := cl.Get(ctx, client.ObjectKey{Name: storageClassName}, &localStorageClass)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Error(err, "[DeleteVolume][traceID:%s] LocalStorageClass %s not found: %v", traceID, storageClassName)
+		} else {
+			log.Error(err, "[DeleteVolume][traceID:%s] Error fetching LocalStorageClass %s: %v", traceID, storageClassName)
+			return nil, status.Errorf(codes.Internal, "Failed to fetch LocalStorageClass: %v", err)
+		}
+	} else {
+		log.Info("[DeleteVolume][traceID:%s] Successfully fetched LocalStorageClass: %s", traceID, storageClassName)
+	}
+
+	return &localStorageClass, nil
+}
+
 func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, traceID, name string, lvmLogicalVolumeSpec snc.LVMLogicalVolumeSpec) (*snc.LVMLogicalVolume, error) {
 	var err error
 	llv := &snc.LVMLogicalVolume{
@@ -215,7 +260,7 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 	return llv, err
 }
 
-func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName string) error {
+func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, volumeCleanup string) error {
 	var err error
 
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Trying to find LVMLogicalVolume", traceID, lvmLogicalVolumeName))

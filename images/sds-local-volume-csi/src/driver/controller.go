@@ -27,11 +27,8 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"sds-local-volume-csi/internal"
 	"sds-local-volume-csi/pkg/utils"
@@ -257,7 +254,13 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error WaitForStatusUpdate. Delete LVMLogicalVolume %s", traceID, volumeID, request.Name))
 
-		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.Name)
+		localStorageClass, err := utils.GetLSCBeforeLLVDelete(*d.log, d.cl, ctx, request.Name, traceID)
+		volumeCleanup := "disable"
+		if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
+			volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
+		}
+
+		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.Name, volumeCleanup)
 		if deleteErr != nil {
 			d.log.Error(deleteErr, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error DeleteLVMLogicalVolume", traceID, volumeID))
 		}
@@ -304,19 +307,13 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 		return nil, status.Error(codes.InvalidArgument, "Volume ID cannot be empty")
 	}
 
-	d.log.Info("[DeleteVolume][traceID:%s] Fetching PersistentVolume with VolumeId: %s", traceID, request.VolumeId)
-	var pv corev1.PersistentVolume
-	if err := d.cl.Get(ctx, client.ObjectKey{Name: request.VolumeId}, &pv); err != nil {
-		if apierrors.IsNotFound(err) {
-			d.log.Error(err, "[DeleteVolume][traceID:%s] PersistentVolume %s not found: %v", traceID, request.VolumeId, err)
-			return nil, status.Errorf(codes.NotFound, "PersistentVolume %s not found: %v", request.VolumeId, err)
-		}
-		d.log.Error(err, "[DeleteVolume][traceID:%s] Failed to fetch PersistentVolume: %v", traceID, err)
-		return nil, status.Errorf(codes.Internal, "Failed to fetch PersistentVolume %s: %v", request.VolumeId, err)
+	localStorageClass, err := utils.GetLSCBeforeLLVDelete(*d.log, d.cl, ctx, request.VolumeId, traceID)
+	volumeCleanup := "disable"
+	if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
+		volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
 	}
 
-	d.log.Info("[DeleteVolume][traceID:%s] PersistentVolume %s successfully fetched", traceID, request.VolumeId)
-	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.VolumeId)
+	err = utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.VolumeId, volumeCleanup)
 	if err != nil {
 		d.log.Error(err, "error DeleteLVMLogicalVolume")
 	}
