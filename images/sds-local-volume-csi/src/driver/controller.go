@@ -256,8 +256,10 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 		localStorageClass, err := utils.GetLSCBeforeLLVDelete(*d.log, d.cl, ctx, request.Name, traceID)
 		volumeCleanup := "disable"
-		if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
-			volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
+		if feature.DataEraseEnabled() {
+			if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
+				volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
+			}
 		}
 
 		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.Name, volumeCleanup)
