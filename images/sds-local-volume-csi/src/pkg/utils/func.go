@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/status"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -207,7 +206,7 @@ func GetLSCBeforeLLVDelete(log logger.Logger, cl client.Client, ctx context.Cont
 	log.Info("[DeleteVolume][traceID:%s] Fetching PersistentVolume with VolumeId: %s", traceID, volumeId)
 	var pv corev1.PersistentVolume
 	if err := cl.Get(ctx, client.ObjectKey{Name: volumeId}, &pv); err != nil {
-		if apierrors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			log.Error(err, "[DeleteVolume][traceID:%s] PersistentVolume %s not found: %v", traceID, volumeId, err)
 			return nil, status.Errorf(codes.NotFound, "PersistentVolume %s not found: %v", volumeId, err)
 		}
@@ -230,7 +229,7 @@ func GetLSCBeforeLLVDelete(log logger.Logger, cl client.Client, ctx context.Cont
 
 	err := cl.Get(ctx, client.ObjectKey{Name: storageClassName}, &localStorageClass)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			log.Error(err, "[DeleteVolume][traceID:%s] LocalStorageClass %s not found: %v", traceID, storageClassName)
 		} else {
 			log.Error(err, "[DeleteVolume][traceID:%s] Error fetching LocalStorageClass %s: %v", traceID, storageClassName)
