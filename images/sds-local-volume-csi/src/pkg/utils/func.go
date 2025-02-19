@@ -268,14 +268,14 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 		return fmt.Errorf("get LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
 	}
 
-	if llv.Spec.Thick == nil {
-		llv.Spec.Thick = &snc.LVMLogicalVolumeThickSpec{}
+	llvThickSpec := &snc.LVMLogicalVolumeThickSpec{}
+	if llv.Spec.Thick != nil && llv.Spec.Thick.Contiguous != nil {
+		llvThickSpec.Contiguous = llv.Spec.Thick.Contiguous
 	}
 	if volumeCleanup != "disable" {
-		llv.Spec.Thick.VolumeCleanup = volumeCleanup
-	} else {
-		llv.Spec.Thick.VolumeCleanup = ""
+		llvThickSpec.VolumeCleanup = volumeCleanup
 	}
+	llv.Spec.Thick = llvThickSpec
 	kc.Update(ctx, llv)
 
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] LVMLogicalVolume found: %+v (status: %+v)", traceID, lvmLogicalVolumeName, llv, llv.Status))
