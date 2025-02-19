@@ -254,9 +254,9 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error WaitForStatusUpdate. Delete LVMLogicalVolume %s", traceID, volumeID, request.Name))
 
-		localStorageClass, err := utils.GetLSCBeforeLLVDelete(*d.log, d.cl, ctx, request.Name, traceID)
 		volumeCleanup := "disable"
 		if feature.DataEraseEnabled() {
+			localStorageClass, _ := utils.GetLSCBeforeLLVDelete(*d.log, d.cl, ctx, request.Name, traceID)
 			if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
 				volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
 			}
@@ -309,15 +309,15 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 		return nil, status.Error(codes.InvalidArgument, "Volume ID cannot be empty")
 	}
 
-	localStorageClass, err := utils.GetLSCBeforeLLVDelete(*d.log, d.cl, ctx, request.VolumeId, traceID)
 	volumeCleanup := "disable"
 	if feature.DataEraseEnabled() {
+		localStorageClass, _ := utils.GetLSCBeforeLLVDelete(*d.log, d.cl, ctx, request.VolumeId, traceID)
 		if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
 			volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
 		}
 	}
 
-	err = utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.VolumeId, volumeCleanup)
+	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.VolumeId, volumeCleanup)
 	if err != nil {
 		d.log.Error(err, "error DeleteLVMLogicalVolume")
 	}
