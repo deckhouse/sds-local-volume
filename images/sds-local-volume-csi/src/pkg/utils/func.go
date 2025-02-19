@@ -203,11 +203,11 @@ func GetLVMLogicalVolumeSnapshot(ctx context.Context, kc client.Client, lvmLogic
 }
 
 func GetLSCBeforeLLVDelete(log logger.Logger, cl client.Client, ctx context.Context, volumeId, traceID string) (*slv.LocalStorageClass, error) {
-	log.Info("[DeleteVolume][traceID:%s] Fetching PersistentVolume with VolumeId: %s", traceID, volumeId)
+	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] Fetching PersistentVolume with VolumeId: %s", traceID, volumeId))
 	var pv corev1.PersistentVolume
 	if err := cl.Get(ctx, client.ObjectKey{Name: volumeId}, &pv); err != nil {
 		if kerrors.IsNotFound(err) {
-			log.Error(err, "[DeleteVolume][traceID:%s] PersistentVolume %s not found: %v", traceID, volumeId, err)
+			log.Error(err, fmt.Sprintf("[DeleteVolume][traceID:%s] PersistentVolume %s not found: %v", traceID, volumeId, err))
 			return nil, status.Errorf(codes.NotFound, "PersistentVolume %s not found: %v", volumeId, err)
 		}
 		log.Error(err, "[DeleteVolume][traceID:%s] Failed to fetch PersistentVolume: %v", traceID, err)
@@ -221,22 +221,22 @@ func GetLSCBeforeLLVDelete(log logger.Logger, cl client.Client, ctx context.Cont
 		log.Error(nil, "[DeleteVolume][traceID:%s] PersistentVolume %s does not have a StorageClassName defined", traceID, volumeId)
 		return nil, status.Error(codes.InvalidArgument, "PersistentVolume does not have a StorageClassName defined")
 	}
-	log.Info("[DeleteVolume][traceID:%s] StorageClassName for PersistentVolume %s: %s", traceID, volumeId, storageClassName)
+	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] StorageClassName for PersistentVolume %s: %s", traceID, volumeId, storageClassName))
 
-	log.Info("[DeleteVolume][traceID:%s] Fetching LocalStorageClass with name: %s", traceID, storageClassName)
+	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] Fetching LocalStorageClass with name: %s", traceID, storageClassName))
 
 	var localStorageClass slv.LocalStorageClass
 
 	err := cl.Get(ctx, client.ObjectKey{Name: storageClassName}, &localStorageClass)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			log.Error(err, "[DeleteVolume][traceID:%s] LocalStorageClass %s not found: %v", traceID, storageClassName)
+			log.Error(err, fmt.Sprintf("[DeleteVolume][traceID:%s] LocalStorageClass %s not found: %v", traceID, storageClassName, err))
 		} else {
-			log.Error(err, "[DeleteVolume][traceID:%s] Error fetching LocalStorageClass %s: %v", traceID, storageClassName)
+			log.Error(err, fmt.Sprintf("[DeleteVolume][traceID:%s] Error fetching LocalStorageClass %s: %v", traceID, storageClassName, err))
 			return nil, status.Errorf(codes.Internal, "Failed to fetch LocalStorageClass: %v", err)
 		}
 	} else {
-		log.Info("[DeleteVolume][traceID:%s] Successfully fetched LocalStorageClass: %s", traceID, storageClassName)
+		log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] Successfully fetched LocalStorageClass: %s", traceID, storageClassName))
 	}
 
 	return &localStorageClass, nil
