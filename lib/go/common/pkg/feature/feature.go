@@ -4,6 +4,6 @@ func SnapshotsEnabled() bool {
 	return snapshotsEnabled
 }
 
-func DataEraseEnabled() bool {
-	return dataEraseEnabled
+func VolumeCleanupEnabled() bool {
+	return volumeCleanupEnabled
 }

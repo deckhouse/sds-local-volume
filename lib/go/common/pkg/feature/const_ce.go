@@ -16,4 +16,4 @@ limitations under the License.
 package feature
 
 const snapshotsEnabled = false
-const dataEraseEnabled = false
+const volumeCleanupEnabled = false
