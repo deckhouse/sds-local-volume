@@ -113,13 +113,13 @@ spec:
                           x-doc-d8editions: [ee,fe]
                           description: |
                             **This feature is available in EE and FE.**
-                            Specifies the cleanup method to be applied to the PV’s content before deletion.
-                            When volumeCleanup is enabled, the driver will erase PV content.
-                            Valid options are:
-                            - Empty parameter: No cleanup is performed.
-                            - **Discard**: Uses the filesystem’s discard (trim) functionality to free data blocks. (This option is available only when supported)
-                            - **RandomFillSinglePass**: Overwrites the content of each file once with random data before deletion. This is implemented by invoking the utility `shred`.
-                            - **RandomFillThreePass**: Overwrites the content of each file three times with random data before deletion. This is implemented by invoking the utility `shred`.
+                            The method of the volume cleanup before deletion.
+                            If the parameter is not set, the volume will not be cleared after the PV is deleted.
+                            Allowed values:
+                            - empty parameter — No cleanup is performed.
+                            - **Discard**: All blocks of the volume will be marked as free using the `discard` system call before deletion. This option is only applicable to solid-state drives.
+                            - **RandomFillSinglePass**: The volume will be overwritten with random data once before deletion. This option is not recommended for solid-state drives, as it reduces the lifespan of the drive.
+                            - **RandomFillThreePass**: The volume will be overwritten with random data three times before deletion. This option is also not recommended for solid-state drives, as it reduces the lifespan of the drive.
                           enum:
                             - Discard
                             - RandomFillSinglePass
