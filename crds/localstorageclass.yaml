@@ -116,7 +116,7 @@ spec:
                             Specifies the cleanup method to be applied to the PV’s content before deletion.
                             When volumeCleanup is enabled, the driver will erase PV content.
                             Valid options are:
-                            - **Disabled**: No cleanup is performed.
+                            - Empty parameter: No cleanup is performed.
                             - **Discard**: Uses the filesystem’s discard (trim) functionality to free data blocks. (This option is available only when supported)
                             - **RandomFillSinglePass**: Overwrites the content of each file once with random data before deletion. This is implemented by invoking the utility `shred`.
                             - **RandomFillThreePass**: Overwrites the content of each file three times with random data before deletion. This is implemented by invoking the utility `shred`.
