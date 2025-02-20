@@ -109,15 +109,15 @@ spec:
                           description: |
                             If true, the Logical Volume will be created with the contiguous flag. Note: This flag should be used with caution because it may lead to poor scheduling of pods using the Persistent Volume. Our scheduler checks the free space in VG and selects nodes with the most free space for pods. However, it cannot determine the maximum amount of sequential free space available. Consequently, there may be situations where a pod is scheduled to a node, but the volume cannot be created due to insufficient contiguous free space. If such a situation arises, manual intervention will be required.
                         volumeCleanup:
-                            type: string
-                            enum: [RandomFillThreePass, RandomFillSinglePass, Discard]
-                            description: |
-                              The method of the volume cleanup before deletion.
-                              If the parameter is not set, after deleting the PV, the data may be deleted or it may remain. There is no guarantee of deletion or non-deletion.
-                              Allowed values:
-                              - `RandomFillSinglePass`: The volume will be overwritten with random data once before deletion. This option is not recommended for solid-state drives, as it reduces the lifespan of the drive.
-                              - `RandomFillThreePass`: The volume will be overwritten with random data three times before deletion. This option is also not recommended for solid-state drives, as it reduces the lifespan of the drive.
-                              - `Discard`: All blocks of the volume will be marked as free using the `discard`` system call before deletion. This option is only applicable to solid-state drives.
+                          type: string
+                          enum: [RandomFillThreePass, RandomFillSinglePass, Discard]
+                          description: |
+                            The method of the volume cleanup before deletion.
+                            If the parameter is not set, after deleting the PV, the data may be deleted or it may remain. There is no guarantee of deletion or non-deletion.
+                            Allowed values:
+                            - `RandomFillSinglePass`: The volume will be overwritten with random data once before deletion. This option is not recommended for solid-state drives, as it reduces the lifespan of the drive.
+                            - `RandomFillThreePass`: The volume will be overwritten with random data three times before deletion. This option is also not recommended for solid-state drives, as it reduces the lifespan of the drive.
+                            - `Discard`: All blocks of the volume will be marked as free using the `discard`` system call before deletion. This option is only applicable to solid-state drives.
                     lvmVolumeGroups:
                       type: array
                       description: |
