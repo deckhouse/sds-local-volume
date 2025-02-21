@@ -202,7 +202,7 @@ func GetLVMLogicalVolumeSnapshot(ctx context.Context, kc client.Client, lvmLogic
 	return &llvs, err
 }
 
-func GetLSCBeforeLLVDelete(log logger.Logger, cl client.Client, ctx context.Context, volumeId, traceID string) (*slv.LocalStorageClass, error) {
+func GetLSCBeforeLLVDelete(ctx context.Context, cl client.Client, log logger.Logger, volumeId, traceID string) (*slv.LocalStorageClass, error) {
 	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] Fetching PersistentVolume with VolumeId: %s", traceID, volumeId))
 	var pv corev1.PersistentVolume
 	if err := cl.Get(ctx, client.ObjectKey{Name: volumeId}, &pv); err != nil {
@@ -276,7 +276,10 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 		llvThickSpec.VolumeCleanup = &volumeCleanup
 	}
 	llv.Spec.Thick = llvThickSpec
-	kc.Update(ctx, llv)
+	err = kc.Update(ctx, llv)
+	if err != nil {
+		return fmt.Errorf("update LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
+	}
 
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] LVMLogicalVolume found: %+v (status: %+v)", traceID, lvmLogicalVolumeName, llv, llv.Status))
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Removing finalizer %s if exists", traceID, lvmLogicalVolumeName, SDSLocalVolumeCSIFinalizer))
