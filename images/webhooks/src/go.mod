@@ -4,7 +4,7 @@ go 1.23.4
 
 require (
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20250114161813-c1a8b09cd47d
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20250219163020-f6aebf2f4029 // THIS MUST BE CHANGED TO ACTUAL MAIN BEFORE MERGE
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slok/kubewebhook/v2 v2.6.0
 	k8s.io/api v0.30.3
@@ -56,3 +56,7 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
+
+replace github.com/deckhouse/sds-local-volume/api => ../../../api
+
+replace github.com/deckhouse/sds-local-volume/lib/go/common => ../../../lib/go/common

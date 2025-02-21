@@ -251,6 +251,25 @@ kubectl -n d8-sds-local-volume get pod -owide
 
 If StorageClass with the name `local-storage-class` is shown, then the configuration of the `sds-local-volume` module is complete. Now users can create PVCs by specifying StorageClass with the name `local-storage-class`.
 
+### Selects the method to clean the volume before deleting the PV
+
+Files with user data may remain on the volume being deleted and may be available to other clients to which the PV is allocated.
+
+You can prevent this by configuring a file cleanup procedure before deleting the PV.
+To do this, use the `volumeCleanup` parameter.
+It allows you to select the method of cleaning the volume before deleting the PV.
+
+Possible values of the `volumeCleanup` parameter:
+
+- Parameter not specified - the volume will not be cleaned after PV deletion. There is no guarantee of deletion or non-deletion: data may be deleted or data may remain after PV deletion.
+- `RandomFillSinglePass` - the volume will be overwritten with random data once before deletion. Using this option is not recommended for solid-state drives as it reduces the lifespan of the drive.
+- `RandomFillThreePass` - the volume will be overwritten with random data three times before deletion. This option is not recommended for solid-state drives as it reduces the lifespan of the drive.
+- `Discard` - all blocks of the volume will be marked as free using the `discard` system call before deletion. This option is only applicable to solid-state drives.
+
+Most modern solid-state drives ensure that a `discard` marked block will not return previous data when read. This makes the `Discard' option the most effective way to prevent leakage when using solid-state drives.
+However, clearing a cell is a relatively long operation, so it is performed in the background by the device. In addition, many drives cannot clear individual cells, only groups - pages. Because of this, not all drives guarantee immediate unavailability of the freed data. In addition, not all drives that do guarantee this keep the promise.
+If the device does not guarantee Deterministic TRIM (DRAT), Deterministic Read Zero after TRIM (RZAT) and is not tested, then it is not recommended.
+
 ## System requirements and recommendations
 
 - Use the stock kernels provided with the [supported distributions](https://deckhouse.io/documentation/v1/supported_versions.html#linux).
