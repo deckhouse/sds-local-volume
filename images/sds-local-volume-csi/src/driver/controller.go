@@ -256,7 +256,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 		volumeCleanup := "disable"
 		if feature.VolumeCleanupEnabled() {
-			localStorageClass, _ := utils.GetLSCBeforeLLVDelete(*d.log, d.cl, ctx, request.Name, traceID)
+			localStorageClass, _ := utils.GetLSCBeforeLLVDelete(ctx, d.cl, *d.log, request.Name, traceID)
 			if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
 				volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
 			}
@@ -311,7 +311,7 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 
 	volumeCleanup := "disable"
 	if feature.VolumeCleanupEnabled() {
-		localStorageClass, _ := utils.GetLSCBeforeLLVDelete(*d.log, d.cl, ctx, request.VolumeId, traceID)
+		localStorageClass, _ := utils.GetLSCBeforeLLVDelete(ctx, d.cl, *d.log, request.VolumeId, traceID)
 		if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
 			volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
 		}
