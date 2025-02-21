@@ -202,26 +202,26 @@ func GetLVMLogicalVolumeSnapshot(ctx context.Context, kc client.Client, lvmLogic
 	return &llvs, err
 }
 
-func GetLSCBeforeLLVDelete(ctx context.Context, cl client.Client, log logger.Logger, volumeId, traceID string) (*slv.LocalStorageClass, error) {
-	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] Fetching PersistentVolume with VolumeId: %s", traceID, volumeId))
+func GetLSCBeforeLLVDelete(ctx context.Context, cl client.Client, log logger.Logger, volumeID, traceID string) (*slv.LocalStorageClass, error) {
+	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] Fetching PersistentVolume with VolumeId: %s", traceID, volumeID))
 	var pv corev1.PersistentVolume
-	if err := cl.Get(ctx, client.ObjectKey{Name: volumeId}, &pv); err != nil {
+	if err := cl.Get(ctx, client.ObjectKey{Name: volumeID}, &pv); err != nil {
 		if kerrors.IsNotFound(err) {
-			log.Error(err, fmt.Sprintf("[DeleteVolume][traceID:%s] PersistentVolume %s not found: %v", traceID, volumeId, err))
-			return nil, status.Errorf(codes.NotFound, "PersistentVolume %s not found: %v", volumeId, err)
+			log.Error(err, fmt.Sprintf("[DeleteVolume][traceID:%s] PersistentVolume %s not found: %v", traceID, volumeID, err))
+			return nil, status.Errorf(codes.NotFound, "PersistentVolume %s not found: %v", volumeID, err)
 		}
 		log.Error(err, "[DeleteVolume][traceID:%s] Failed to fetch PersistentVolume: %v", traceID, err)
-		return nil, status.Errorf(codes.Internal, "Failed to fetch PersistentVolume %s: %v", volumeId, err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch PersistentVolume %s: %v", volumeID, err)
 	}
 
-	log.Info("[DeleteVolume][traceID:%s] PersistentVolume %s successfully fetched", traceID, volumeId)
+	log.Info("[DeleteVolume][traceID:%s] PersistentVolume %s successfully fetched", traceID, volumeID)
 
 	storageClassName := pv.Spec.StorageClassName
 	if storageClassName == "" {
-		log.Error(nil, "[DeleteVolume][traceID:%s] PersistentVolume %s does not have a StorageClassName defined", traceID, volumeId)
+		log.Error(nil, "[DeleteVolume][traceID:%s] PersistentVolume %s does not have a StorageClassName defined", traceID, volumeID)
 		return nil, status.Error(codes.InvalidArgument, "PersistentVolume does not have a StorageClassName defined")
 	}
-	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] StorageClassName for PersistentVolume %s: %s", traceID, volumeId, storageClassName))
+	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] StorageClassName for PersistentVolume %s: %s", traceID, volumeID, storageClassName))
 
 	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] Fetching LocalStorageClass with name: %s", traceID, storageClassName))
 
