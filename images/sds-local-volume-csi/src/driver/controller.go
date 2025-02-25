@@ -254,7 +254,15 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error WaitForStatusUpdate. Delete LVMLogicalVolume %s", traceID, volumeID, request.Name))
 
-		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.Name)
+		volumeCleanup := "disable"
+		if feature.VolumeCleanupEnabled() {
+			localStorageClass, _ := utils.GetLSCBeforeLLVDelete(ctx, d.cl, *d.log, request.Name, traceID)
+			if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
+				volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
+			}
+		}
+
+		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.Name, volumeCleanup)
 		if deleteErr != nil {
 			d.log.Error(deleteErr, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error DeleteLVMLogicalVolume", traceID, volumeID))
 		}
@@ -296,17 +304,26 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	traceID := uuid.New().String()
-	d.log.Info("[DeleteVolume][traceID:%s] ========== Start DeleteVolume ============", traceID)
+	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] ========== Start DeleteVolume ============", traceID))
 	if len(request.VolumeId) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID cannot be empty")
 	}
 
-	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.VolumeId)
+	volumeCleanup := "disable"
+	if feature.VolumeCleanupEnabled() {
+		localStorageClass, _ := utils.GetLSCBeforeLLVDelete(ctx, d.cl, *d.log, request.VolumeId, traceID)
+		if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
+			volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
+		}
+	}
+
+	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.VolumeId, volumeCleanup)
 	if err != nil {
 		d.log.Error(err, "error DeleteLVMLogicalVolume")
+		return nil, err
 	}
 	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] Volume deleted successfully", traceID, request.VolumeId))
-	d.log.Info("[DeleteVolume][traceID:%s] ========== END DeleteVolume ============", traceID)
+	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] ========== END DeleteVolume ============", traceID))
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
