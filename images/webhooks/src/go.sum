@@ -4,8 +4,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787 h1:YYeoWACJsEOqNcQ/RWDsF82hihNYZKlYZAJopvdeKrQ=
 github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787/go.mod h1:LBLI26oEmeAMYTSRFFFljP8AOk4kqJEwHcf4fYnyzME=
-github.com/deckhouse/sds-node-configurator/api v0.0.0-20250114161813-c1a8b09cd47d h1:I5Bv75VPlH9AdBIOF4a1RIVRAr+zas8CMjeZ6pzJ7eE=
-github.com/deckhouse/sds-node-configurator/api v0.0.0-20250114161813-c1a8b09cd47d/go.mod h1:ro/TIWC/cbDPgjaCzJkbrekzp1CqPzgAzGdNUnww+Ps=
+github.com/deckhouse/sds-node-configurator/api v0.0.0-20250225084914-1778068d1911 h1:FSADbTFYKY3eOTvXEV5LxUzOmJ+BsZ6+WO8hQsbJN7s=
+github.com/deckhouse/sds-node-configurator/api v0.0.0-20250225084914-1778068d1911/go.mod h1:bhgBeuAdLlDc9EQ5qI+/18iRj8Jfr2qfFwE1QnIoQM4=
 github.com/emicklei/go-restful/v3 v3.12.0 h1:y2DdzBAURM29NFF94q6RaY4vjIH1rtwDapwQtU84iWk=
 github.com/emicklei/go-restful/v3 v3.12.0/go.mod h1:6n3XBCmQQb25CM2LCACGz8ukIrRry+4bhvbpWn3mrbc=
 github.com/evanphx/json-patch v4.12.0+incompatible h1:4onqiflcdA9EOZ4RxV643DvftH5pOlLGNtQ5lPWQu84=
