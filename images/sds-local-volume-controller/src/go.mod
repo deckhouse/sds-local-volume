@@ -4,7 +4,7 @@ go 1.23.4
 
 require (
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20250219163020-f6aebf2f4029 // THIS MUST BE CHANGED TO ACTUAL MAIN BEFORE MERGE
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20250225084914-1778068d1911
 	github.com/go-logr/logr v1.4.2
 	github.com/onsi/ginkgo/v2 v2.20.0
 	github.com/onsi/gomega v1.34.1

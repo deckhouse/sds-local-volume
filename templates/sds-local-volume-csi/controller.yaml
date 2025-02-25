@@ -301,8 +301,8 @@ spec:
         - name: {{ .Chart.Name }}-module-registry
       restartPolicy: Always
       schedulerName: default-scheduler
-      serviceAccount: default
-      serviceAccountName: default
+      serviceAccount: csi
+      serviceAccountName: csi
       terminationGracePeriodSeconds: 30
       volumes:
         - hostPath:
