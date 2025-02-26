@@ -301,8 +301,8 @@ spec:
         - name: {{ .Chart.Name }}-module-registry
       restartPolicy: Always
       schedulerName: default-scheduler
-      serviceAccount: default
-      serviceAccountName: default
+      serviceAccount: sds-local-volume-csi-node
+      serviceAccountName: sds-local-volume-csi-node
       terminationGracePeriodSeconds: 30
       volumes:
         - hostPath:
