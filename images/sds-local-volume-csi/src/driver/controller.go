@@ -35,8 +35,9 @@ import (
 )
 
 const (
-	sourceVolumeKindSnapshot = "LVMLogicalVolumeSnapshot"
-	sourceVolumeKindVolume   = "LVMLogicalVolume"
+	sourceVolumeKindSnapshot      = "LVMLogicalVolumeSnapshot"
+	sourceVolumeKindVolume        = "LVMLogicalVolume"
+	LVMThickVolumeCleanupParamKey = "local.csi.storage.deckhouse.io/lvm-thick-volume-cleanup"
 )
 
 func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
@@ -219,6 +220,13 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		}
 	}
 
+	thickVolumeCleanup := "disable"
+	if feature.VolumeCleanupEnabled() {
+		if request.Parameters[LVMThickVolumeCleanupParamKey] != "" {
+			thickVolumeCleanup = request.Parameters[LVMThickVolumeCleanupParamKey]
+		}
+	}
+
 	llvSpec := utils.GetLLVSpec(
 		d.log,
 		lvName,
@@ -228,7 +236,9 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		*llvSize,
 		contiguous,
 		sourceVolume,
+		thickVolumeCleanup,
 	)
+
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] LVMLogicalVolumeSpec: %+v", traceID, volumeID, llvSpec))
 	resizeDelta, err := resource.ParseQuantity(internal.ResizeDelta)
 	if err != nil {
@@ -254,15 +264,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error WaitForStatusUpdate. Delete LVMLogicalVolume %s", traceID, volumeID, request.Name))
 
-		volumeCleanup := "disable"
-		if feature.VolumeCleanupEnabled() {
-			localStorageClass, _ := utils.GetLSCBeforeLLVDelete(ctx, d.cl, *d.log, request.Name, traceID)
-			if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
-				volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
-			}
-		}
-
-		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.Name, volumeCleanup)
+		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.Name, thickVolumeCleanup)
 		if deleteErr != nil {
 			d.log.Error(deleteErr, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error DeleteLVMLogicalVolume", traceID, volumeID))
 		}
