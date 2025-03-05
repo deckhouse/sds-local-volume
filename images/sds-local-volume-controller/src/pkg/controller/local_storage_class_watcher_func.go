@@ -446,6 +446,9 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 		if lsc.Spec.LVM.Thick.Contiguous {
 			params[LVMVThickContiguousParamKey] = "true"
 		}
+		if lsc.Spec.LVM.Thick.VolumeCleanup != "" {
+			params[LVMThickVolumeCleanupParamKey] = lsc.Spec.LVM.Thick.VolumeCleanup
+		}
 	}
 
 	sc := &v1.StorageClass{

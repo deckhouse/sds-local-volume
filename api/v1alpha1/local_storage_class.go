@@ -61,5 +61,5 @@ type LocalStorageClassLVMThinPoolSpec struct {
 
 type LocalStorageClassLVMThickSpec struct {
 	Contiguous    bool   `json:"contiguous"`
-	VolumeCleanup string `json:"volumeCleanup"`
+	VolumeCleanup string `json:"volumeCleanup,omitempty"`
 }
