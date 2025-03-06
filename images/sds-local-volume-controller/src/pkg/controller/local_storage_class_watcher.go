@@ -91,7 +91,7 @@ func RunLocalStorageClassWatcherController(
 
 	c, err := controller.New(LocalStorageClassCtrlName, mgr, controller.Options{
 		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-			log.Info("[LocalStorageClassReconciler] starts Reconcile for the LocalStorageClass %q", request.Name)
+			log.Info("[LocalStorageClassReconciler] starts Reconcile for the LocalStorageClass %s", request.Name)
 			lsc := &slv.LocalStorageClass{}
 			err := cl.Get(ctx, request.NamespacedName, lsc)
 			if err != nil && !errors2.IsNotFound(err) {
