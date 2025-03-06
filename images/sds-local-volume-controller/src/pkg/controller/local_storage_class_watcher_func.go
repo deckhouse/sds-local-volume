@@ -241,7 +241,7 @@ func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 		return false, err
 	}
 
-	if lsc.Spec.LVM.Thick.VolumeCleanup != sc.Parameters[LVMThickVolumeCleanupParamKey] {
+	if lsc.Spec.LVM.Thick != nil && lsc.Spec.LVM.Thick.VolumeCleanup != sc.Parameters[LVMThickVolumeCleanupParamKey] {
 		return true, nil
 	}
 
