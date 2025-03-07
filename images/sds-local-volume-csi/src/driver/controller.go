@@ -35,9 +35,9 @@ import (
 )
 
 const (
-	sourceVolumeKindSnapshot      = "LVMLogicalVolumeSnapshot"
-	sourceVolumeKindVolume        = "LVMLogicalVolume"
-	LVMThickVolumeCleanupParamKey = "local.csi.storage.deckhouse.io/lvm-thick-volume-cleanup"
+	sourceVolumeKindSnapshot = "LVMLogicalVolumeSnapshot"
+	sourceVolumeKindVolume   = "LVMLogicalVolume"
+	LVMVolumeCleanupParamKey = "local.csi.storage.deckhouse.io/lvm-volume-cleanup"
 )
 
 func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
@@ -220,11 +220,9 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		}
 	}
 
-	thickVolumeCleanup := "disable"
-	if feature.VolumeCleanupEnabled() {
-		if request.Parameters[LVMThickVolumeCleanupParamKey] != "" {
-			thickVolumeCleanup = request.Parameters[LVMThickVolumeCleanupParamKey]
-		}
+	volumeCleanup := request.Parameters[LVMVolumeCleanupParamKey]
+	if !feature.VolumeCleanupEnabled() && volumeCleanup != "" {
+		return nil, errors.New("volume cleanup is not supported in your edition")
 	}
 
 	llvSpec := utils.GetLLVSpec(
@@ -236,7 +234,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		*llvSize,
 		contiguous,
 		sourceVolume,
-		thickVolumeCleanup,
+		volumeCleanup,
 	)
 
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] LVMLogicalVolumeSpec: %+v", traceID, volumeID, llvSpec))
@@ -264,7 +262,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error WaitForStatusUpdate. Delete LVMLogicalVolume %s", traceID, volumeID, request.Name))
 
-		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.Name, thickVolumeCleanup)
+		deleteErr := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.Name, volumeCleanup)
 		if deleteErr != nil {
 			d.log.Error(deleteErr, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error DeleteLVMLogicalVolume", traceID, volumeID))
 		}
@@ -311,12 +309,16 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 		return nil, status.Error(codes.InvalidArgument, "Volume ID cannot be empty")
 	}
 
-	volumeCleanup := "disable"
-	if feature.VolumeCleanupEnabled() {
-		localStorageClass, _ := utils.GetLSCBeforeLLVDelete(ctx, d.cl, *d.log, request.VolumeId, traceID)
-		if localStorageClass != nil && localStorageClass.Spec.LVM != nil && localStorageClass.Spec.LVM.Thick != nil && localStorageClass.Spec.LVM.Thick.VolumeCleanup != "" {
-			volumeCleanup = localStorageClass.Spec.LVM.Thick.VolumeCleanup
+	volumeCleanup := func() string {
+		localStorageClass, err := utils.GetLSCBeforeLLVDelete(ctx, d.cl, *d.log, request.VolumeId, traceID)
+		if err == nil && localStorageClass != nil && localStorageClass.Spec.LVM != nil {
+			return localStorageClass.Spec.LVM.VolumeCleanup
 		}
+		return ""
+	}()
+
+	if volumeCleanup != "" && !feature.VolumeCleanupEnabled() {
+		return nil, errors.New("volumeCleanup is not supported in your edition")
 	}
 
 	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.VolumeId, volumeCleanup)

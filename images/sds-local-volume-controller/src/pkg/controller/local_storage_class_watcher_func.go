@@ -241,11 +241,7 @@ func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 		return false, err
 	}
 
-	if lsc.Spec.LVM.Thick == nil && sc.Parameters[LVMThickVolumeCleanupParamKey] != "" {
-		return true, nil
-	}
-
-	if lsc.Spec.LVM.Thick != nil && lsc.Spec.LVM.Thick.VolumeCleanup != sc.Parameters[LVMThickVolumeCleanupParamKey] {
+	if lsc.Spec.LVM.VolumeCleanup != sc.Parameters[LVMVolumeCleanupParamKey] {
 		return true, nil
 	}
 
@@ -452,11 +448,12 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 
 	if lsc.Spec.LVM.Thick != nil {
 		if lsc.Spec.LVM.Thick.Contiguous {
-			params[LVMVThickContiguousParamKey] = "true"
+			params[LVMThickContiguousParamKey] = "true"
 		}
-		if lsc.Spec.LVM.Thick.VolumeCleanup != "" {
-			params[LVMThickVolumeCleanupParamKey] = lsc.Spec.LVM.Thick.VolumeCleanup
-		}
+	}
+
+	if lsc.Spec.LVM.VolumeCleanup != "" {
+		params[LVMVolumeCleanupParamKey] = lsc.Spec.LVM.VolumeCleanup
 	}
 
 	sc := &v1.StorageClass{

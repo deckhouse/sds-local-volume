@@ -259,7 +259,7 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 	return llv, err
 }
 
-func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, thickVolumeCleanup string) error {
+func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, volumeCleanup string) error {
 	var err error
 
 	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Trying to find LVMLogicalVolume", traceID, lvmLogicalVolumeName))
@@ -268,18 +268,10 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 		return fmt.Errorf("get LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
 	}
 
-	if thickVolumeCleanup != "disable" {
-		if llv.Spec.Thick != nil {
-			llv.Spec.Thick.VolumeCleanup = &thickVolumeCleanup
-		} else {
-			llv.Spec.Thick = &snc.LVMLogicalVolumeThickSpec{
-				VolumeCleanup: &thickVolumeCleanup,
-			}
-		}
+	if volumeCleanup != "" {
+		llv.Spec.VolumeCleanup = &volumeCleanup
 	} else {
-		if llv.Spec.Thick != nil {
-			llv.Spec.Thick.VolumeCleanup = nil
-		}
+		llv.Spec.VolumeCleanup = nil
 	}
 	err = kc.Update(ctx, llv)
 	if err != nil {
@@ -490,7 +482,7 @@ func GetLLVSpec(
 	llvSize resource.Quantity,
 	contiguous bool,
 	source *snc.LVMLogicalVolumeSource,
-	thickVolumeCleanup string,
+	volumeCleanup string,
 ) snc.LVMLogicalVolumeSpec {
 	lvmLogicalVolumeSpec := snc.LVMLogicalVolumeSpec{
 		ActualLVNameOnTheNode: lvName,
@@ -514,16 +506,13 @@ func GetLLVSpec(
 		}
 
 		log.Info(fmt.Sprintf("[GetLLVSpec] Thick contiguous: %t", contiguous))
-
-		if thickVolumeCleanup != "" {
-			if lvmLogicalVolumeSpec.Thick == nil {
-				lvmLogicalVolumeSpec.Thick = &snc.LVMLogicalVolumeThickSpec{}
-			}
-			lvmLogicalVolumeSpec.Thick.VolumeCleanup = &thickVolumeCleanup
-		}
-
-		log.Info(fmt.Sprintf("[GetLLVSpec] Thick volumeCleanup: %s", thickVolumeCleanup))
 	}
+
+	if volumeCleanup != "" {
+		lvmLogicalVolumeSpec.VolumeCleanup = &volumeCleanup
+	}
+
+	log.Info(fmt.Sprintf("[GetLLVSpec] volumeCleanup: %s", volumeCleanup))
 
 	return lvmLogicalVolumeSpec
 }

@@ -42,6 +42,7 @@ type LocalStorageClassSpec struct {
 type LocalStorageClassLVMSpec struct {
 	Type            string                         `json:"type"`
 	Thick           *LocalStorageClassLVMThickSpec `json:"thick,omitempty"`
+	VolumeCleanup   string                         `json:"volumeCleanup,omitempty"`
 	LVMVolumeGroups []LocalStorageClassLVG         `json:"lvmVolumeGroups"`
 }
 
@@ -60,6 +61,5 @@ type LocalStorageClassLVMThinPoolSpec struct {
 }
 
 type LocalStorageClassLVMThickSpec struct {
-	Contiguous    bool   `json:"contiguous,omitempty"`
-	VolumeCleanup string `json:"volumeCleanup,omitempty"`
+	Contiguous bool `json:"contiguous,omitempty"`
 }
