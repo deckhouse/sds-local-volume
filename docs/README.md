@@ -237,7 +237,7 @@ kubectl -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
-    For thin volumes thin volumes
+    For thin volumes
 
    ```yaml
    kubectl apply -f -<<EOF
