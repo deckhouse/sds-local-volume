@@ -237,6 +237,28 @@ kubectl -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
+    For thin volumes thin volumes
+
+   ```yaml
+   kubectl apply -f -<<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: local-storage-class
+   spec:
+     lvm:
+       lvmVolumeGroups:
+        - name: vg-1-on-worker-0
+        - name: vg-1-on-worker-1
+        - name: vg-1-on-worker-2
+           thin:
+             poolName: thin-1
+       type: Thin
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+   EOF
+   ```
+
 1. Wait for the created LocalStorageClass resource to become `Created`:
 
    ```shell
