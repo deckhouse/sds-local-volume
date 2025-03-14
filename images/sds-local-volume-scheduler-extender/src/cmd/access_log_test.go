@@ -54,7 +54,11 @@ func TestAccessLogHandler(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/hello", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("hello"))
+		// w.Write([]byte("hello"))
+		_, err := w.Write([]byte("hello"))
+		if err != nil {
+			t.Fatal(err)
+		}
 	})
 	serv := httptest.NewServer(accessLogHandler(ctx, mux))
 	defer serv.Close()
