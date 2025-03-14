@@ -141,7 +141,7 @@ kubectl -n d8-sds-local-volume get pod -owide
            values:
              - dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa
              - dev-0cfc0d07f353598e329d34f3821bed992c1ffbcd
-     actualVGNameOnTheNode: "vg-1" # the name of the LVM VG to be created from the above block devices on the node
+     actualVGNameOnTheNode: "vg-1" # Имя LVM VG, который будет создан из указанных блочных устройств на узле
    EOF
    ```
 
