@@ -20,6 +20,7 @@ rules:
       - lvmvolumegroups
       - lvmlogicalvolumes
       - lvmlogicalvolumesnapshots
+      - localstorageclasses
     verbs:
       - get
       - list

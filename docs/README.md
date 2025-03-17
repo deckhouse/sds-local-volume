@@ -23,7 +23,7 @@ To ensure the correct operation of the `sds-local-volume` module, follow these s
 
   The creation of StorageClasses for the CSI driver `local.csi.storage.deckhouse.io` is **prohibited** for users.
 
-The module supports two operation modes: LVM and LVMThin.  
+The module supports two operation modes: LVM and LVMThin.
 Each mode has its own features, advantages, and limitations. For more details on the differences, refer to the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvmthin).
 
 ## Quickstart guide
@@ -143,7 +143,7 @@ kubectl -n d8-sds-local-volume get pod -owide
            values:
              - dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa
              - dev-0cfc0d07f353598e329d34f3821bed992c1ffbcd
-     actualVGNameOnTheNode: "vg-1" # the name of the LVM VG to be created from the above block devices on the node 
+     actualVGNameOnTheNode: "vg-1" # The name of the LVM VG to be created from the above block devices on the node
    EOF
    ```
 
@@ -237,6 +237,28 @@ kubectl -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
+   For thin volumes
+
+   ```yaml
+   kubectl apply -f -<<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: local-storage-class
+   spec:
+     lvm:
+       lvmVolumeGroups:
+        - name: vg-1-on-worker-0
+        - name: vg-1-on-worker-1
+        - name: vg-1-on-worker-2
+           thin:
+             poolName: thin-1
+       type: Thin
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+   EOF
+   ```
+
 1. Wait for the created LocalStorageClass resource to become `Created`:
 
    ```shell
@@ -250,6 +272,41 @@ kubectl -n d8-sds-local-volume get pod -owide
    ```
 
 If StorageClass with the name `local-storage-class` is shown, then the configuration of the `sds-local-volume` module is complete. Now users can create PVCs by specifying StorageClass with the name `local-storage-class`.
+
+### Selects the method to clean the volume before deleting the PV
+
+When deleting files, the operating system does not physically delete the contents, but only marks the corresponding blocks as “free”. If a new volume receives physical blocks previously used by another volume, the previous user's data may remain in them.
+
+This is possible, for example, in the following case:
+
+- user №1 placed files in the volume requested from StorageClass 1 and on node 1 (no matter in “Block” or “Filesystem” mode);
+- user №1 deleted the files and the volume;
+- the physical blocks it occupied become “free” but not wiped;
+- user №2 requested a new volume from StorageClass 1 and on node 1 in “Block” mode;
+- there is a risk that some or all of the blocks previously occupied by user №1 will be reallocated to user №2;
+- in which case user №2 has the ability to recover user №1's data.
+
+### Thick volumes
+
+The `volumeCleanup` parameter is provided to prevent leaks through thick volumes.
+It allows to select the volume cleanup method before deleting the PV.
+Allowed values:
+
+- parameter not specified — do not perform any additional actions when deleting a volume. The data may be available to the next user;
+
+- `RandomFillSinglePass` - the volume will be overwritten with random data once before deletion. Use of this option is not recommended for solid-state drives as it reduces the lifespan of the drive.
+
+- `RandomFillThreePass` - the volume will be overwritten with random data three times before deletion. Use of this option is not recommended for solid-state drives as it reduces the lifespan of the drive.
+
+- `Discard` - all blocks of the volume will be marked as free using the `discard` system call before deletion. This option is only applicable to solid-state drives.
+
+Most modern solid-state drives ensure that a `discard` marked block will not return previous data when read. This makes the `Discard' option the most effective way to prevent leakage when using solid-state drives.
+However, clearing a cell is a relatively long operation, so it is performed in the background by the device. In addition, many drives cannot clear individual cells, only groups - pages. Because of this, not all drives guarantee immediate unavailability of the freed data. In addition, not all drives that do guarantee this keep the promise.
+If the device does not guarantee Deterministic TRIM (DRAT), Deterministic Read Zero after TRIM (RZAT) and is not tested, then it is not recommended.
+
+### Thin volumes
+
+When a thin-pool block is released via `discard` by the guest operating system, this command is forwarded to the device. If a hard disk drive is used or if there is no `discard` support from the solid-state drive, the data may remain on the thin-pool until such a block is used again. However, users are only given access to thin volumes, not the thin-pool itself. They can only retrieve a volume from the pool, and the thin volumes are nulled for the thin-pool block on new use, preventing leakage between clients. This is guaranteed by setting `thin_pool_zero=1` in LVM.
 
 ## System requirements and recommendations
 

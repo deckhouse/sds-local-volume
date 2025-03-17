@@ -132,7 +132,7 @@ func reconcileLSCUpdateFunc(
 
 	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] storage class %s params: %+v", oldSC.Name, oldSC.Parameters))
 	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] LocalStorageClass %s Spec.LVM: %+v", lsc.Name, lsc.Spec.LVM))
-	hasDiff, err := hasLVGDiff(oldSC, lsc)
+	hasDiff, err := hasSCDiff(oldSC, lsc)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to identify the LVMVolumeGroup difference for the LocalStorageClass %s", lsc.Name))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -210,7 +210,7 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 	for _, sc := range scList.Items {
 		if sc.Name == lsc.Name {
 			if sc.Provisioner == LocalStorageClassProvisioner {
-				diff, err := hasLVGDiff(&sc, lsc)
+				diff, err := hasSCDiff(&sc, lsc)
 				if err != nil {
 					return false, err
 				}
@@ -235,10 +235,14 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 	return false, err
 }
 
-func hasLVGDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
+func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 	currentLVGs, err := getLVGFromSCParams(sc)
 	if err != nil {
 		return false, err
+	}
+
+	if lsc.Spec.LVM.VolumeCleanup != sc.Parameters[LVMVolumeCleanupParamKey] {
+		return true, nil
 	}
 
 	if len(currentLVGs) != len(lsc.Spec.LVM.LVMVolumeGroups) {
@@ -444,8 +448,12 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 
 	if lsc.Spec.LVM.Thick != nil {
 		if lsc.Spec.LVM.Thick.Contiguous {
-			params[LVMVThickContiguousParamKey] = "true"
+			params[LVMThickContiguousParamKey] = "true"
 		}
+	}
+
+	if lsc.Spec.LVM.VolumeCleanup != "" {
+		params[LVMVolumeCleanupParamKey] = lsc.Spec.LVM.VolumeCleanup
 	}
 
 	sc := &v1.StorageClass{
