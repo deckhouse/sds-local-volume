@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -111,6 +112,8 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	mountOptions := collectMountOptions(fsType, mountVolume.GetMountFlags(), []string{})
 
 	d.log.Debug(fmt.Sprintf("[NodeStageVolume] Volume %s operation started", volumeID))
+	d.log.Info("NodeStageVolume called.Sleep 45 seconds")
+	time.Sleep(time.Second * 45)
 	ok = d.inFlight.Insert(volumeID)
 	if !ok {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
@@ -198,6 +201,9 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 	d.log.Trace("------------- NodePublishVolume --------------")
 	d.log.Trace(request.String())
 	d.log.Trace("------------- NodePublishVolume --------------")
+
+	d.log.Info("NodePublishVolume called.Sleep 45 seconds")
+	time.Sleep(time.Second * 45)
 
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
