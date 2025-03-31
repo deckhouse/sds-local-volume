@@ -26,8 +26,7 @@ webhooks:
         namespace: "d8-{{ .Chart.Name }}"
         name: "webhooks"
         path: "/pod-scheduler-mutate"
-      caBundle: |
-        {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca }}
+      caBundle: {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca | b64enc | quote }}
 
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
@@ -52,8 +51,7 @@ webhooks:
         namespace: "d8-{{ .Chart.Name }}"
         name: "webhooks"
         path: "/lsc-validate"
-      caBundle: |
-        {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca }}
+      caBundle: {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca | b64enc | quote }}
 
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
@@ -76,8 +74,7 @@ webhooks:
         namespace: "d8-{{ .Chart.Name }}"
         name: "webhooks"
         path: "/sc-validate"
-      caBundle: |
-        {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca }}
+      caBundle: {{ .Values.sdsLocalVolume.internal.customWebhookCert.ca | b64enc | quote }}
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
