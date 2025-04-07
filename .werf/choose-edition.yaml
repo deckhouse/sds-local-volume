@@ -1,6 +1,6 @@
 ---
 image: choose-edition
-from: { { $.BASE_ALT_P11 } }
+from: {{ $.BASE_ALT_P11 }}
 
 git:
   - add: /
