@@ -1,3 +1,19 @@
+/*
+Copyright 2025 Flant JSC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package scheduler
 
 import (
@@ -8,7 +24,7 @@ import (
 )
 
 func TestPrioritize(t *testing.T) {
-	t.Run("getFreeSpaceLeftPercent", func(t *testing.T) {
+	t.Run("getFreeSpaceLeftPercent", func(_ *testing.T) {
 		requested := resource.MustParse("1Gi")
 		devisor := 1.0
 
@@ -17,8 +33,6 @@ func TestPrioritize(t *testing.T) {
 		allocated := resource.MustParse("211Gi")
 		freeSize := resource.MustParse(totalSizeString)
 		freeSize.Sub(allocated)
-		// t.Logf("freeSize=%s, requested=%s, totalSize=%s", freeSize.String(), requested.String(), totalSize.String())
-		// t.Logf("freeSize=%d, requested=%d, totalSize=%d", freeSize.Value(), requested.Value(), totalSize.Value())
 
 		percent := getFreeSpaceLeftPercent(freeSize.Value(), requested.Value(), totalSize.Value())
 		t.Logf("First freeSpacePercent %d", percent)
@@ -37,9 +51,5 @@ func TestPrioritize(t *testing.T) {
 
 		rawScore2 := int(math.Round(math.Log2(float64(percent2) / devisor)))
 		t.Logf("rawScore2=%d", rawScore2)
-	})
-
-	t.Run("getNodeScore", func(t *testing.T) {
-
 	})
 }

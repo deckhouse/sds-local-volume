@@ -1,0 +1,41 @@
+run:
+  timeout: 10m
+
+issues:
+  exclude:
+    - ST1005.*
+    - "should not use dot imports"
+    - "don't use an underscore in package name"
+    - "exported: .*"
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(sds-local-volume-controller)
+      - prefix(sds-local-volume-csi)
+      - prefix(sds-local-volume-scheduler-extender)
+      - prefix(webhooks)
+
+linters:
+  disable-all: true
+  enable:
+  - dogsled
+  - errcheck
+  - gci
+  - gocritic
+  - gofmt
+#  - goimports
+  - gosimple
+  - govet
+  - ineffassign
+  - misspell
+  - revive
+  - staticcheck
+#  - structcheck
+  - typecheck
+  - unconvert
+  - unparam
+  - whitespace
+  - copyloopvar

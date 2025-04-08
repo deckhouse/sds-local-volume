@@ -1,5 +1,5 @@
 /*
-Copyright 2023 Flant JSC
+Copyright 2025 Flant JSC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,26 +18,25 @@ package controller_test
 
 import (
 	"context"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
-	"sds-local-volume-controller/pkg/controller"
-	"sds-local-volume-controller/pkg/logger"
 	"slices"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"sds-local-volume-controller/pkg/controller"
+	"sds-local-volume-controller/pkg/logger"
 )
 
 var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 	const (
-		controllerNamespace      = "test-namespace"
 		nameForLocalStorageClass = "sds-local-volume-storage-class"
 
 		existingThickLVG1Name = "test-thick-vg1"
@@ -63,13 +62,13 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		volumeBindingModeWFFC = string(v1.VolumeBindingWaitForFirstConsumer)
 		volumeBindingModeIM   = string(v1.VolumeBindingImmediate)
 
-		existingThickLVG1Template = generateLVMVolumeGroup(existingThickLVG1Name, []string{"dev-1111", "dev-2222"}, []string{})
-		existingThickLVG2Template = generateLVMVolumeGroup(existingThickLVG2Name, []string{"dev-3333", "dev-4444"}, []string{})
-		newThickLVGTemplate       = generateLVMVolumeGroup(newThickLVGName, []string{"dev-5555", "dev-6666"}, []string{})
+		existingThickLVG1Template = generateLVMVolumeGroup(existingThickLVG1Name, []string{})
+		existingThickLVG2Template = generateLVMVolumeGroup(existingThickLVG2Name, []string{})
+		newThickLVGTemplate       = generateLVMVolumeGroup(newThickLVGName, []string{})
 
-		existingThinLVG1Template = generateLVMVolumeGroup(existingThinLVG1Name, []string{"dev-7777", "dev-8888"}, []string{"thin-pool-1", "thin-pool-2"})
-		existingThinLVG2Template = generateLVMVolumeGroup(existingThinLVG2Name, []string{"dev-9999", "dev-1010"}, []string{"thin-pool-1", "thin-pool-2"})
-		newThinLVGTemplate       = generateLVMVolumeGroup(newThinLVGName, []string{"dev-1111", "dev-1212"}, []string{"thin-pool-1", "thin-pool-2"})
+		existingThinLVG1Template = generateLVMVolumeGroup(existingThinLVG1Name, []string{"thin-pool-1", "thin-pool-2"})
+		existingThinLVG2Template = generateLVMVolumeGroup(existingThinLVG2Name, []string{"thin-pool-1", "thin-pool-2"})
+		newThinLVGTemplate       = generateLVMVolumeGroup(newThinLVGName, []string{"thin-pool-1", "thin-pool-2"})
 	)
 
 	It("Create_local_sc_with_existing_lvgs", func() {
@@ -113,7 +112,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		sc := &v1.StorageClass{}
 		err = cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
-		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC)
+		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC, controller.DefaultFSType)
 	})
 
 	It("Annotate_sc_as_default_sc", func() {
@@ -170,7 +169,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		sc := &v1.StorageClass{}
 		err = cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
-		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC)
+		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC, controller.DefaultFSType)
 	})
 
 	It("Check_anotated_sc_after_lsc_update", func() {
@@ -215,7 +214,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		sc := &v1.StorageClass{}
 		err = cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
-		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC)
+		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC, "")
 	})
 
 	It("Update_local_sc_add_non_existing_lvg", func() {
@@ -257,7 +256,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		sc := &v1.StorageClass{}
 		err = cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
-		performStandartChecksForSC(sc, lvgSpecOld, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC)
+		performStandartChecksForSC(sc, lvgSpecOld, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC, controller.DefaultFSType)
 	})
 
 	It("Remove_local_sc_with_non_existing_lvg", func() {
@@ -367,7 +366,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		sc := &v1.StorageClass{}
 		err = cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
-		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC)
+		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC, controller.DefaultFSType)
 	})
 
 	It("Remove_local_sc_with_existing_lvgs", func() {
@@ -581,7 +580,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		sc := &v1.StorageClass{}
 		err = cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
-		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThinType, reclaimPolicyRetain, volumeBindingModeIM)
+		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThinType, reclaimPolicyRetain, volumeBindingModeIM, controller.DefaultFSType)
 	})
 
 	It("Update_local_thin_sc_add_existing_thin_lvg", func() {
@@ -621,7 +620,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		sc := &v1.StorageClass{}
 		err = cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
-		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThinType, reclaimPolicyRetain, volumeBindingModeIM)
+		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThinType, reclaimPolicyRetain, volumeBindingModeIM, controller.DefaultFSType)
 	})
 
 	It("Update_local_thin_sc_remove_existing_thin_lvg", func() {
@@ -657,7 +656,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		sc := &v1.StorageClass{}
 		err = cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
-		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThinType, reclaimPolicyRetain, volumeBindingModeIM)
+		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThinType, reclaimPolicyRetain, volumeBindingModeIM, controller.DefaultFSType)
 	})
 
 	It("Update_local_thin_sc_add_existing_thick_lvg", func() {
@@ -699,7 +698,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		sc := &v1.StorageClass{}
 		err = cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
-		performStandartChecksForSC(sc, lvgSpecOld, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThinType, reclaimPolicyRetain, volumeBindingModeIM)
+		performStandartChecksForSC(sc, lvgSpecOld, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThinType, reclaimPolicyRetain, volumeBindingModeIM, controller.DefaultFSType)
 	})
 
 	It("Remove_local_thin_sc_with_existing_thick_lvg", func() {
@@ -742,45 +741,44 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 
 })
 
-func generateLVMVolumeGroup(name string, devices, thinPoolNames []string) *snc.LvmVolumeGroup {
+func generateLVMVolumeGroup(name string, thinPoolNames []string) *snc.LVMVolumeGroup {
 	lvmType := controller.LVMThickType
 
 	if len(thinPoolNames) > 0 {
 		lvmType = controller.LVMThinType
 	}
 
-	thinPoolsSpec := make([]snc.LvmVolumeGroupThinPoolSpec, 0)
-	thinPoolsStatus := make([]snc.LvmVolumeGroupThinPoolStatus, 0)
+	thinPoolsSpec := make([]snc.LVMVolumeGroupThinPoolSpec, 0)
+	thinPoolsStatus := make([]snc.LVMVolumeGroupThinPoolStatus, 0)
 	for i := 0; i < len(thinPoolNames); i++ {
-		thinPoolsSpec = append(thinPoolsSpec, snc.LvmVolumeGroupThinPoolSpec{
+		thinPoolsSpec = append(thinPoolsSpec, snc.LVMVolumeGroupThinPoolSpec{
 			Name: thinPoolNames[i],
-			Size: resource.MustParse("10Gi"),
+			Size: "10Gi",
 		})
-		thinPoolsStatus = append(thinPoolsStatus, snc.LvmVolumeGroupThinPoolStatus{
+		thinPoolsStatus = append(thinPoolsStatus, snc.LVMVolumeGroupThinPoolStatus{
 			Name:       thinPoolNames[i],
 			ActualSize: resource.MustParse("10Gi"),
 			UsedSize:   resource.MustParse("0Gi"),
 		})
 	}
 
-	return &snc.LvmVolumeGroup{
+	return &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		Spec: snc.LvmVolumeGroupSpec{
+		Spec: snc.LVMVolumeGroupSpec{
 			ActualVGNameOnTheNode: "vg1",
-			BlockDeviceNames:      devices,
 			ThinPools:             thinPoolsSpec,
 			Type:                  lvmType,
 		},
-		Status: snc.LvmVolumeGroupStatus{
+		Status: snc.LVMVolumeGroupStatus{
 			ThinPools: thinPoolsStatus,
 		},
 	}
 }
 
+//nolint:unparam
 func generateLocalStorageClass(lscName, reclaimPolicy, volumeBindingMode, lvmType string, lvgs []slv.LocalStorageClassLVG) *slv.LocalStorageClass {
-
 	return &slv.LocalStorageClass{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: lscName,
@@ -794,10 +792,19 @@ func generateLocalStorageClass(lscName, reclaimPolicy, volumeBindingMode, lvmTyp
 			},
 		},
 	}
-
 }
 
-func performStandartChecksForSC(sc *v1.StorageClass, lvgSpec []slv.LocalStorageClassLVG, nameForLocalStorageClass, LSCType, LVMType, reclaimPolicy, volumeBindingMode string) {
+//nolint:unparam
+func performStandartChecksForSC(
+	sc *v1.StorageClass,
+	lvgSpec []slv.LocalStorageClassLVG,
+	nameForLocalStorageClass,
+	lscType,
+	lvmType,
+	reclaimPolicy,
+	volumeBindingMode,
+	fsType string,
+) {
 	expectString := ""
 	for i, lvg := range lvgSpec {
 		if i != 0 {
@@ -811,15 +818,21 @@ func performStandartChecksForSC(sc *v1.StorageClass, lvgSpec []slv.LocalStorageC
 	}
 	expectString += "\n"
 
+	expectedFSType := fsType
+	if fsType == "" {
+		expectedFSType = controller.DefaultFSType
+	}
+
 	Expect(sc).NotTo(BeNil())
 	Expect(sc.Name).To(Equal(nameForLocalStorageClass))
 	Expect(sc.Finalizers).To(HaveLen(1))
 	Expect(sc.Finalizers).To(ContainElement(controller.LocalStorageClassFinalizerName))
 
-	Expect(sc.Parameters).To(HaveLen(4))
-	Expect(sc.Parameters).To(HaveKeyWithValue(controller.TypeParamKey, LSCType))
-	Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMTypeParamKey, LVMType))
+	Expect(sc.Parameters).To(HaveLen(5))
+	Expect(sc.Parameters).To(HaveKeyWithValue(controller.TypeParamKey, lscType))
+	Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMTypeParamKey, lvmType))
 	Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMVolumeBindingModeParamKey, volumeBindingMode))
+	Expect(sc.Parameters).To(HaveKeyWithValue(controller.FSTypeParamKey, expectedFSType))
 	Expect(sc.Parameters).To(HaveKey(controller.LVMVolumeGroupsParamKey))
 	Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(Equal(expectString))
 
@@ -827,7 +840,6 @@ func performStandartChecksForSC(sc *v1.StorageClass, lvgSpec []slv.LocalStorageC
 	Expect(string(*sc.ReclaimPolicy)).To(Equal(reclaimPolicy))
 	Expect(string(*sc.VolumeBindingMode)).To(Equal(volumeBindingMode))
 	Expect(*sc.AllowVolumeExpansion).To(BeTrue())
-
 }
 
 func delFromSlice(slice []slv.LocalStorageClassLVG, name string) []slv.LocalStorageClassLVG {

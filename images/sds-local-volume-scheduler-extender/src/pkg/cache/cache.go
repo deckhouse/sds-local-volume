@@ -1,17 +1,38 @@
+/*
+Copyright 2025 Flant JSC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package cache
 
 import (
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	slices2 "k8s.io/utils/strings/slices"
+
 	"sds-local-volume-scheduler-extender/pkg/consts"
 	"sds-local-volume-scheduler-extender/pkg/logger"
-	"sync"
 )
 
 const (
+	DefaultPVCExpiredDurationSec = 30
+
 	pvcPerLVGCount         = 150
 	lvgsPerPVCCount        = 5
 	lvgsPerNodeCount       = 5
@@ -19,20 +40,21 @@ const (
 )
 
 type Cache struct {
-	lvgs     sync.Map //map[string]*lvgCache
-	pvcLVGs  sync.Map //map[string][]string
-	nodeLVGs sync.Map //map[string][]string
-	log      logger.Logger
+	lvgs            sync.Map // map[string]*lvgCache
+	pvcLVGs         sync.Map // map[string][]string
+	nodeLVGs        sync.Map // map[string][]string
+	log             logger.Logger
+	expiredDuration time.Duration
 }
 
 type lvgCache struct {
-	lvg       *snc.LvmVolumeGroup
-	thickPVCs sync.Map //map[string]*pvcCache
-	thinPools sync.Map //map[string]*thinPoolCache
+	lvg       *snc.LVMVolumeGroup
+	thickPVCs sync.Map // map[string]*pvcCache
+	thinPools sync.Map // map[string]*thinPoolCache
 }
 
 type thinPoolCache struct {
-	pvcs sync.Map //map[string]*pvcCache
+	pvcs sync.Map // map[string]*pvcCache
 }
 
 type pvcCache struct {
@@ -41,18 +63,56 @@ type pvcCache struct {
 }
 
 // NewCache initialize new cache.
-func NewCache(logger logger.Logger) *Cache {
-	return &Cache{
-		log: logger,
+func NewCache(logger logger.Logger, pvcExpDurSec int) *Cache {
+	ch := &Cache{
+		log:             logger,
+		expiredDuration: time.Duration(pvcExpDurSec) * time.Second,
 	}
+
+	go func() {
+		timer := time.NewTimer(ch.expiredDuration)
+
+		for range timer.C {
+			ch.clearBoundExpiredPVC()
+			timer.Reset(ch.expiredDuration)
+		}
+	}()
+
+	return ch
+}
+
+func (c *Cache) clearBoundExpiredPVC() {
+	c.log.Debug("[clearBoundExpiredPVC] starts to clear expired PVC")
+	c.lvgs.Range(func(lvgName, _ any) bool {
+		pvcs, err := c.GetAllPVCForLVG(lvgName.(string))
+		if err != nil {
+			c.log.Error(err, fmt.Sprintf("[clearBoundExpiredPVC] unable to get PVCs for the LVMVolumeGroup %s", lvgName.(string)))
+			return false
+		}
+
+		for _, pvc := range pvcs {
+			if pvc.Status.Phase != v1.ClaimBound {
+				c.log.Trace(fmt.Sprintf("[clearBoundExpiredPVC] PVC %s is not in a Bound state", pvc.Name))
+				continue
+			}
+
+			if time.Since(pvc.CreationTimestamp.Time) > c.expiredDuration {
+				c.log.Warning(fmt.Sprintf("[clearBoundExpiredPVC] PVC %s is in a Bound state and expired, remove it from the cache", pvc.Name))
+				c.RemovePVCFromTheCache(pvc)
+			} else {
+				c.log.Trace(fmt.Sprintf("[clearBoundExpiredPVC] PVC %s is in a Bound state but not expired yet.", pvc.Name))
+			}
+		}
+
+		return true
+	})
+	c.log.Debug("[clearBoundExpiredPVC] finished the expired PVC clearing")
 }
 
 // AddLVG adds selected LVMVolumeGroup resource to the cache. If it is already stored, does nothing.
-func (c *Cache) AddLVG(lvg *snc.LvmVolumeGroup) {
+func (c *Cache) AddLVG(lvg *snc.LVMVolumeGroup) {
 	_, loaded := c.lvgs.LoadOrStore(lvg.Name, &lvgCache{
-		lvg:       lvg,
-		thickPVCs: sync.Map{},
-		thinPools: sync.Map{},
+		lvg: lvg,
 	})
 	if loaded {
 		c.log.Debug(fmt.Sprintf("[AddLVG] the LVMVolumeGroup %s has been already added to the cache", lvg.Name))
@@ -73,34 +133,35 @@ func (c *Cache) AddLVG(lvg *snc.LvmVolumeGroup) {
 }
 
 // UpdateLVG updated selected LVMVolumeGroup resource in the cache. If such LVMVolumeGroup is not stored, returns an error.
-func (c *Cache) UpdateLVG(lvg *snc.LvmVolumeGroup) error {
-	if lvgCh, found := c.lvgs.Load(lvg.Name); found {
-		lvgCh.(*lvgCache).lvg = lvg
-
-		c.log.Trace(fmt.Sprintf("[UpdateLVG] the LVMVolumeGroup %s nodes: %v", lvg.Name, lvg.Status.Nodes))
-		for _, node := range lvg.Status.Nodes {
-			lvgsOnTheNode, _ := c.nodeLVGs.Load(node.Name)
-			if lvgsOnTheNode == nil {
-				lvgsOnTheNode = make([]string, 0, lvgsPerNodeCount)
-			}
-
-			if !slices2.Contains(lvgsOnTheNode.([]string), lvg.Name) {
-				lvgsOnTheNode = append(lvgsOnTheNode.([]string), lvg.Name)
-				c.log.Debug(fmt.Sprintf("[UpdateLVG] the LVMVolumeGroup %s has been added to the node %s", lvg.Name, node.Name))
-				c.nodeLVGs.Store(node.Name, lvgsOnTheNode)
-			} else {
-				c.log.Debug(fmt.Sprintf("[UpdateLVG] the LVMVolumeGroup %s has been already added to the node %s", lvg.Name, node.Name))
-			}
-		}
-
-		return nil
+func (c *Cache) UpdateLVG(lvg *snc.LVMVolumeGroup) error {
+	lvgCh, found := c.lvgs.Load(lvg.Name)
+	if !found {
+		return fmt.Errorf("the LVMVolumeGroup %s was not found in the lvgCh", lvg.Name)
 	}
 
-	return fmt.Errorf("the LVMVolumeGroup %s was not found in the lvgCh", lvg.Name)
+	lvgCh.(*lvgCache).lvg = lvg
+
+	c.log.Trace(fmt.Sprintf("[UpdateLVG] the LVMVolumeGroup %s nodes: %v", lvg.Name, lvg.Status.Nodes))
+	for _, node := range lvg.Status.Nodes {
+		lvgsOnTheNode, _ := c.nodeLVGs.Load(node.Name)
+		if lvgsOnTheNode == nil {
+			lvgsOnTheNode = make([]string, 0, lvgsPerNodeCount)
+		}
+
+		if !slices2.Contains(lvgsOnTheNode.([]string), lvg.Name) {
+			lvgsOnTheNode = append(lvgsOnTheNode.([]string), lvg.Name)
+			c.log.Debug(fmt.Sprintf("[UpdateLVG] the LVMVolumeGroup %s has been added to the node %s", lvg.Name, node.Name))
+			c.nodeLVGs.Store(node.Name, lvgsOnTheNode)
+		} else {
+			c.log.Debug(fmt.Sprintf("[UpdateLVG] the LVMVolumeGroup %s has been already added to the node %s", lvg.Name, node.Name))
+		}
+	}
+
+	return nil
 }
 
 // TryGetLVG returns selected LVMVolumeGroup resource if it is stored in the cache, otherwise returns nil.
-func (c *Cache) TryGetLVG(name string) *snc.LvmVolumeGroup {
+func (c *Cache) TryGetLVG(name string) *snc.LVMVolumeGroup {
 	lvgCh, found := c.lvgs.Load(name)
 	if !found {
 		c.log.Debug(fmt.Sprintf("[TryGetLVG] the LVMVolumeGroup %s was not found in the cache. Return nil", name))
@@ -122,11 +183,11 @@ func (c *Cache) GetLVGNamesByNodeName(nodeName string) []string {
 }
 
 // GetAllLVG returns all the LVMVolumeGroups resources stored in the cache.
-func (c *Cache) GetAllLVG() map[string]*snc.LvmVolumeGroup {
-	lvgs := make(map[string]*snc.LvmVolumeGroup)
+func (c *Cache) GetAllLVG() map[string]*snc.LVMVolumeGroup {
+	lvgs := make(map[string]*snc.LVMVolumeGroup)
 	c.lvgs.Range(func(lvgName, lvgCh any) bool {
 		if lvgCh.(*lvgCache).lvg == nil {
-			c.log.Error(fmt.Errorf("LVMVolumeGroup %s is not initialized", lvgName), fmt.Sprintf("[GetAllLVG] an error occurs while iterating the LVMVolumeGroups"))
+			c.log.Error(fmt.Errorf("LVMVolumeGroup %s is not initialized", lvgName), "[GetAllLVG] an error occurs while iterating the LVMVolumeGroups")
 			return true
 		}
 
@@ -146,7 +207,7 @@ func (c *Cache) GetLVGThickReservedSpace(lvgName string) (int64, error) {
 	}
 
 	var space int64
-	lvg.(*lvgCache).thickPVCs.Range(func(pvcName, pvcCh any) bool {
+	lvg.(*lvgCache).thickPVCs.Range(func(_, pvcCh any) bool {
 		space += pvcCh.(*pvcCache).pvc.Spec.Resources.Requests.Storage().Value()
 		return true
 	})
@@ -169,7 +230,7 @@ func (c *Cache) GetLVGThinReservedSpace(lvgName string, thinPoolName string) (in
 	}
 
 	var space int64
-	thinPool.(*thinPoolCache).pvcs.Range(func(pvcName, pvcCh any) bool {
+	thinPool.(*thinPoolCache).pvcs.Range(func(_, pvcCh any) bool {
 		space += pvcCh.(*pvcCache).pvc.Spec.Resources.Requests.Storage().Value()
 		return true
 	})
@@ -181,20 +242,24 @@ func (c *Cache) GetLVGThinReservedSpace(lvgName string, thinPoolName string) (in
 func (c *Cache) DeleteLVG(lvgName string) {
 	c.lvgs.Delete(lvgName)
 
-	c.nodeLVGs.Range(func(nodeName, lvgNames any) bool {
+	c.nodeLVGs.Range(func(_, lvgNames any) bool {
 		for i, lvg := range lvgNames.([]string) {
 			if lvg == lvgName {
+				//nolint:gocritic,ineffassign
 				lvgNames = append(lvgNames.([]string)[:i], lvgNames.([]string)[i+1:]...)
+				return false
 			}
 		}
 
 		return true
 	})
 
-	c.pvcLVGs.Range(func(pvcName, lvgNames any) bool {
+	c.pvcLVGs.Range(func(_, lvgNames any) bool {
 		for i, lvg := range lvgNames.([]string) {
 			if lvg == lvgName {
+				//nolint:gocritic,ineffassign
 				lvgNames = append(lvgNames.([]string)[:i], lvgNames.([]string)[i+1:]...)
+				return false
 			}
 		}
 
@@ -215,7 +280,7 @@ func (c *Cache) AddThickPVC(lvgName string, pvc *v1.PersistentVolumeClaim) error
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("the LVMVolumeGroup %s was not found in the cache", lvgName)
-		c.log.Error(err, fmt.Sprintf("[AddThickPVC] an error occured while trying to add PVC %s to the cache", pvcKey))
+		c.log.Error(err, fmt.Sprintf("[AddThickPVC] an error occurred while trying to add PVC %s to the cache", pvcKey))
 		return err
 	}
 
@@ -245,7 +310,7 @@ func (c *Cache) shouldAddPVC(pvc *v1.PersistentVolumeClaim, lvgCh *lvgCache, pvc
 		lvgsOnTheNode, found := c.nodeLVGs.Load(pvc.Annotations[SelectedNodeAnnotation])
 		if !found {
 			err := fmt.Errorf("no LVMVolumeGroups found for the node %s", pvc.Annotations[SelectedNodeAnnotation])
-			c.log.Error(err, fmt.Sprintf("[shouldAddPVC] an error occured while trying to add PVC %s to the cache", pvcKey))
+			c.log.Error(err, fmt.Sprintf("[shouldAddPVC] an error occurred while trying to add PVC %s to the cache", pvcKey))
 			return false, err
 		}
 
@@ -292,7 +357,7 @@ func (c *Cache) AddThinPVC(lvgName, thinPoolName string, pvc *v1.PersistentVolum
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("the LVMVolumeGroup %s was not found in the cache", lvgName)
-		c.log.Error(err, fmt.Sprintf("[AddThinPVC] an error occured while trying to add PVC %s to the cache", pvcKey))
+		c.log.Error(err, fmt.Sprintf("[AddThinPVC] an error occurred while trying to add PVC %s to the cache", pvcKey))
 		return err
 	}
 
@@ -462,18 +527,18 @@ func (c *Cache) GetAllPVCForLVG(lvgName string) ([]*v1.PersistentVolumeClaim, er
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("cache was not found for the LVMVolumeGroup %s", lvgName)
-		c.log.Error(err, fmt.Sprintf("[GetAllPVCForLVG] an error occured while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
+		c.log.Error(err, fmt.Sprintf("[GetAllPVCForLVG] an error occurred while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
 		return nil, err
 	}
 
 	// TODO: fix this to struct size field after refactoring
 	size := 0
-	lvgCh.(*lvgCache).thickPVCs.Range(func(key, value any) bool {
+	lvgCh.(*lvgCache).thickPVCs.Range(func(_, _ any) bool {
 		size++
 		return true
 	})
-	lvgCh.(*lvgCache).thinPools.Range(func(tpName, tpCh any) bool {
-		tpCh.(*thinPoolCache).pvcs.Range(func(key, value any) bool {
+	lvgCh.(*lvgCache).thinPools.Range(func(_, tpCh any) bool {
+		tpCh.(*thinPoolCache).pvcs.Range(func(_, _ any) bool {
 			size++
 			return true
 		})
@@ -482,14 +547,14 @@ func (c *Cache) GetAllPVCForLVG(lvgName string) ([]*v1.PersistentVolumeClaim, er
 
 	result := make([]*v1.PersistentVolumeClaim, 0, size)
 	// collect Thick PVC for the LVG
-	lvgCh.(*lvgCache).thickPVCs.Range(func(pvcName, pvcCh any) bool {
+	lvgCh.(*lvgCache).thickPVCs.Range(func(_, pvcCh any) bool {
 		result = append(result, pvcCh.(*pvcCache).pvc)
 		return true
 	})
 
 	// collect Thin PVC for the LVG
-	lvgCh.(*lvgCache).thinPools.Range(func(tpName, tpCh any) bool {
-		tpCh.(*thinPoolCache).pvcs.Range(func(pvcName, pvcCh any) bool {
+	lvgCh.(*lvgCache).thinPools.Range(func(_, tpCh any) bool {
+		tpCh.(*thinPoolCache).pvcs.Range(func(_, pvcCh any) bool {
 			result = append(result, pvcCh.(*pvcCache).pvc)
 			return true
 		})
@@ -504,13 +569,13 @@ func (c *Cache) GetAllThickPVCLVG(lvgName string) ([]*v1.PersistentVolumeClaim, 
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("cache was not found for the LVMVolumeGroup %s", lvgName)
-		c.log.Error(err, fmt.Sprintf("[GetAllPVCForLVG] an error occured while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
+		c.log.Error(err, fmt.Sprintf("[GetAllPVCForLVG] an error occurred while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
 		return nil, err
 	}
 
 	result := make([]*v1.PersistentVolumeClaim, 0, pvcPerLVGCount)
 	// collect Thick PVC for the LVG
-	lvgCh.(*lvgCache).thickPVCs.Range(func(pvcName, pvcCh any) bool {
+	lvgCh.(*lvgCache).thickPVCs.Range(func(_, pvcCh any) bool {
 		result = append(result, pvcCh.(*pvcCache).pvc)
 		return true
 	})
@@ -523,7 +588,7 @@ func (c *Cache) GetAllPVCFromLVGThinPool(lvgName, thinPoolName string) ([]*v1.Pe
 	lvgCh, found := c.lvgs.Load(lvgName)
 	if !found {
 		err := fmt.Errorf("cache was not found for the LVMVolumeGroup %s", lvgName)
-		c.log.Error(err, fmt.Sprintf("[GetAllPVCFromLVGThinPool] an error occured while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
+		c.log.Error(err, fmt.Sprintf("[GetAllPVCFromLVGThinPool] an error occurred while trying to get all PVC for the LVMVolumeGroup %s", lvgName))
 		return nil, err
 	}
 
@@ -534,7 +599,7 @@ func (c *Cache) GetAllPVCFromLVGThinPool(lvgName, thinPoolName string) ([]*v1.Pe
 	}
 
 	result := make([]*v1.PersistentVolumeClaim, 0, pvcPerLVGCount)
-	thinPoolCh.(*thinPoolCache).pvcs.Range(func(pvcName, pvcCh any) bool {
+	thinPoolCh.(*thinPoolCache).pvcs.Range(func(_, pvcCh any) bool {
 		result = append(result, pvcCh.(*pvcCache).pvc)
 		return true
 	})
@@ -580,7 +645,7 @@ func (c *Cache) RemoveSpaceReservationForPVCWithSelectedNode(pvc *v1.PersistentV
 		lvgCh, found := c.lvgs.Load(lvgName)
 		if !found || lvgCh == nil {
 			err := fmt.Errorf("no cache found for the LVMVolumeGroup %s", lvgName)
-			c.log.Error(err, fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] an error occured while trying to remove space reservation for PVC %s", pvcKey))
+			c.log.Error(err, fmt.Sprintf("[RemoveSpaceReservationForPVCWithSelectedNode] an error occurred while trying to remove space reservation for PVC %s", pvcKey))
 			return err
 		}
 
@@ -641,27 +706,24 @@ func (c *Cache) RemoveSpaceReservationForPVCWithSelectedNode(pvc *v1.PersistentV
 
 // RemovePVCFromTheCache completely removes selected PVC in the cache.
 func (c *Cache) RemovePVCFromTheCache(pvc *v1.PersistentVolumeClaim) {
-	targetPvcKey := configurePVCKey(pvc)
+	pvcKey := configurePVCKey(pvc)
 
-	c.log.Debug(fmt.Sprintf("[RemovePVCFromTheCache] run full cache wipe for PVC %s", targetPvcKey))
-	c.pvcLVGs.Range(func(pvcKey, lvgArray any) bool {
-		if pvcKey == targetPvcKey {
-			for _, lvgName := range lvgArray.([]string) {
-				lvgCh, found := c.lvgs.Load(lvgName)
-				if found {
-					lvgCh.(*lvgCache).thickPVCs.Delete(pvcKey.(string))
-					lvgCh.(*lvgCache).thinPools.Range(func(tpName, tpCh any) bool {
-						tpCh.(*thinPoolCache).pvcs.Delete(pvcKey)
-						return true
-					})
-				}
+	c.log.Debug(fmt.Sprintf("[RemovePVCFromTheCache] run full cache wipe for PVC %s", pvcKey))
+	lvgSlice, ok := c.pvcLVGs.Load(pvcKey)
+	if ok {
+		for _, lvgName := range lvgSlice.([]string) {
+			lvgCh, found := c.lvgs.Load(lvgName)
+			if found {
+				lvgCh.(*lvgCache).thickPVCs.Delete(pvcKey)
+				lvgCh.(*lvgCache).thinPools.Range(func(_, tpCh any) bool {
+					tpCh.(*thinPoolCache).pvcs.Delete(pvcKey)
+					return true
+				})
 			}
 		}
+	}
 
-		return true
-	})
-
-	c.pvcLVGs.Delete(targetPvcKey)
+	c.pvcLVGs.Delete(pvcKey)
 }
 
 // FindLVGForPVCBySelectedNode finds a suitable LVMVolumeGroup resource's name for selected PVC based on selected node. If no such LVMVolumeGroup found, returns empty string.
@@ -684,6 +746,7 @@ func (c *Cache) FindLVGForPVCBySelectedNode(pvc *v1.PersistentVolumeClaim, nodeN
 	for _, lvgName := range lvgsForPVC.([]string) {
 		if slices2.Contains(lvgsOnTheNode.([]string), lvgName) {
 			targetLVG = lvgName
+			break
 		}
 	}
 

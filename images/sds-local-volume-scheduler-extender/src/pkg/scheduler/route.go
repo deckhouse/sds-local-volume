@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Flant JSC
+Copyright 2025 Flant JSC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,11 +19,13 @@ package scheduler
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"net/http"
+
+	"k8s.io/apimachinery/pkg/api/resource"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"sds-local-volume-scheduler-extender/pkg/cache"
 	"sds-local-volume-scheduler-extender/pkg/logger"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type scheduler struct {
@@ -37,11 +39,11 @@ type scheduler struct {
 
 func (s *scheduler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
-	case "/filter":
+	case "/scheduler/filter":
 		s.log.Debug("[ServeHTTP] filter route starts handling the request")
 		s.filter(w, r)
 		s.log.Debug("[ServeHTTP] filter route ends handling the request")
-	case "/prioritize":
+	case "/scheduler/prioritize":
 		s.log.Debug("[ServeHTTP] prioritize route starts handling the request")
 		s.prioritize(w, r)
 		s.log.Debug("[ServeHTTP] prioritize route ends handling the request")
@@ -77,7 +79,7 @@ func status(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write([]byte("ok"))
 	if err != nil {
-		fmt.Println(fmt.Sprintf("error occurs on status route, err: %s", err.Error()))
+		fmt.Printf("error occurs on status route, err: %s\n", err.Error())
 	}
 }
 
@@ -107,6 +109,13 @@ func (s *scheduler) getCache(w http.ResponseWriter, _ *http.Request) {
 		}
 
 		thickPvcs, err := s.cache.GetAllThickPVCLVG(lvg.Name)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, err = w.Write([]byte("unable to write the cache"))
+			if err != nil {
+				s.log.Error(err, "error write response")
+			}
+		}
 		for _, pvc := range thickPvcs {
 			_, err = w.Write([]byte(fmt.Sprintf("\t\tThick PVC: %s, reserved: %s, selected node: %s\n", pvc.Name, pvc.Spec.Resources.Requests.Storage().String(), pvc.Annotations[cache.SelectedNodeAnnotation])))
 			if err != nil {

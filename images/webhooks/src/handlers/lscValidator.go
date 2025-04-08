@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Flant JSC
+Copyright 2025 Flant JSC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,17 +20,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
+
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"slices"
-
-	dh "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	mc "webhooks/api"
 )
 
 const (
@@ -49,7 +51,7 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 		klog.Fatal(err)
 	}
 
-	listDevice := &snc.LvmVolumeGroupList{}
+	listDevice := &snc.LVMVolumeGroupList{}
 
 	err = cl.List(ctx, listDevice)
 	if err != nil {
@@ -59,8 +61,7 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 	errMsg := ""
 	var lvmVolumeGroupUnique []string
 
-	thickExists := false
-	thinExists := false
+	var thickNames, thinNames []string
 	for _, lvmGroup := range lsc.Spec.LVM.LVMVolumeGroups {
 		lvgExists := false
 
@@ -88,11 +89,13 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 		}
 
 		if lvmGroup.Thin == nil {
-			thickExists = true
+			thickNames = append(thickNames, lvmGroup.Name)
 		} else {
-			thinExists = true
+			thinNames = append(thinNames, lvmGroup.Name)
 		}
 	}
+
+	thinExists, thickExists := len(thinNames) > 0, len(thickNames) > 0
 
 	if thinExists {
 		ctx := context.Background()
@@ -101,7 +104,7 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 			klog.Fatal(err.Error())
 		}
 
-		slvModuleConfig := &dh.ModuleConfig{}
+		slvModuleConfig := &mc.ModuleConfig{}
 
 		err = cl.Get(ctx, types.NamespacedName{Name: sdsLocalVolumeModuleName, Namespace: ""}, slvModuleConfig)
 		if err != nil {
@@ -114,6 +117,7 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 			klog.Info("Enabling thin pools support")
 			patchBytes, err := json.Marshal(map[string]interface{}{
 				"spec": map[string]interface{}{
+					"version": 1,
 					"settings": map[string]interface{}{
 						"enableThinProvisioning": true,
 					},
@@ -132,26 +136,23 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 	}
 
 	if thinExists && lsc.Spec.LVM.Type == "Thick" {
-		errMsg = "There must be only thick pools with Thick LVM type"
+		errMsg = fmt.Sprintf("There must be only thick pools with Thick LVM type. Found: %s.", strings.Join(thinNames, ", "))
 		klog.Info(errMsg)
 		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
 			nil
 	}
 
 	if thickExists && lsc.Spec.LVM.Type == "Thin" {
-		errMsg = "There must be only thin pools with Thin LVM type"
+		errMsg = fmt.Sprintf("There must be only thin pools with Thin LVM type. Found: %s.", strings.Join(thickNames, ", "))
 		klog.Info(errMsg)
 		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
 			nil
 	}
 
-	if thickExists == true && thinExists == true {
+	if thickExists && thinExists {
 		errMsg = "There must be only thin or thick pools simultaneously"
 		klog.Info(errMsg)
-		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
-			nil
-	} else {
-		return &kwhvalidating.ValidatorResult{Valid: true},
-			nil
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
 	}
+	return &kwhvalidating.ValidatorResult{Valid: true}, nil
 }

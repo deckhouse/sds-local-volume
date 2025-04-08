@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Flant JSC
+Copyright 2025 Flant JSC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,11 +36,13 @@ type LocalStorageClassSpec struct {
 	ReclaimPolicy     string                    `json:"reclaimPolicy"`
 	VolumeBindingMode string                    `json:"volumeBindingMode"`
 	LVM               *LocalStorageClassLVMSpec `json:"lvm,omitempty"`
+	FSType            string                    `json:"fsType,omitempty"`
 }
 
 type LocalStorageClassLVMSpec struct {
 	Type            string                         `json:"type"`
 	Thick           *LocalStorageClassLVMThickSpec `json:"thick,omitempty"`
+	VolumeCleanup   string                         `json:"volumeCleanup,omitempty"`
 	LVMVolumeGroups []LocalStorageClassLVG         `json:"lvmVolumeGroups"`
 }
 
@@ -59,5 +61,5 @@ type LocalStorageClassLVMThinPoolSpec struct {
 }
 
 type LocalStorageClassLVMThickSpec struct {
-	Contiguous bool `json:"contiguous"`
+	Contiguous bool `json:"contiguous,omitempty"`
 }

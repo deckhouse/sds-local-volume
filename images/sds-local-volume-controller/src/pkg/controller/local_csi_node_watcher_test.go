@@ -1,18 +1,35 @@
+/*
+Copyright 2025 Flant JSC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controller
 
 import (
 	"context"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
-	"sds-local-volume-controller/pkg/logger"
 	"testing"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"sds-local-volume-controller/pkg/logger"
 )
 
 func TestRunLocalCSINodeWatcherController(t *testing.T) {
@@ -62,12 +79,12 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			t.Error(err)
 		}
 
-		lvgOnNode4 := &snc.LvmVolumeGroup{
+		lvgOnNode4 := &snc.LVMVolumeGroup{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "lvgOnNode4",
 			},
-			Status: snc.LvmVolumeGroupStatus{
-				Nodes: []snc.LvmVolumeGroupNode{
+			Status: snc.LVMVolumeGroupStatus{
+				Nodes: []snc.LVMVolumeGroupNode{
 					{
 						Name: "test-node4",
 					},
@@ -189,7 +206,7 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			_, exist = node4.Labels[localCsiNodeSelectorLabel]
 			assert.True(t, exist)
 
-			updateLvg := &snc.LvmVolumeGroup{}
+			updateLvg := &snc.LVMVolumeGroup{}
 			err = cl.Get(ctx,
 				client.ObjectKey{
 					Name: "lvgOnNode4",
@@ -217,10 +234,8 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			assert.False(t, exist)
 			_, exist = node5.Labels[localCsiNodeSelectorLabel]
 			assert.False(t, exist)
-
 		}
 	})
-
 }
 
 func NewFakeClient() client.WithWatch {

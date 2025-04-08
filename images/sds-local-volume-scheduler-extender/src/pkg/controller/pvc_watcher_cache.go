@@ -1,17 +1,30 @@
+/*
+Copyright 2025 Flant JSC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controller
 
 import (
 	"context"
 	"errors"
 	"fmt"
+
 	v1 "k8s.io/api/core/v1"
 	v12 "k8s.io/api/storage/v1"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/strings/slices"
-	"sds-local-volume-scheduler-extender/pkg/cache"
-	"sds-local-volume-scheduler-extender/pkg/consts"
-	"sds-local-volume-scheduler-extender/pkg/logger"
-	"sds-local-volume-scheduler-extender/pkg/scheduler"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -19,6 +32,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"sds-local-volume-scheduler-extender/pkg/cache"
+	"sds-local-volume-scheduler-extender/pkg/consts"
+	"sds-local-volume-scheduler-extender/pkg/logger"
+	"sds-local-volume-scheduler-extender/pkg/scheduler"
 )
 
 const (
@@ -33,7 +51,7 @@ func RunPVCWatcherCacheController(
 	log.Info("[RunPVCWatcherCacheController] starts the work")
 
 	c, err := controller.New("test-pvc-watcher", mgr, controller.Options{
-		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+		Reconciler: reconcile.Func(func(_ context.Context, _ reconcile.Request) (reconcile.Result, error) {
 			return reconcile.Result{}, nil
 		}),
 	})
@@ -42,14 +60,10 @@ func RunPVCWatcherCacheController(
 		return err
 	}
 
-	err = c.Watch(source.Kind(mgr.GetCache(), &v1.PersistentVolumeClaim{}), handler.Funcs{
-		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+	err = c.Watch(source.Kind(mgr.GetCache(), &v1.PersistentVolumeClaim{}, handler.TypedFuncs[*v1.PersistentVolumeClaim, reconcile.Request]{
+		CreateFunc: func(ctx context.Context, e event.TypedCreateEvent[*v1.PersistentVolumeClaim], _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 			log.Info("[RunPVCWatcherCacheController] CreateFunc reconciliation starts")
-			pvc, ok := e.Object.(*v1.PersistentVolumeClaim)
-			if !ok {
-				err = errors.New("unable to cast event object to a given type")
-				log.Error(err, "[RunPVCWatcherCacheController] an error occurred while handling create event")
-			}
+			pvc := e.Object
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] CreateFunc starts the reconciliation for the PVC %s/%s", pvc.Namespace, pvc.Name))
 
 			if pvc.Annotations == nil {
@@ -58,10 +72,8 @@ func RunPVCWatcherCacheController(
 			}
 
 			selectedNodeName, wasSelected := pvc.Annotations[cache.SelectedNodeAnnotation]
-			if !wasSelected ||
-				pvc.Status.Phase == v1.ClaimBound ||
-				pvc.DeletionTimestamp != nil {
-				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s/%s should not be reconciled by CreateFunc due to no selected node annotaion found or deletion timestamp is not nil", pvc.Namespace, pvc.Name))
+			if !wasSelected || pvc.Status.Phase == v1.ClaimBound || pvc.DeletionTimestamp != nil {
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s/%s should not be reconciled by CreateFunc due to no selected node annotation found or deletion timestamp is not nil", pvc.Namespace, pvc.Name))
 				return
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s/%s has selected node annotation, it will be reconciled in CreateFunc", pvc.Namespace, pvc.Name))
@@ -70,13 +82,9 @@ func RunPVCWatcherCacheController(
 			reconcilePVC(ctx, mgr, log, schedulerCache, pvc, selectedNodeName)
 			log.Info("[RunPVCWatcherCacheController] CreateFunc reconciliation ends")
 		},
-		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+		UpdateFunc: func(ctx context.Context, e event.TypedUpdateEvent[*v1.PersistentVolumeClaim], _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 			log.Info("[RunPVCWatcherCacheController] Update Func reconciliation starts")
-			pvc, ok := e.ObjectNew.(*v1.PersistentVolumeClaim)
-			if !ok {
-				err = errors.New("unable to cast event object to a given type")
-				log.Error(err, "[RunPVCWatcherCacheController] an error occurred while handling create event")
-			}
+			pvc := e.ObjectNew
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] UpdateFunc starts the reconciliation for the PVC %s/%s", pvc.Namespace, pvc.Name))
 
 			if pvc.Annotations == nil {
@@ -86,7 +94,7 @@ func RunPVCWatcherCacheController(
 
 			selectedNodeName, wasSelected := pvc.Annotations[cache.SelectedNodeAnnotation]
 			if !wasSelected || pvc.DeletionTimestamp != nil {
-				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s/%s should not be reconciled by UpdateFunc due to no selected node annotaion found or deletion timestamp is not nil", pvc.Namespace, pvc.Name))
+				log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s/%s should not be reconciled by UpdateFunc due to no selected node annotation found or deletion timestamp is not nil", pvc.Namespace, pvc.Name))
 				return
 			}
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s/%s has selected node annotation, it will be reconciled in UpdateFunc", pvc.Namespace, pvc.Name))
@@ -95,20 +103,18 @@ func RunPVCWatcherCacheController(
 			reconcilePVC(ctx, mgr, log, schedulerCache, pvc, selectedNodeName)
 			log.Info("[RunPVCWatcherCacheController] Update Func reconciliation ends")
 		},
-		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+		DeleteFunc: func(_ context.Context, e event.TypedDeleteEvent[*v1.PersistentVolumeClaim], _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 			log.Info("[RunPVCWatcherCacheController] Delete Func reconciliation starts")
-			pvc, ok := e.Object.(*v1.PersistentVolumeClaim)
-			if !ok {
-				err = errors.New("unable to cast event object to a given type")
-				log.Error(err, "[RunPVCWatcherCacheController] an error occurred while handling create event")
-			}
+			pvc := e.Object
 			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] DeleteFunc starts the reconciliation for the PVC %s/%s", pvc.Namespace, pvc.Name))
 
-			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s/%s was removed from the cluster. It will be full removed from the cache", pvc.Namespace, pvc.Name))
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] PVC %s/%s was removed from the cluster. It will be fully removed from the cache", pvc.Namespace, pvc.Name))
 			schedulerCache.RemovePVCFromTheCache(pvc)
-			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully full removed PVC %s/%s from the cache", pvc.Namespace, pvc.Name))
+			log.Debug(fmt.Sprintf("[RunPVCWatcherCacheController] successfully fully removed PVC %s/%s from the cache", pvc.Namespace, pvc.Name))
 		},
-	})
+	},
+	),
+	)
 	if err != nil {
 		log.Error(err, "[RunPVCWatcherCacheController] unable to controller Watch")
 		return err
@@ -140,7 +146,7 @@ func reconcilePVC(ctx context.Context, mgr manager.Manager, log logger.Logger, s
 	log.Debug(fmt.Sprintf("[reconcilePVC] successfully extracted LVGs from the Storage Class %s for PVC %s/%s", sc.Name, pvc.Namespace, pvc.Name))
 
 	lvgsForPVC := schedulerCache.GetLVGNamesForPVC(pvc)
-	if lvgsForPVC == nil || len(lvgsForPVC) == 0 {
+	if len(lvgsForPVC) == 0 {
 		log.Debug(fmt.Sprintf("[reconcilePVC] no LVMVolumeGroups were found in the cache for PVC %s/%s. Use Storage Class %s instead", pvc.Namespace, pvc.Name, *pvc.Spec.StorageClassName))
 
 		for _, lvg := range lvgsFromSc {

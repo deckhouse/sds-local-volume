@@ -1,5 +1,5 @@
 /*
-Copyright 2024 Flant JSC
+Copyright 2025 Flant JSC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,27 +18,27 @@ package handlers
 
 import (
 	"context"
-	dh "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
+	"net/http"
+	"os"
+
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
+	kwhhttp "github.com/slok/kubewebhook/v2/pkg/http"
+	"github.com/slok/kubewebhook/v2/pkg/log"
+	"github.com/slok/kubewebhook/v2/pkg/model"
+	kwhmutating "github.com/slok/kubewebhook/v2/pkg/webhook/mutating"
+	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/resource/v1alpha2"
 	sv1 "k8s.io/api/storage/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"net/http"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/slok/kubewebhook/v2/pkg/log"
-
-	kwhhttp "github.com/slok/kubewebhook/v2/pkg/http"
-	"github.com/slok/kubewebhook/v2/pkg/model"
-	kwhmutating "github.com/slok/kubewebhook/v2/pkg/webhook/mutating"
-	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	mc "webhooks/api"
 )
 
 func NewKubeClient(kubeconfigPath string) (client.Client, error) {
@@ -58,7 +58,7 @@ func NewKubeClient(kubeconfigPath string) (client.Client, error) {
 	var (
 		resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
 			v1alpha2.AddToScheme,
-			dh.AddToScheme,
+			mc.AddToScheme,
 			snc.AddToScheme,
 			clientgoscheme.AddToScheme,
 			extv1.AddToScheme,
@@ -100,7 +100,6 @@ func GetMutatingWebhookHandler(mutationFunc func(ctx context.Context, _ *model.A
 	mutationWebhookHandler, err := kwhhttp.HandlerFor(kwhhttp.HandlerConfig{Webhook: mutationWebhook, Logger: logger})
 
 	return mutationWebhookHandler, err
-
 }
 
 func GetValidatingWebhookHandler(validationFunc func(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhvalidating.ValidatorResult, error), validatorID string, obj metav1.Object, logger log.Logger) (http.Handler, error) {
@@ -121,5 +120,4 @@ func GetValidatingWebhookHandler(validationFunc func(ctx context.Context, _ *mod
 	mutationWebhookHandler, err := kwhhttp.HandlerFor(kwhhttp.HandlerConfig{Webhook: mutationWebhook, Logger: logger})
 
 	return mutationWebhookHandler, err
-
 }

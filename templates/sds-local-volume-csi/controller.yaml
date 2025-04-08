@@ -75,12 +75,14 @@ spec:
       maxAllowed:
         cpu: 70m
         memory: 100Mi
+{{- if .Values.sdsLocalVolume.internal.featureSnapshotsEnabled }}
     - containerName: csi-snapshotter
       minAllowed:
         {{- include "csi_snapshotter_resources" . | nindent 8 }}
       maxAllowed:
         cpu: 20m
         memory: 50Mi
+{{- end }}
     - containerName: csi-livenessprobe
       minAllowed:
         {{- include "csi_livenessprobe_resources" . | nindent 8 }}
@@ -162,10 +164,10 @@ spec:
       containers:
       - args:
           - --v=5
-          - --csi-address=$(CSI_ENDPOINT)
+          - --csi-address=$(CSI_ADDRESS)
           - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
         env:
-          - name: CSI_ENDPOINT
+          - name: CSI_ADDRESS
             value: /csi/csi.sock
           - name: DRIVER_REG_SOCK_PATH
             value: /var/lib/kubelet/plugins/local.csi.storage.deckhouse.io/csi.sock
@@ -204,9 +206,9 @@ spec:
           - mountPath: /registration/
             name: registration-dir
       - args:
-          - --csi-address=$(CSI_ENDPOINT)
+          - --csi-address=$(CSI_ADDRESS)
         env:
-          - name: CSI_ENDPOINT
+          - name: CSI_ADDRESS
             value: /csi/csi.sock
         image: {{ include "helm_lib_module_common_image" (list . (list "csiLivenessprobe" $kubeVersion.Major $kubeVersion.Minor | join "" )) }}
         imagePullPolicy: IfNotPresent
@@ -224,9 +226,9 @@ spec:
             {{- include "csi_livenessprobe_resources" . | nindent 12 }}
 {{- end }}
       - args:
-        - --endpoint=unix://$(CSI_ENDPOINT)
+        - --csi-address=unix://$(CSI_ADDRESS)
         env:
-          - name: CSI_ENDPOINT
+          - name: CSI_ADDRESS
             value: /csi/csi.sock
           - name: DRIVER_REG_SOCK_PATH
             value: /var/lib/kubelet/plugins/local.csi.storage.deckhouse.io/csi.sock
@@ -299,8 +301,8 @@ spec:
         - name: {{ .Chart.Name }}-module-registry
       restartPolicy: Always
       schedulerName: default-scheduler
-      serviceAccount: default
-      serviceAccountName: default
+      serviceAccount: sds-local-volume-csi-node
+      serviceAccountName: sds-local-volume-csi-node
       terminationGracePeriodSeconds: 30
       volumes:
         - hostPath:
@@ -465,12 +467,14 @@ spec:
         volumeMounts:
           - mountPath: /csi/
             name: socket-dir
+{{- if .Values.sdsLocalVolume.internal.featureSnapshotsEnabled }}
       - args:
           - --timeout=1m
           - --csi-address=$(ADDRESS)
           - --leader-election=true
           - --leader-election-namespace=$(NAMESPACE)
           - --worker-threads=10
+          - --snapshot-name-prefix=snap
         env:
           - name: ADDRESS
             value: /csi/csi.sock
@@ -494,6 +498,7 @@ spec:
         volumeMounts:
           - mountPath: /csi/
             name: socket-dir
+{{- end }}
       - args:
           - --v=5
           - --csi-address=$(ADDRESS)
@@ -526,7 +531,7 @@ spec:
           - mountPath: /csi/
             name: socket-dir
       - args:
-        - --endpoint=unix://$(ADDRESS)
+        - --csi-address=unix://$(ADDRESS)
         env:
           - name: ADDRESS
             value: /csi/csi.sock

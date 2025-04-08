@@ -1,11 +1,11 @@
 /*
-Copyright 2024 Flant JSC
+Copyright 2025 Flant JSC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-	http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,17 +19,18 @@ package controller
 import (
 	"context"
 	"fmt"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
-	"sds-local-volume-controller/pkg/logger"
 	"strings"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	"sds-local-volume-controller/pkg/logger"
 )
 
 func reconcileLSCDeleteFunc(
@@ -131,7 +132,7 @@ func reconcileLSCUpdateFunc(
 
 	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] storage class %s params: %+v", oldSC.Name, oldSC.Parameters))
 	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] LocalStorageClass %s Spec.LVM: %+v", lsc.Name, lsc.Spec.LVM))
-	hasDiff, err := hasLVGDiff(oldSC, lsc)
+	hasDiff, err := hasSCDiff(oldSC, lsc)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to identify the LVMVolumeGroup difference for the LocalStorageClass %s", lsc.Name))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -198,11 +199,7 @@ func identifyReconcileFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageCla
 }
 
 func shouldReconcileByDeleteFunc(lsc *slv.LocalStorageClass) bool {
-	if lsc.DeletionTimestamp != nil {
-		return true
-	}
-
-	return false
+	return lsc.DeletionTimestamp != nil
 }
 
 func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass) (bool, error) {
@@ -213,7 +210,7 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 	for _, sc := range scList.Items {
 		if sc.Name == lsc.Name {
 			if sc.Provisioner == LocalStorageClassProvisioner {
-				diff, err := hasLVGDiff(&sc, lsc)
+				diff, err := hasSCDiff(&sc, lsc)
 				if err != nil {
 					return false, err
 				}
@@ -227,23 +224,25 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 				}
 
 				return false, nil
-
-			} else {
-				err := fmt.Errorf("a storage class %s already exists and does not belong to %s provisioner", sc.Name, LocalStorageClassProvisioner)
-				return false, err
 			}
+
+			err := fmt.Errorf("a storage class %s already exists and does not belong to %s provisioner", sc.Name, LocalStorageClassProvisioner)
+			return false, err
 		}
 	}
 
 	err := fmt.Errorf("a storage class %s does not exist", lsc.Name)
 	return false, err
-
 }
 
-func hasLVGDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
+func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 	currentLVGs, err := getLVGFromSCParams(sc)
 	if err != nil {
 		return false, err
+	}
+
+	if lsc.Spec.LVM.VolumeCleanup != sc.Parameters[LVMVolumeCleanupParamKey] {
+		return true, nil
 	}
 
 	if len(currentLVGs) != len(lsc.Spec.LVM.LVMVolumeGroups) {
@@ -434,17 +433,27 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 		return nil, err
 	}
 
+	fsType := lsc.Spec.FSType
+	if fsType == "" {
+		fsType = DefaultFSType
+	}
+
 	params := map[string]string{
 		TypeParamKey:                 LocalStorageClassLvmType,
 		LVMTypeParamKey:              lsc.Spec.LVM.Type,
 		LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
 		LVMVolumeGroupsParamKey:      string(lvgsParam),
+		FSTypeParamKey:               fsType,
 	}
 
 	if lsc.Spec.LVM.Thick != nil {
 		if lsc.Spec.LVM.Thick.Contiguous {
-			params[LVMVThickContiguousParamKey] = "true"
+			params[LVMThickContiguousParamKey] = "true"
 		}
+	}
+
+	if lsc.Spec.LVM.VolumeCleanup != "" {
+		params[LVMVolumeCleanupParamKey] = lsc.Spec.LVM.VolumeCleanup
 	}
 
 	sc := &v1.StorageClass{
@@ -510,7 +519,7 @@ func validateLocalStorageClass(
 		failedMsgBuilder.WriteString(fmt.Sprintf("There already is a storage class with the same name: %s but it is not managed by the LocalStorageClass controller\n", unmanagedScName))
 	}
 
-	lvgList := &snc.LvmVolumeGroupList{}
+	lvgList := &snc.LVMVolumeGroupList{}
 	err := cl.List(ctx, lvgList)
 	if err != nil {
 		valid = false
@@ -574,8 +583,8 @@ func findAnyThinPool(lsc *slv.LocalStorageClass) []string {
 	return badLvgs
 }
 
-func findNonexistentThinPools(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageClass) []string {
-	lvgs := make(map[string]snc.LvmVolumeGroup, len(lvgList.Items))
+func findNonexistentThinPools(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalStorageClass) []string {
+	lvgs := make(map[string]snc.LVMVolumeGroup, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		lvgs[lvg.Name] = lvg
 	}
@@ -605,7 +614,7 @@ func findNonexistentThinPools(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalSto
 	return badLvgs
 }
 
-func findNonexistentLVGs(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageClass) []string {
+func findNonexistentLVGs(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalStorageClass) []string {
 	lvgs := make(map[string]struct{}, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		lvgs[lvg.Name] = struct{}{}
@@ -621,7 +630,7 @@ func findNonexistentLVGs(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageC
 	return nonexistent
 }
 
-func findLVMVolumeGroupsOnTheSameNode(lvgList *snc.LvmVolumeGroupList, lsc *slv.LocalStorageClass) []string {
+func findLVMVolumeGroupsOnTheSameNode(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalStorageClass) []string {
 	nodesWithLVGs := make(map[string][]string, len(lsc.Spec.LVM.LVMVolumeGroups))
 	usedLVGs := make(map[string]struct{}, len(lsc.Spec.LVM.LVMVolumeGroups))
 	for _, lvg := range lsc.Spec.LVM.LVMVolumeGroups {

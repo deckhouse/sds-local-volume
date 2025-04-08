@@ -1,11 +1,11 @@
 /*
-Copyright 2024 Flant JSC
+Copyright 2025 Flant JSC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-	http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,12 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"reflect"
-	"sds-local-volume-controller/pkg/config"
-	"sds-local-volume-controller/pkg/logger"
 	"time"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	v1 "k8s.io/api/storage/v1"
 	errors2 "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,10 +32,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sds-local-volume-controller/pkg/config"
+	"sds-local-volume-controller/pkg/logger"
 )
 
 const (
@@ -56,7 +56,11 @@ const (
 	LVMTypeParamKey              = LocalStorageClassProvisioner + "/lvm-type"
 	LVMVolumeBindingModeParamKey = LocalStorageClassProvisioner + "/volume-binding-mode"
 	LVMVolumeGroupsParamKey      = LocalStorageClassProvisioner + "/lvm-volume-groups"
-	LVMVThickContiguousParamKey  = LocalStorageClassProvisioner + "/lvm-thick-contiguous"
+	LVMThickContiguousParamKey   = LocalStorageClassProvisioner + "/lvm-thick-contiguous"
+	LVMVolumeCleanupParamKey     = LocalStorageClassProvisioner + "/lvm-volume-cleanup"
+
+	FSTypeParamKey = "csi.storage.k8s.io/fstype"
+	DefaultFSType  = "ext4"
 
 	LocalStorageClassFinalizerName    = "storage.deckhouse.io/local-storage-class-controller"
 	LocalStorageClassFinalizerNameOld = "localstorageclass.storage.deckhouse.io"
@@ -87,7 +91,7 @@ func RunLocalStorageClassWatcherController(
 
 	c, err := controller.New(LocalStorageClassCtrlName, mgr, controller.Options{
 		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-			log.Info("[LocalStorageClassReconciler] starts Reconcile for the LocalStorageClass %q", request.Name)
+			log.Info("[LocalStorageClassReconciler] starts Reconcile for the LocalStorageClass %s", request.Name)
 			lsc := &slv.LocalStorageClass{}
 			err := cl.Get(ctx, request.NamespacedName, lsc)
 			if err != nil && !errors2.IsNotFound(err) {
@@ -109,7 +113,7 @@ func RunLocalStorageClassWatcherController(
 
 			shouldRequeue, err := RunEventReconcile(ctx, cl, log, scList, lsc)
 			if err != nil {
-				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] an error occured while reconciles the LocalStorageClass, name: %s", lsc.Name))
+				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] an error occurred while reconciles the LocalStorageClass, name: %s", lsc.Name))
 			}
 
 			if shouldRequeue {
@@ -128,27 +132,17 @@ func RunLocalStorageClassWatcherController(
 		return nil, err
 	}
 
-	err = c.Watch(source.Kind(mgr.GetCache(), &slv.LocalStorageClass{}), handler.Funcs{
-		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+	err = c.Watch(source.Kind(mgr.GetCache(), &slv.LocalStorageClass{}, handler.TypedFuncs[*slv.LocalStorageClass, reconcile.Request]{
+		CreateFunc: func(_ context.Context, e event.TypedCreateEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 			log.Info(fmt.Sprintf("[CreateFunc] get event for LocalStorageClass %q. Add to the queue", e.Object.GetName()))
 			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: e.Object.GetNamespace(), Name: e.Object.GetName()}}
 			q.Add(request)
 		},
-		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+		UpdateFunc: func(_ context.Context, e event.TypedUpdateEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 			log.Info(fmt.Sprintf("[UpdateFunc] get event for LocalStorageClass %q. Check if it should be reconciled", e.ObjectNew.GetName()))
 
-			oldLsc, ok := e.ObjectOld.(*slv.LocalStorageClass)
-			if !ok {
-				err = errors.New("unable to cast event object to a given type")
-				log.Error(err, "[UpdateFunc] an error occurred while handling create event")
-				return
-			}
-			newLsc, ok := e.ObjectNew.(*slv.LocalStorageClass)
-			if !ok {
-				err = errors.New("unable to cast event object to a given type")
-				log.Error(err, "[UpdateFunc] an error occurred while handling create event")
-				return
-			}
+			oldLsc := e.ObjectOld
+			newLsc := e.ObjectNew
 
 			if reflect.DeepEqual(oldLsc.Spec, newLsc.Spec) && newLsc.DeletionTimestamp == nil {
 				log.Info(fmt.Sprintf("[UpdateFunc] an update event for the LocalStorageClass %s has no Spec field updates. It will not be reconciled", newLsc.Name))
@@ -159,7 +153,9 @@ func RunLocalStorageClassWatcherController(
 			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: newLsc.Namespace, Name: newLsc.Name}}
 			q.Add(request)
 		},
-	})
+	},
+	),
+	)
 	if err != nil {
 		log.Error(err, "[RunLocalStorageClassWatcherController] unable to watch the events")
 		return nil, err
