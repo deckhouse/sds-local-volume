@@ -13,29 +13,24 @@ linters-settings:
     sections:
       - standard
       - default
-      - prefix(sds-local-volume-controller)
-      - prefix(sds-local-volume-csi)
-      - prefix(sds-local-volume-scheduler-extender)
-      - prefix(webhooks)
+      - prefix(github.com/deckhouse)
 
 linters:
   disable-all: true
   enable:
-  - dogsled
-  - errcheck
-  - gci
-  - gocritic
-  - gofmt
-#  - goimports
-  - gosimple
-  - govet
-  - ineffassign
-  - misspell
-  - revive
-  - staticcheck
-#  - structcheck
-  - typecheck
-  - unconvert
-  - unparam
-  - whitespace
-  - copyloopvar
+    - dogsled
+    - errcheck
+    - gci
+    - gocritic
+    - gofmt
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unparam
+    - whitespace
+    - copyloopvar

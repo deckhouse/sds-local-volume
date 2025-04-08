@@ -2,20 +2,20 @@
 # Required for external analytics. Do not remove!
 ---
 image: {{ $.ImageName }}-src-artifact
-from: {{ $.Root.BASE_ALT }}
+from: {{ $.Root.BASE_ALT_P11 }}
 final: false
 
 git:
-  - add: /images/{{ $.ImageName }}/src
-    to: /src/images/{{ $.ImageName }}/src
+  - add: /
+    to: /src
+    includePaths:
+      - api
+      - images/{{ $.ImageName }}
     stageDependencies:
       install:
-        - "**/*"
-  - add: /api
-    to: /src/api
-    stageDependencies:
-      install:
-        - "**/*"
+        - '**/*'
+    excludePaths:
+      - images/{{ $.ImageName }}/werf.yaml
 
 shell:
   install:
@@ -35,9 +35,10 @@ import:
 mount:
   - fromPath: ~/go-pkg-cache
     to: /go/pkg
+
 shell:
   setup:
-    - cd /src/images/{{ $.ImageName }}/src/cmd
+    - cd /src/images/{{ $.ImageName }}/cmd
     - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
     - chmod +x /{{ $.ImageName }}
 

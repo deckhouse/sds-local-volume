@@ -1,7 +1,7 @@
 ---
 image: choose-edition
 from: {{ $.BASE_ALT_P11 }}
-fromCacheVersion: 2025-02-18.1
+
 git:
   - add: /
     to: /
