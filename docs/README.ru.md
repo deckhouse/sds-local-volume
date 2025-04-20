@@ -257,6 +257,8 @@ kubectl -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
+> **Внимание.** В `LocalStorageClass` с `type: Thick` нельзя использовать LocalVolumeGroup, содержащие хотя бы один thin pool.
+
 1. Дождитесь, когда созданный ресурс LocalStorageClass перейдет в состояние `Created`:
 
    ```shell

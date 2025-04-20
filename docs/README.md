@@ -258,6 +258,7 @@ kubectl -n d8-sds-local-volume get pod -owide
      volumeBindingMode: WaitForFirstConsumer
    EOF
    ```
+> **Caution.** A `LocalStorageClass` with `type: Thick` cannot use an LocalVolumeGroup that includes even a single thin pool.
 
 1. Wait for the created LocalStorageClass resource to become `Created`:
 
