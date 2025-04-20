@@ -145,6 +145,7 @@ spec:
           ports:
            - containerPort: 8099
              protocol: TCP
+             name: http
 {{- end }}
       volumes:
       - name: scheduler-extender-config

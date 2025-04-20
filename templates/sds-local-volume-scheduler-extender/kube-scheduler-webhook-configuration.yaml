@@ -16,5 +16,4 @@ webhooks:
       path: /scheduler
     caBundle: {{ .Values.sdsLocalVolume.internal.customSchedulerExtenderCert.ca }}
   timeoutSeconds: 5
-
 {{- end }}
