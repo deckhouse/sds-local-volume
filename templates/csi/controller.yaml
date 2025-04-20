@@ -93,7 +93,7 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- end }}
 
 {{- define "csi_additional_node_volume_mounts" }}
-- mountPath: /csi/
+- mountPath: /csi
   name: plugin-dir
 - mountPath: /var/lib/kubelet
   mountPropagation: Bidirectional
