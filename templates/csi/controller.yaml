@@ -74,28 +74,9 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- end }}
 
 {{- define "csi_additional_node_volumes" }}
-- hostPath:
-    path: /dev
-    type: ""
-  name: device-dir
-- hostPath:
-    path: /var/lib/kubelet/plugins/local.csi.storage.deckhouse.io
-    type: DirectoryOrCreate
-  name: plugin-dir
-- hostPath:
-    path: /var/lib/kubelet
-    type: Directory
-  name: publish-dir
 {{- end }}
 
 {{- define "csi_additional_node_volume_mounts" }}
-- mountPath: /csi
-  name: plugin-dir
-- mountPath: /var/lib/kubelet
-  mountPropagation: Bidirectional
-  name: publish-dir
-- mountPath: /dev
-  name: device-dir
 {{- end }}
 
 
