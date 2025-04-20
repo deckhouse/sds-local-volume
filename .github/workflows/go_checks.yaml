@@ -183,12 +183,8 @@ jobs:
                   actual_pseudo_tag="v0.0.0-"$commit_date"-"$short_hash
                   pseudo_tag_date=$(echo $pseudo_tag | awk -F'-' '{ print $2 }')
                   echo "  Latest commit in $repository: $short_hash $commit_date"
-                  
-                  echo "  Commit date: $commit_date"
-                  echo "  Pseudo tag: $actual_pseudo_tag"
-                  echo "  Module version: $module_version"
 
-                  if [[ "$module_version" != "$commit_date" ]]; then
+                  if [[ "$pseudo_tag" != "$actual_pseudo_tag" ]]; then
                     echo "  Incorrect pseudo tag for repo $repository in file "$go_mod_file" (current: "$pseudo_tag", actual:"$actual_pseudo_tag")"
                     echo "  Incorrect pseudo tag for repo $repository in file "$go_mod_file" (current: "$pseudo_tag", actual:"$actual_pseudo_tag")" >> $temp_dir"/incorrect_alert"
                   fi
