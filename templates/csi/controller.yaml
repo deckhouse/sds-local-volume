@@ -86,10 +86,6 @@ storage.deckhouse.io/sds-local-volume-node: ""
     path: /var/lib/kubelet
     type: Directory
   name: publish-dir
-- hostPath:
-    path: /var/lib/kubelet/plugins_registry
-    type: DirectoryOrCreate
-  name: registration-dir
 {{- end }}
 
 {{- define "csi_additional_node_volume_mounts" }}
