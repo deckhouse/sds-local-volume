@@ -54,7 +54,7 @@ storage.deckhouse.io/sds-local-volume-node: ""
 ###
 
 {{- define "csi_node_args" }}
-- "--csi-address=$(CSI_ADDRESS)""
+- "--csi-address=$(CSI_ADDRESS)"
 {{- end }}
 
 {{- define "csi_node_envs" }}
