@@ -48,7 +48,7 @@
 storage.deckhouse.io/csi-hpe-node: ""
 {{- end }}
 
-{{- $csiControllerImage := include "helm_lib_module_image" (list . "sdsLocalVolume") }}
+{{- $csiControllerImage := include "helm_lib_module_image" (list . "sdsLocalVolumeCsi") }}
 
 {{- $csiControllerConfig := dict }}
 {{- $_ := set $csiControllerConfig "controllerImage" $csiControllerImage }}
