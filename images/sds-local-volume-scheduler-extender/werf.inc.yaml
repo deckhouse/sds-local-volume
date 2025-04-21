@@ -64,7 +64,7 @@ shell:
 
 ---
 image: {{ $.ImageName }}
-fromImage: {{ $.ImageName }}-distroless
+fromImage: base/distroless
 
 import:
   - image: {{ $.ImageName }}-golang-artifact
