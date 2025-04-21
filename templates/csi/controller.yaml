@@ -98,7 +98,7 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiNodeConfig "nodeImage" $csiNodeImage }}
 {{- $_ := set $csiNodeConfig "driverFQDN" "local.csi.storage.deckhouse.io" }}
 {{- $_ := set $csiNodeConfig "livenessProbePort" 4251 }}
-{{- $_ := set $csiControllerConfig "csiNodeHostNetwork" false }}
+{{- $_ := set $csiNodeConfig "csiNodeHostNetwork" false }}
 {{- $_ := set $csiNodeConfig "serviceAccount" "csi" }}
 {{- $_ := set $csiNodeConfig "additionalNodeArgs" (include "csi_node_args" . | fromYamlArray) }}
 {{- $_ := set $csiNodeConfig "additionalNodeEnvs" (include "csi_node_envs" . | fromYamlArray) }}
