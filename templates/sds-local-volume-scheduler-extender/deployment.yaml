@@ -27,12 +27,14 @@ spec:
     updateMode: "Auto"
   resourcePolicy:
     containerPolicies:
+{{- if and (not $dhVersionIsDev) (semverCompare "<1.64" .Values.global.deckhouseVersion) }}    
     - containerName: kube-scheduler
       minAllowed:
         {{- include "kube_scheduler_resources" . | nindent 8 }}
       maxAllowed:
         memory: 60Mi
         cpu: 20m
+{{- end }}        
     - containerName: sds-local-volume-scheduler-extender
       minAllowed:
         {{- include "sds_local_volume_scheduler_extender_resources" . | nindent 8 }}
