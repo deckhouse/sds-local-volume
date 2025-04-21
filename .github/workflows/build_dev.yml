@@ -10,6 +10,7 @@ env:
   GOLANG_VERSION: ${{ vars.GOLANG_VERSION }}
   GOPROXY: ${{ secrets.GOPROXY }}
   SOURCE_REPO: ${{ secrets.SOURCE_REPO }}
+  BASE_IMAGES_VERSION: "v0.4.3"
 
 on:
   #pull_request:
@@ -49,6 +50,7 @@ jobs:
         env:
           DMT_METRICS_URL: ${{ secrets.DMT_METRICS_URL }}
           DMT_METRICS_TOKEN: ${{ secrets.DMT_METRICS_TOKEN }}
+
   set_edition:
     runs-on: [self-hosted, large]
     name: Set edition
@@ -76,7 +78,7 @@ jobs:
       - name: Set vars
         id: set-vars
         run: |
-          # Select edition for build, default ee
+          # Slect edition for build, default ee
           if echo "${{ steps.get-labels.outputs.result }}" | grep -q "edition/ce"; then
             echo "MODULE_EDITION=ce" >> "$GITHUB_OUTPUT"
           else
@@ -109,6 +111,12 @@ jobs:
           echo MODULE_EDITION=$MODULE_EDITION
 
       - uses: actions/checkout@v4
+
+      - name: Download base images
+        run: |
+          wget https://fox.flant.com/api/v4/projects/deckhouse%2Fbase-images/packages/generic/base_images/$BASE_IMAGES_VERSION/base_images.yml -O base_images.yml
+          cat base_images.yml
+
       - uses: deckhouse/modules-actions/setup@v2
         with:
           registry: ${{ vars.DEV_REGISTRY }}
