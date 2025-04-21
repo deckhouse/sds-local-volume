@@ -172,7 +172,7 @@ jobs:
                   pseudo_tag=$(echo "$line" | awk '{print $2}')
 
                   echo "  Cloning repo $repository into $temp_dir"
-                  if [-z "$temp_dir/$repository"]; then
+                  if [ ! -d "$temp_dir/$repository" ]; then
                     git clone "$repository" "$temp_dir/$repository" >/dev/null 2>&1
                   fi
 
