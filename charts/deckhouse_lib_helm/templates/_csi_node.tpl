@@ -128,7 +128,9 @@ spec:
       {{- include "helm_lib_tolerations" (tuple $context "any-node" "with-no-csi") | nindent 6 }}
       {{- include "helm_lib_module_pod_security_context_run_as_user_root" . | nindent 6 }}
       hostNetwork: {{ $csiNodeHostNetwork }}
+      {{- if eq $csiNodeHostNetwork "true" }}
       dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
       containers:
       - name: node-driver-registrar
         {{- include "helm_lib_module_container_security_context_read_only_root_filesystem" $context | nindent 8 }}

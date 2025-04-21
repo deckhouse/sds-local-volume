@@ -199,7 +199,9 @@ spec:
       {{- end }}
     spec:
       hostNetwork: {{ $csiControllerHostNetwork }}
+      {{- if eq $csiControllerHostNetwork "true" }}
       dnsPolicy: ClusterFirstWithHostNet
+      {{- end }}
       imagePullSecrets:
       - name: deckhouse-registry
       {{- if $additionalPullSecrets }}
