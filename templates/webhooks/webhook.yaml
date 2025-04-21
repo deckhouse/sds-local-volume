@@ -6,6 +6,9 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   name: "d8-{{ .Chart.Name }}-pod-scheduler-mutation"
+  labels:
+    heritage: deckhouse
+    module: storage  
 webhooks:
   - name: "d8-{{ .Chart.Name }}-pod-scheduler-mutation.storage.deckhouse.io"
     failurePolicy: Ignore
@@ -37,6 +40,9 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   name: "d8-{{ .Chart.Name }}-lsc-validation"
+  labels:
+    heritage: deckhouse
+    module: storage
 webhooks:
   - name: "d8-{{ .Chart.Name }}-lsc-validation.deckhouse.io"
     failurePolicy: Fail
@@ -61,6 +67,9 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   name: "d8-{{ .Chart.Name }}-sc-validation"
+  labels:
+    heritage: deckhouse
+    module: storage  
 webhooks:
   - name: "d8-{{ .Chart.Name }}-sc-validation.deckhouse.io"
     rules:

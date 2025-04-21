@@ -1,6 +1,7 @@
 name: "sds-local-volume"
 weight: 920
-description: "SDS local volume"
+descriptions:
+  en: "SDS local volume"
 requirements:
   bootstrapped: true
 namespace: d8-sds-local-volume
