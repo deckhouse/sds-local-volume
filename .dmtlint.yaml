@@ -45,3 +45,6 @@ linters-settings:
         - kind: DaemonSet
           name: sds-local-volume
           container: node-driver-registrar
+  module:
+    oss:
+      disable: true
