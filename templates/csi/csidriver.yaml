@@ -4,7 +4,7 @@ metadata:
   name: local.csi.storage.deckhouse.io
   labels:
     heritage: deckhouse
-    module: storage
+    module: sds-local-volume
 spec:
   attachRequired: true
   podInfoOnMount: false

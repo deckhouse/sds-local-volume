@@ -8,7 +8,7 @@ metadata:
   name: "d8-{{ .Chart.Name }}-pod-scheduler-mutation"
   labels:
     heritage: deckhouse
-    module: storage  
+    module: sds-local-volume
 webhooks:
   - name: "d8-{{ .Chart.Name }}-pod-scheduler-mutation.storage.deckhouse.io"
     failurePolicy: Ignore
@@ -42,7 +42,7 @@ metadata:
   name: "d8-{{ .Chart.Name }}-lsc-validation"
   labels:
     heritage: deckhouse
-    module: storage
+    module: sds-local-volume
 webhooks:
   - name: "d8-{{ .Chart.Name }}-lsc-validation.deckhouse.io"
     failurePolicy: Fail
@@ -69,7 +69,7 @@ metadata:
   name: "d8-{{ .Chart.Name }}-sc-validation"
   labels:
     heritage: deckhouse
-    module: storage  
+    module: sds-local-volume
 webhooks:
   - name: "d8-{{ .Chart.Name }}-sc-validation.deckhouse.io"
     rules:
