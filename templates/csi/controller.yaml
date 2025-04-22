@@ -81,10 +81,6 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- end }}
 {{- end }}
 
-{{- define "csi_custom_node_selector" }}
-storage.deckhouse.io/sds-local-volume-node: ""
-{{- end }}
-
 {{- define "csi_additional_node_volumes" }}
 {{- end }}
 
