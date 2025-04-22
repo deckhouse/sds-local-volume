@@ -100,7 +100,6 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiNodeConfig "additionalNodeArgs" (include "csi_node_args" . | fromYamlArray) }}
 {{- $_ := set $csiNodeConfig "additionalNodeEnvs" (include "csi_node_envs" . | fromYamlArray) }}
 {{- $_ := set $csiNodeConfig "additionalNodeVolumes" (include "csi_additional_node_volumes" . | fromYamlArray) }}
-{{- $_ := set $csiNodeConfig "additionalNodeSelectorTerms" (include "csi_additional_node_selector_terms" . | fromYamlArray) }}
 {{- $_ := set $csiNodeConfig "additionalNodeVolumeMounts" (include "csi_additional_node_volume_mounts" . | fromYamlArray) }}
 {{- $_ := set $csiNodeConfig "customNodeSelector" (include "csi_custom_node_selector" . | fromYaml) }}
 
