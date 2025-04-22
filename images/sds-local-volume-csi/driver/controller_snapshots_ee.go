@@ -1,3 +1,5 @@
+//go:build ee
+
 /*
 Copyright 2025 Flant JSC
 
@@ -8,8 +10,6 @@ You may obtain a copy of the License at
     https://github.com/deckhouse/deckhouse/blob/main/ee/LICENSE
 */
 
-//go:build ee
-
 package driver
 
 import (
@@ -18,8 +18,6 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -27,6 +25,8 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 	"github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 

@@ -12,7 +12,7 @@ spec:
   type: ClusterIP
   ports:
     - port: 8099
-      targetPort: 8099
+      targetPort: http
       protocol: TCP
       name: http
   selector:

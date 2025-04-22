@@ -1,0 +1,54 @@
+linters-settings:
+  container:
+    exclude-rules:
+      liveness-probe:
+        - kind: Deployment
+          name: csi-controller
+          container: snapshotter
+        - kind: Deployment
+          name: csi-controller
+          container: resizer
+        - kind: Deployment
+          name: csi-controller
+          container: attacher
+        - kind: Deployment
+          name: csi-controller
+          container: provisioner
+        - kind: Deployment
+          name: csi-controller
+          container: livenessprobe
+        - kind: DaemonSet
+          name: sds-local-volume
+          container: node-driver-registrar
+      readiness-probe:
+        - kind: Deployment
+          name: csi-controller
+          container: snapshotter
+        - kind: Deployment
+          name: csi-controller
+          container: resizer
+        - kind: Deployment
+          name: csi-controller
+          container: attacher
+        - kind: Deployment
+          name: csi-controller
+          container: provisioner
+        - kind: Deployment
+          name: csi-controller
+          container: livenessprobe
+        - kind: Deployment
+          name: csi-controller
+          container: controller
+        - kind: DaemonSet
+          name: sds-local-volume
+          container: node
+        - kind: DaemonSet
+          name: sds-local-volume
+          container: node-driver-registrar
+  module:
+    oss:
+      disable: true
+  openapi:
+    exclude-rules:
+      enum:
+        - spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.fsType

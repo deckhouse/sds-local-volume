@@ -27,12 +27,14 @@ spec:
     updateMode: "Auto"
   resourcePolicy:
     containerPolicies:
+{{- if and (not $dhVersionIsDev) (semverCompare "<1.64" .Values.global.deckhouseVersion) }}    
     - containerName: kube-scheduler
       minAllowed:
         {{- include "kube_scheduler_resources" . | nindent 8 }}
       maxAllowed:
         memory: 60Mi
         cpu: 20m
+{{- end }}        
     - containerName: sds-local-volume-scheduler-extender
       minAllowed:
         {{- include "sds_local_volume_scheduler_extender_resources" . | nindent 8 }}
@@ -125,6 +127,22 @@ spec:
           {{- include "helm_lib_module_container_security_context_read_only_root_filesystem_capabilities_drop_all" . | nindent 10 }}
           image: {{ include "helm_lib_module_image" (list . "sdsLocalVolumeSchedulerExtender") }}
           imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 8
+            httpGet:
+              path: /healthz
+              port: 8081
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+              scheme: HTTP
+            periodSeconds: 1
+            failureThreshold: 3
           args:
             - sds-local-volume-scheduler-extender
             - --config=/etc/sds-local-volume-scheduler-extender/scheduler-extender-config.yaml
@@ -145,6 +163,7 @@ spec:
           ports:
            - containerPort: 8099
              protocol: TCP
+             name: http
 {{- end }}
       volumes:
       - name: scheduler-extender-config

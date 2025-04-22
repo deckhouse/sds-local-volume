@@ -9,6 +9,8 @@ config:
       - GOPROXY
       - SOURCE_REPO
       - MODULE_EDITION
+    allowUncommittedFiles:
+      - "base_images.yml"            
   stapel:
     mount:
       allowBuildDir: true

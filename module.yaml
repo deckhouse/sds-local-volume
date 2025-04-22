@@ -1,6 +1,9 @@
 name: "sds-local-volume"
 weight: 920
-description: "SDS local volume"
+descriptions:
+  en: "SDS local volume"
 requirements:
   bootstrapped: true
-namepspace: d8-sds-local-volume
+  modules:
+    sds-node-configurator: ">= 0.0.0"
+namespace: d8-sds-local-volume

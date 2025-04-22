@@ -31,7 +31,7 @@ import (
 
 const (
 	localCSIProvisioner = "local.csi.storage.deckhouse.io"
-	allowedUserName     = "system:serviceaccount:d8-sds-local-volume:sds-local-volume-controller"
+	allowedUserName     = "system:serviceaccount:d8-sds-local-volume:controller"
 )
 
 func SCValidate(_ context.Context, arReview *model.AdmissionReview, obj metav1.Object) (*kwhvalidating.ValidatorResult, error) {
