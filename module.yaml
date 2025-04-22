@@ -4,4 +4,6 @@ descriptions:
   en: "SDS local volume"
 requirements:
   bootstrapped: true
+  modules:
+    - sds-node-configurator
 namespace: d8-sds-local-volume
