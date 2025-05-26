@@ -19,10 +19,10 @@ package certs
 import (
 	"fmt"
 
-	kcertificates "k8s.io/api/certificates/v1"
-
 	chcrt "github.com/deckhouse/module-sdk/common-hooks/tls-certificate"
+	. "github.com/deckhouse/sds-local-volume/hooks/go/consts"
 	tlscertificate "github.com/deckhouse/sds-local-volume/hooks/go/tls-certificate"
+	kcertificates "k8s.io/api/certificates/v1"
 )
 
 func RegisterSchedulerExtenderCertHook() {

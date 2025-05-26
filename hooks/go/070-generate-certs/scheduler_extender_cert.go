@@ -45,7 +45,7 @@ var _ = tlscertificate.RegisterInternalTLSHookEM(tlscertificate.GenSelfSignedTLS
 
 package generatecerts
 
-import "github.com/deckhouse/csi-nfs/hooks/go/certs"
+import "github.com/deckhouse/sds-local-volume/hooks/go/certs"
 
 func init() {
 	certs.RegisterSchedulerExtenderCertHook()
