@@ -19,6 +19,8 @@ package main
 import (
 	"github.com/deckhouse/module-sdk/pkg/app"
 	_ "github.com/deckhouse/sds-local-volume/hooks/go/020-webhook-certs"
+	_ "github.com/deckhouse/sds-local-volume/hooks/go/030-enable-thin-provisioning"
+	_ "github.com/deckhouse/sds-local-volume/hooks/go/070-generate-certs"
 )
 
 func main() {
