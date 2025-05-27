@@ -1,3 +1,19 @@
+/*
+Copyright 2025 Flant JSC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package thinprovisioning
 
 import (
@@ -17,50 +33,51 @@ const (
 	crdGroup      = "storage.deckhouse.io"
 	crdNamePlural = "localstorageclasses"
 	crdVersion    = "v1alpha1"
-	configVersion = "v1"
-	afterHelm     = 10
 )
 
 func init() {
-	// Load in-cluster Kubernetes configuration
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		// Fallback to kubeconfig for local testing
 		kubeconfig := os.Getenv("KUBECONFIG")
 		if kubeconfig == "" {
 			kubeconfig = os.Getenv("HOME") + "/.kube/config"
 		}
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to load Kubernetes config: %v\n", err)
+			_, err := fmt.Fprintf(os.Stderr, "Failed to load Kubernetes config: %v\n", err)
+			if err != nil {
+				return
+			}
 			os.Exit(1)
 		}
 	}
 
-	// Create dynamic client for interacting with custom resources
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create dynamic client: %v\n", err)
+		_, err := fmt.Fprintf(os.Stderr, "Failed to create dynamic client: %v\n", err)
+		if err != nil {
+			return
+		}
 		os.Exit(1)
 	}
 
-	// Define the custom resource GVR (Group, Version, Resource)
 	localStorageClassGVR := schema.GroupVersionResource{
 		Group:    crdGroup,
 		Version:  crdVersion,
 		Resource: crdNamePlural,
 	}
 
-	// List localstorageclasses custom resources
 	list, err := dynamicClient.Resource(localStorageClassGVR).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to list custom objects: %v\n", err)
+		_, err := fmt.Fprintf(os.Stderr, "Failed to list custom objects: %v\n", err)
+		if err != nil {
+			return
+		}
 		os.Exit(1)
 	}
 
 	thinPoolExistence := false
 	for _, item := range list.Items {
-		// Extract spec.lvm.type
 		lvmType, found, err := unstructured.NestedString(item.Object, "spec", "lvm", "type")
 		if err != nil || !found {
 			continue
@@ -71,7 +88,6 @@ func init() {
 		}
 	}
 
-	// If thinPoolExistence is true, patch moduleconfigs
 	if thinPoolExistence {
 		moduleConfigGVR := schema.GroupVersionResource{
 			Group:    "deckhouse.io",
