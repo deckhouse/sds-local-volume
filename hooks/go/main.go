@@ -24,8 +24,11 @@ import (
 	_ "github.com/deckhouse/sds-local-volume/hooks/go/090-on-start-checks"
 =======
 	_ "github.com/deckhouse/sds-local-volume/hooks/go/030-enable-thin-provisioning"
+<<<<<<< HEAD
 	_ "github.com/deckhouse/sds-local-volume/hooks/go/070-generate-certs"
 >>>>>>> b3e72c2 (added certs for scheduler_extender and stuff)
+=======
+>>>>>>> 65ebfbf (fix)
 )
 
 func main() {
