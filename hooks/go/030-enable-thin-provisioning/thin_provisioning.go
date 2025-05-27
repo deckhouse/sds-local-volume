@@ -95,23 +95,31 @@ func init() {
 			Resource: "moduleconfigs",
 		}
 
-		_, err := dynamicClient.Resource(moduleConfigGVR).Patch(
+		applyConfig := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "deckhouse.io/v1alpha1",
+				"kind":       "ModuleConfig",
+				"metadata": map[string]interface{}{
+					"name": "sds-local-volume",
+				},
+				"spec": map[string]interface{}{
+					"version": 1,
+					"settings": map[string]interface{}{
+						"enableThinProvisioning": true,
+					},
+				},
+			},
+		}
+
+		_, err := dynamicClient.Resource(moduleConfigGVR).Apply(
 			context.Background(),
 			"sds-local-volume",
-			"application/apply-patch+yaml",
-			[]byte(`apiVersion: deckhouse.io/v1alpha1
-kind: ModuleConfig
-metadata:
-  name: sds-local-volume
-spec:
-  version: 1
-  settings:
-    enableThinProvisioning: true
-`),
-			metav1.PatchOptions{
+			applyConfig,
+			metav1.ApplyOptions{
 				FieldManager: "sds-hook",
 			},
 		)
+
 		if err != nil {
 			_, err := fmt.Fprintf(os.Stderr, "Failed to patch moduleconfig: %v\n", err)
 			if err != nil {
