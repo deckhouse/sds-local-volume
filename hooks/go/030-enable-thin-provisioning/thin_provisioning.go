@@ -37,10 +37,8 @@ const (
 )
 
 func init() {
-	// Load in-cluster Kubernetes configuration
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		// Fallback to kubeconfig for local testing
 		kubeconfig := os.Getenv("KUBECONFIG")
 		if kubeconfig == "" {
 			kubeconfig = os.Getenv("HOME") + "/.kube/config"
@@ -52,30 +50,32 @@ func init() {
 		}
 	}
 
-	// Create dynamic client for interacting with custom resources
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create dynamic client: %v\n", err)
+		_, err := fmt.Fprintf(os.Stderr, "Failed to create dynamic client: %v\n", err)
+		if err != nil {
+			return
+		}
 		os.Exit(1)
 	}
 
-	// Define the custom resource GVR (Group, Version, Resource)
 	localStorageClassGVR := schema.GroupVersionResource{
 		Group:    crdGroup,
 		Version:  crdVersion,
 		Resource: crdNamePlural,
 	}
 
-	// List localstorageclasses custom resources
 	list, err := dynamicClient.Resource(localStorageClassGVR).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to list custom objects: %v\n", err)
+		_, err := fmt.Fprintf(os.Stderr, "Failed to list custom objects: %v\n", err)
+		if err != nil {
+			return
+		}
 		os.Exit(1)
 	}
 
 	thinPoolExistence := false
 	for _, item := range list.Items {
-		// Extract spec.lvm.type
 		lvmType, found, err := unstructured.NestedString(item.Object, "spec", "lvm", "type")
 		if err != nil || !found {
 			continue
@@ -86,7 +86,6 @@ func init() {
 		}
 	}
 
-	// If thinPoolExistence is true, apply YAML configuration to moduleconfigs
 	if thinPoolExistence {
 		resp, err := dynamicClient.Resource(schema.GroupVersionResource{Group: "deckhouse.io", Version: "v1alpha1", Resource: "moduleconfigs"}).Patch(
 			context.Background(),
@@ -104,12 +103,18 @@ spec:
 			metav1.PatchOptions{FieldManager: "sds-hook"},
 		)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to patch moduleconfigs/sds-local-volume: %v\n", err)
+			_, err := fmt.Fprintf(os.Stderr, "Failed to patch moduleconfigs/sds-local-volume: %v\n", err)
+			if err != nil {
+				return
+			}
 			os.Exit(1)
 		}
 		_, err = json.Marshal(resp.Object)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to format response as YAML: %v\n", err)
+			_, err := fmt.Fprintf(os.Stderr, "Failed to format response as YAML: %v\n", err)
+			if err != nil {
+				return
+			}
 			os.Exit(1)
 		}
 
