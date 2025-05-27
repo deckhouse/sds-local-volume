@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 
-	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -90,48 +89,23 @@ func init() {
 	}
 
 	if thinPoolExistence {
-		moduleConfigGVR := schema.GroupVersionResource{
+		_, err := dynamicClient.Resource(schema.GroupVersionResource{
 			Group:    "deckhouse.io",
 			Version:  "v1alpha1",
 			Resource: "moduleconfigs",
-		}
-
-		applyConfig := &unstructured.Unstructured{
+		}).Apply(context.Background(), "sds-local-volume", &unstructured.Unstructured{
 			Object: map[string]interface{}{
 				"apiVersion": "deckhouse.io/v1alpha1",
 				"kind":       "ModuleConfig",
-				"metadata": map[string]interface{}{
-					"name": "sds-local-volume",
-				},
-				"spec": map[string]interface{}{
-					"version": 1,
-					"settings": map[string]interface{}{
-						"enableThinProvisioning": true,
-					},
-				},
+				"metadata":   map[string]interface{}{"name": "sds-local-volume"},
+				"spec":       map[string]interface{}{"version": 1, "settings": map[string]interface{}{"enableThinProvisioning": true}},
 			},
-		}
-
-		apiResponse, err := dynamicClient.Resource(moduleConfigGVR).Apply(
-			context.Background(),
-			"sds-local-volume",
-			applyConfig,
-			metav1.ApplyOptions{
-				FieldManager: "sds-hook",
-			},
-		)
-
+		}, metav1.ApplyOptions{FieldManager: "sds-hook"})
 		if err != nil {
-			_, err := fmt.Fprintf(os.Stderr, "Failed to patch moduleconfig: %v\n", err)
+			_, err := fmt.Fprintf(os.Stderr, "Failed to apply YAML configuration: %v\n", err)
 			if err != nil {
 				return
 			}
-			os.Exit(1)
-		}
-
-		_, err = yaml.Marshal(apiResponse.Object)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to marshal API response to YAML: %v\n", err)
 			os.Exit(1)
 		}
 
