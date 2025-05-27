@@ -98,7 +98,7 @@ func init() {
 		_, err := dynamicClient.Resource(moduleConfigGVR).Patch(
 			context.Background(),
 			"sds-local-volume",
-			"application/merge-patch+json",
+			"application/merge-patch+yaml",
 			[]byte(`{"spec":{"version":1,"settings":{"enableThinProvisioning":true}}}`),
 			metav1.PatchOptions{},
 		)
