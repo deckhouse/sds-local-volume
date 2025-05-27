@@ -107,11 +107,11 @@ spec:
 			fmt.Fprintf(os.Stderr, "Failed to patch moduleconfigs/sds-local-volume: %v\n", err)
 			os.Exit(1)
 		}
-		yamlResp, err := json.Marshal(resp.Object)
+		_, err = json.Marshal(resp.Object)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to format response as YAML: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Thin pools present, switching enableThinProvisioning on\n---\n%s\n", yamlResp)
+
 	}
 }
