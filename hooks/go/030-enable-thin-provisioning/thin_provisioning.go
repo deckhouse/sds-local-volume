@@ -19,9 +19,9 @@ package thinprovisioning
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/json"
 	"os"
 
-	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -107,7 +107,7 @@ spec:
 			fmt.Fprintf(os.Stderr, "Failed to patch moduleconfigs/sds-local-volume: %v\n", err)
 			os.Exit(1)
 		}
-		yamlResp, err := yaml.Marshal(resp.Object)
+		yamlResp, err := json.Marshal(resp.Object)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to format response as YAML: %v\n", err)
 			os.Exit(1)
