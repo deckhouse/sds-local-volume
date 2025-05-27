@@ -99,11 +99,24 @@ func init() {
 			context.Background(),
 			"sds-local-volume",
 			"application/apply-patch+yaml",
-			[]byte(`{"spec":{"version":1,"settings":{"enableThinProvisioning":true}}}`),
-			metav1.PatchOptions{},
+			[]byte(`apiVersion: deckhouse.io/v1alpha1
+kind: ModuleConfig
+metadata:
+  name: sds-local-volume
+spec:
+  version: 1
+  settings:
+    enableThinProvisioning: true
+`),
+			metav1.PatchOptions{
+				FieldManager: "sds-hook",
+			},
 		)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to patch moduleconfig: %v\n", err)
+			_, err := fmt.Fprintf(os.Stderr, "Failed to patch moduleconfig: %v\n", err)
+			if err != nil {
+				return
+			}
 			os.Exit(1)
 		}
 		fmt.Println("Thin pools present, switching enableThinProvisioning on")
