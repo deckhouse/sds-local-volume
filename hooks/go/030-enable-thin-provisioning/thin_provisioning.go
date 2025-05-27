@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 
+	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -111,7 +112,7 @@ func init() {
 			},
 		}
 
-		_, err := dynamicClient.Resource(moduleConfigGVR).Apply(
+		apiResponse, err := dynamicClient.Resource(moduleConfigGVR).Apply(
 			context.Background(),
 			"sds-local-volume",
 			applyConfig,
@@ -127,6 +128,13 @@ func init() {
 			}
 			os.Exit(1)
 		}
+
+		_, err = yaml.Marshal(apiResponse.Object)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to marshal API response to YAML: %v\n", err)
+			os.Exit(1)
+		}
+
 		fmt.Println("Thin pools present, switching enableThinProvisioning on")
 	}
 }
