@@ -1,4 +1,4 @@
-project: sds-replicated-volume
+project: sds-local-volume
 configVersion: 1
 build:
   imageSpec:
