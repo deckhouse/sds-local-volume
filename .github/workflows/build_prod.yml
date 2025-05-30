@@ -14,6 +14,7 @@ env:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   BASE_IMAGES_VERSION: "v0.5.25"
 =======
   BASE_IMAGES_VERSION: "v0.5.8"
@@ -24,6 +25,9 @@ env:
 =======
   BASE_IMAGES_VERSION: "v0.5.25"
 >>>>>>> 892194d ([internal] fix CVE (#135))
+=======
+  BASE_IMAGES_VERSION: "v0.4.3"
+>>>>>>> 890babe ([internal] Fixes in CI, module structure and build (#114))
 
 on:
   push:
@@ -244,4 +248,8 @@ jobs:
           module_tag: ${{ github.ref_name }}
           secondary_repo: "${{ vars.DEV_MODULE_SOURCE }}/${{ vars.MODULE_NAME }}"
           source_repo: ${{ secrets.SOURCE_REPO }}
+<<<<<<< HEAD
           source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
+=======
+          source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
+>>>>>>> 890babe ([internal] Fixes in CI, module structure and build (#114))
