@@ -1,12 +1,12 @@
 {{- $csiBinaries := "/usr/bin/curl" }}
 # Required for external analytics. Do not remove!
 ---
-image: {{ $.ImageName }}-src-artifact
+image: {{ include "ImageName" (tuple . .ImageName "src-artifact") }}
 fromImage: builder/src
 final: false
 
 git:
-  - add: /
+  - add: {{ include "PreffixPath" . }}/
     to: /src
     includePaths:
       - api
@@ -22,12 +22,12 @@ shell:
     - echo "src artifact"
 
 ---
-image: {{ $.ImageName }}-golang-artifact
+image: {{ include "ImageName" (tuple . .ImageName "golang-artifact") }}
 fromImage: builder/golang-alpine
 final: false
 
 import:
-  - image: {{ $.ImageName }}-src-artifact
+  - image: {{ include "ImageName" (tuple . .ImageName "src-artifact") }}
     add: /src
     to: /src
     before: install
@@ -43,12 +43,12 @@ shell:
     - chmod +x /{{ $.ImageName }}
 
 ---
-image: {{ $.ImageName }}-binaries-artifact
+image: {{ include "ImageName" (tuple . .ImageName "binaries-artifact") }}
 fromImage: builder/alt
 final: false
 
 git:
-  - add: /tools/dev_images/additional_tools/binary_replace.sh
+  - add: {{ include "PreffixPath" . }}/tools/dev_images/additional_tools/binary_replace.sh
     to: /binary_replace.sh
     stageDependencies:
       install:
@@ -63,15 +63,15 @@ shell:
     - /binary_replace.sh -i "{{ $csiBinaries }}" -o /relocate
 
 ---
-image: {{ $.ImageName }}
+image: {{ include "ImageName" (tuple . .ImageName) }}
 fromImage: base/distroless
 
 import:
-  - image: {{ $.ImageName }}-golang-artifact
+  - image: {{ include "ImageName" (tuple . .ImageName "golang-artifact") }}
     add: /{{ $.ImageName }}
     to: /{{ $.ImageName }}
     before: install
-  - image: {{ $.ImageName }}-binaries-artifact
+  - image: {{ include "ImageName" (tuple . .ImageName "binaries-artifact") }}
     add: /relocate
     to: /
     before: install

@@ -9,6 +9,10 @@ build:
       removeLabels:
         - /.*/
 ---
+{{- range $path, $content := .Files.Glob ".werf/*.yaml" }}
+  {{- tpl $content $ }}
+{{- end }}
+{{/*
 {{ tpl (.Files.Get ".werf/base-images.yaml") $ }}
 {{ tpl (.Files.Get ".werf/consts.yaml") $ }}
 {{ tpl (.Files.Get ".werf/choose-edition.yaml") $ }}
@@ -17,3 +21,4 @@ build:
 {{ tpl (.Files.Get ".werf/python-deps.yaml") $ }}
 {{ tpl (.Files.Get ".werf/bundle.yaml") $ }}
 {{ tpl (.Files.Get ".werf/release.yaml") $ }}
+*/}}
