@@ -458,7 +458,9 @@ func GetStorageClassLVGsAndParameters(
 		_, ok := storageClassLVGParametersMap[lvg.Name]
 		if ok {
 			log.Info(fmt.Sprintf("[GetStorageClassLVGs] found lvg from storage class: %s", lvg.Name))
-			log.Info(fmt.Sprintf("[GetStorageClassLVGs] lvg.Status.Nodes[0].Name: %s", lvg.Status.Nodes[0].Name))
+			if len(lvg.Status.Nodes) > 0 {
+				log.Info(fmt.Sprintf("[GetStorageClassLVGs] lvg.Status.Nodes[0].Name: %s", lvg.Status.Nodes[0].Name))
+			}
 			storageClassLVGs = append(storageClassLVGs, lvg)
 		} else {
 			log.Trace(fmt.Sprintf("[GetStorageClassLVGs] skip lvg: %s", lvg.Name))
