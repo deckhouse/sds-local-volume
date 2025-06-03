@@ -22,6 +22,7 @@ shell:
     - echo "src artifact"
 
 ---
+{{- $MODULE_EDITION := "ee" }}
 image: {{ include "ImageName" (tuple . .ImageName "golang-artifact") }}
 fromImage: builder/golang-alpine
 final: false
@@ -45,7 +46,7 @@ shell:
       ls -la /src/images/{{ $.ImageName }}/cmd
 
     - cd /src/images/{{ $.ImageName }}/cmd
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -tags {{ $.Root.MODULE_EDITION }} -o /{{ $.ImageName }}
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -tags "{{ $MODULE_EDITION }}" -o /{{ $.ImageName }}
     - chmod +x /{{ $.ImageName }}
 
 ---
