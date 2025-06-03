@@ -521,6 +521,9 @@ func GetLLVSpec(
 
 func SelectLVG(storageClassLVGs []snc.LVMVolumeGroup, nodeName string) (*snc.LVMVolumeGroup, error) {
 	for i := 0; i < len(storageClassLVGs); i++ {
+		if len(storageClassLVGs[i].Status.Nodes) == 0 {
+			continue
+		}
 		if storageClassLVGs[i].Status.Nodes[0].Name == nodeName {
 			return &storageClassLVGs[i], nil
 		}
