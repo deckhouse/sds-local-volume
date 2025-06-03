@@ -5,7 +5,7 @@ fromImage: builder/src
 final: false
 
 git:
-  - add: /
+  - add: {{ include "PreffixPath" . }}/
     to: /src
     includePaths:
       - api

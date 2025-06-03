@@ -12,7 +12,7 @@ git:
         - '**/go.sum'
       beforeSetup:
         - '**/*.go'
-  - add: /api
+  - add: {{ include "PreffixPath" . }}/api
     to: /usr/src/app/api
     stageDependencies:
       install:
