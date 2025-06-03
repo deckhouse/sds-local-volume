@@ -9,7 +9,7 @@ git:
     to: /src
     includePaths:
       - api
-      - lib/go      
+      - lib/go
       - images/{{ $.ImageName }}
     stageDependencies:
       install:
@@ -38,6 +38,12 @@ mount:
 
 shell:
   setup:
+    - |
+      echo "=== ls -la / ===="
+      ls -la /
+      echo "= /src/images/{{ $.ImageName }}/cmd ="
+      ls -la /src/images/{{ $.ImageName }}/cmd
+
     - cd /src/images/{{ $.ImageName }}/cmd
     - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -tags {{ $.Root.MODULE_EDITION }} -o /{{ $.ImageName }}
     - chmod +x /{{ $.ImageName }}
