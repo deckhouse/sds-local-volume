@@ -4,7 +4,7 @@ fromImage: builder/golang-alpine
 final: false
 
 git:
-  - add: {{ .ModuleDir }}hooks/go
+  - add: {{ .ModuleDir }}/hooks/go
     to: /usr/src/app/hooks/go
     stageDependencies:
       install:
@@ -12,7 +12,7 @@ git:
         - '**/go.sum'
       beforeSetup:
         - '**/*.go'
-  - add: {{ .ModuleDir }}api
+  - add: {{ .ModuleDir }}/api
     to: /usr/src/app/api
     stageDependencies:
       install:
