@@ -6,7 +6,7 @@ fromImage: builder/src
 final: false
 
 git:
-  - add: {{ .ModulePath }}
+  - add: {{ .ModuleDir }}
     to: /src
     includePaths:
       - api
@@ -52,7 +52,7 @@ fromImage: builder/alt
 final: false
 
 git:
-  - add: {{ .ModulePath }}tools/dev_images/additional_tools/binary_replace.sh
+  - add: {{ .ModuleDir }}tools/dev_images/additional_tools/binary_replace.sh
     to: /binary_replace.sh
     stageDependencies:
       install:

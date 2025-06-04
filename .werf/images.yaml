@@ -7,7 +7,7 @@
   {{- $_ := set $ctx "Versions" $.VERSIONS }}
   {{- $_ := set $ctx "ImagePath" (printf "/images/%s" $ctx.ImageName) }}
   {{- $_ := set $ctx "ModuleNamePrefix" "" }}
-  {{- $_ := set $ctx "ModulePath" "/" }}
+  {{- $_ := set $ctx "ModuleDir" "/" }}
   {{- $_ := set $ctx "GOPROXY" "https://proxy.golang.org,direct" }}
 ---
   {{- /* For Dockerfile just render it from the folder. */ -}}
