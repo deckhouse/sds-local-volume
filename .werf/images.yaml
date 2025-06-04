@@ -8,7 +8,7 @@
   {{- $_ := set $ctx "ImagePath" (printf "/images/%s" $ctx.ImageName) }}
   {{- $_ := set $ctx "ModuleNamePrefix" "" }}
   {{- $_ := set $ctx "ModuleDir" "/" }}
-  {{- $_ := set $ctx "GOPROXY" "https://proxy.golang.org,direct" }}
+  {{- $_ := set $ctx "GOPROXY" (env "GOPROXY" "https://proxy.golang.org,direct") }}
 ---
   {{- /* For Dockerfile just render it from the folder. */ -}}
   {{- if not (regexMatch "/werf.inc.yaml$" $path) }}
