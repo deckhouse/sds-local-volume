@@ -4,11 +4,21 @@ fromImage: builder/alt
 fromCacheVersion: {{ div .Commit.Date.Unix (mul 60 60 24 30) }}
 
 git:
+<<<<<<< HEAD
   - add: /openapi
     to: /openapi
     stageDependencies:
       setup:
         - '**/*'
+=======
+  - add: /
+    to: /
+    includePaths:
+      - openapi
+    stageDependencies:
+      setup:
+        - openapi/values_*.yaml      
+>>>>>>> 38d14cf (Fix module CRDs and choose-version image if needed (#119))
 shell:
   setup:
     - cd /openapi
