@@ -83,6 +83,6 @@ import:
     includePaths:
       - '**/*'
 
-docker:
-  ENTRYPOINT: ["/{{ $.ImageName }}"]
-  USER: deckhouse:deckhouse
+imageSpec:
+  config:
+    entrypoint: ["/{{ $.ImageName }}"]
