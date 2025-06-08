@@ -90,15 +90,15 @@ import:
     add: /sbin/blockdev
     to: /sbin/blockdev
     before: install
-  - images: tools/xfsprogs
+  - image: tools/xfsprogs
     add: /usr/sbin/xfs_repair
     to: /usr/sbin/xfs_repair
     before: install
-  - images: tools/xfsprogs
+  - image: tools/xfsprogs
     add: /usr/sbin/mkfs.xfs
     to: /usr/sbin/mkfs.xfs
     before: install
-  - images: tools/xfsprogs
+  - image: tools/xfsprogs
     add: /usr/sbin/xfs_admin
     to: /usr/sbin/xfs_admin
     before: install
