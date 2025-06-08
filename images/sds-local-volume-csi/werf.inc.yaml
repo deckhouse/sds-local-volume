@@ -83,8 +83,8 @@ import:
     includePaths:
       - '**/*'
   - image: tools/util-linux
-    add: /usr/sbin/blkid
-    to: /usr/sbin/blkid 
+    add: /sbin/blkid
+    to: /sbin/blkid 
     before: install
 
 imageSpec:
