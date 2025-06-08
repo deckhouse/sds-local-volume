@@ -83,7 +83,7 @@ import:
     includePaths:
       - '**/*'
   - image: tools/util-linux
-    add: /out/blkid
+    add: /usr/sbin/blkid
     to: /usr/sbin/blkid 
     before: install
 
