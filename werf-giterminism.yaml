@@ -13,7 +13,7 @@ config:
       - "base_images.yml"
   secrets:
     allowValueIds:
-    - GOPROXY           
+      - GOPROXY
   stapel:
     mount:
       allowBuildDir: true
