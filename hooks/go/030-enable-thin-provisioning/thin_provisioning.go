@@ -22,7 +22,6 @@ import (
 	"github.com/deckhouse/module-sdk/pkg"
 	"github.com/deckhouse/module-sdk/pkg/registry"
 	"github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	_ "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/hooks/go/consts"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -49,8 +48,14 @@ func mainHook(ctx context.Context, input *pkg.HookInput) error {
 
 	thinPoolExistence := false
 	for _, item := range list.Items {
+
+		input.Logger.Info("checking item %s", item.Name)
+		input.Logger.Info("LVM type is %s", item.Spec.LVM.Type)
+
 		if item.Spec.LVM.Type == "Thin" {
+			input.Logger.Info("Thin LVM type is found for LSC %s", item.Name)
 			thinPoolExistence = true
+			break
 		}
 	}
 
