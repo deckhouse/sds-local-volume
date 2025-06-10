@@ -38,10 +38,14 @@ storage.deckhouse.io/sds-local-volume-node: ""
 
 {{- $csiControllerConfig := dict }}
 {{- $_ := set $csiControllerConfig "controllerImage" $csiControllerImage }}
+{{- if .Values.sdsLocalVolume.internal.featureSnapshotsEnabled }}
 {{- $_ := set $csiControllerConfig "snapshotterEnabled" true }}
+{{- $_ := set $csiControllerConfig "snapshotterTimeout" "1m" }}
+{{- else }}
+{{- $_ := set $csiControllerConfig "snapshotterEnabled" true }}
+{{- end }}
 {{- $_ := set $csiControllerConfig "resizerEnabled" true }}
 {{- $_ := set $csiControllerConfig "provisionerTimeout" "1m" }}
-{{- $_ := set $csiControllerConfig "snapshotterTimeout" "1m" }}
 {{- $_ := set $csiControllerConfig "extraCreateMetadataEnabled" true }}
 {{- $_ := set $csiControllerConfig "livenessProbePort" 4250 }}
 {{- $_ := set $csiControllerConfig "csiControllerHostNetwork" "false" }}
