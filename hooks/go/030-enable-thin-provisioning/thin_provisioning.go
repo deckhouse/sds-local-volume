@@ -19,104 +19,65 @@ package thinprovisioning
 import (
 	"context"
 	"fmt"
+	"github.com/deckhouse/module-sdk/pkg"
+	"github.com/deckhouse/module-sdk/pkg/registry"
+	"github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	_ "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	"github.com/deckhouse/sds-local-volume/hooks/go/consts"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
-	"os"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	crdGroup      = "storage.deckhouse.io"
-	crdNamePlural = "localstorageclasses"
-	crdVersion    = "v1alpha1"
+var (
+	_ = registry.RegisterFunc(
+		&pkg.HookConfig{
+			OnAfterHelm: &pkg.OrderedConfig{Order: 15},
+			Queue:       fmt.Sprintf("modules/%s", consts.ModuleName),
+		},
+		mainHook,
+	)
 )
 
-func init() {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		kubeconfig := os.Getenv("KUBECONFIG")
-		if kubeconfig == "" {
-			kubeconfig = os.Getenv("HOME") + "/.kube/config"
-		}
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to load Kubernetes config: %v\n", err)
-			os.Exit(1)
-		}
-	}
+func mainHook(ctx context.Context, input *pkg.HookInput) error {
 
-	dynamicClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		_, err := fmt.Fprintf(os.Stderr, "Failed to create dynamic client: %v\n", err)
-		if err != nil {
-			return
-		}
-		os.Exit(1)
-	}
+	input.Logger.Info("Started thin provisioning check webhook")
 
-	localStorageClassGVR := schema.GroupVersionResource{
-		Group:    crdGroup,
-		Version:  crdVersion,
-		Resource: crdNamePlural,
-	}
-
-	list, err := dynamicClient.Resource(localStorageClassGVR).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		_, err := fmt.Fprintf(os.Stderr, "Failed to list custom objects: %v\n", err)
-		if err != nil {
-			return
-		}
-		os.Exit(1)
-	}
+	var mc = &v1alpha1.ModuleConfig{}
+	cl := input.DC.MustGetK8sClient()
+	list := v1alpha1.LocalStorageClassList{}
 
 	thinPoolExistence := false
 	for _, item := range list.Items {
-		lvmType, found, err := unstructured.NestedString(item.Object, "spec", "lvm", "type")
-		if err != nil || !found {
-			continue
-		}
-		if lvmType == "Thin" {
+		if item.Spec.LVM.Type == "Thin" {
 			thinPoolExistence = true
-			break
 		}
 	}
 
 	if thinPoolExistence {
-		resp, err := dynamicClient.Resource(schema.GroupVersionResource{Group: "deckhouse.io", Version: "v1alpha1", Resource: "moduleconfigs"}).Patch(
-			context.Background(),
-			"sds-local-volume",
-			"application/apply-patch+yaml",
-			[]byte(`apiVersion: deckhouse.io/v1alpha1
-kind: ModuleConfig
-metadata:
-  name: sds-local-volume
-spec:
-  version: 1
-  settings:
-    enableThinProvisioning: true
-`),
-			metav1.PatchOptions{FieldManager: "sds-hook"},
-		)
-		if err != nil {
-			_, err := fmt.Fprintf(os.Stderr, "Failed to patch moduleconfigs/sds-local-volume: %v\n", err)
-			if err != nil {
-				return
-			}
-			os.Exit(1)
-		}
-		_, err = json.Marshal(resp.Object)
-		if err != nil {
-			_, err := fmt.Fprintf(os.Stderr, "Failed to format response as YAML: %v\n", err)
-			if err != nil {
-				return
-			}
-			os.Exit(1)
-		}
+		if value, exists := mc.Spec.Settings["enableThinProvisioning"]; exists && value == true {
+			input.Logger.Info("Thin provisioning is already enabled, nothing to do here")
+			return nil
+		} else {
+			input.Logger.Info("Enabling thin provisioning support")
+			patchBytes, err := json.Marshal(map[string]interface{}{
+				"spec": map[string]interface{}{
+					"version": 1,
+					"settings": map[string]interface{}{
+						"enableThinProvisioning": true,
+					},
+				},
+			})
 
+			if err != nil {
+				input.Logger.Error("Error marshalling patch: %s", err.Error())
+			}
+
+			err = cl.Patch(context.TODO(), mc, client.RawPatch(types.MergePatchType, patchBytes))
+			if err != nil {
+				input.Logger.Error("Error patching object: %s", err.Error())
+			}
+		}
 	}
+	return nil
 }
