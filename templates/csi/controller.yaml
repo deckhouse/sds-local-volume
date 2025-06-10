@@ -38,10 +38,19 @@ storage.deckhouse.io/sds-local-volume-node: ""
 
 {{- $csiControllerConfig := dict }}
 {{- $_ := set $csiControllerConfig "controllerImage" $csiControllerImage }}
+{{- if .Values.sdsLocalVolume.internal.featureSnapshotsEnabled }}
 {{- $_ := set $csiControllerConfig "snapshotterEnabled" true }}
+{{- $_ := set $csiControllerConfig "snapshotterTimeout" "1m" }}
+{{- else }}
+{{- $_ := set $csiControllerConfig "snapshotterEnabled" false }}
+{{- end }}
+{{- $_ := set $csiControllerConfig "fullname" "sds-local-volume" }}
+{{- $_ := set $csiControllerConfig "driverFQDN" "local.csi.storage.deckhouse.io" }}
+{{- $_ := set $csiControllerConfig "serviceAccount" "csi" }}
+{{- $_ := set $csiControllerConfig "customNodeSelector" (include "csi_custom_node_selector" . | fromYaml) }}
+{{- $_ := set $csiControllerConfig "resizerImage" (include "helm_lib_module_image" (list . "sdsLocalVolumeCsiResizer")) }}
 {{- $_ := set $csiControllerConfig "resizerEnabled" true }}
 {{- $_ := set $csiControllerConfig "provisionerTimeout" "1m" }}
-{{- $_ := set $csiControllerConfig "snapshotterTimeout" "1m" }}
 {{- $_ := set $csiControllerConfig "extraCreateMetadataEnabled" true }}
 {{- $_ := set $csiControllerConfig "livenessProbePort" 4250 }}
 {{- $_ := set $csiControllerConfig "csiControllerHostNetwork" "false" }}
