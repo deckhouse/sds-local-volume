@@ -2,7 +2,6 @@
 image: {{ .ModuleNamePrefix }}{{ .ImageName }}-src-artifact
 fromImage: builder/src
 final: false
-
 git:
   - add: {{ .ModuleDir }}
     to: /src
@@ -21,7 +20,11 @@ shell:
 
 ---
 image: {{ .ModuleNamePrefix }}{{ .ImageName }}-golang-artifact
+<<<<<<< HEAD
 fromImage: {{ eq .SVACE_ENABLED "false" | ternary "builder/golang-alpine" "builder/alt-go-svace" }}
+=======
+fromImage: builder/golang-alpine
+>>>>>>> bf7e024 (Prepare to CSE build (#118))
 final: false
 
 import:
@@ -41,9 +44,13 @@ shell:
   setup:
     - cd /src/images/{{ $.ImageName }}/cmd
     - GOPROXY=$(cat /run/secrets/GOPROXY) go mod download
+<<<<<<< HEAD
     - export GOOS=linux GOARCH=amd64 CGO_ENABLED=0
     - |
       {{- include "image-build.build" (set $ "BuildCommand" (printf `go build -ldflags="-s -w" -tags "%s" -o /%s` .MODULE_EDITION $.ImageName)) | nindent 6 }}
+=======
+    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
+>>>>>>> bf7e024 (Prepare to CSE build (#118))
     - chmod +x /{{ $.ImageName }}
 
 ---
@@ -54,7 +61,11 @@ import:
   - image: {{ .ModuleNamePrefix }}{{ .ImageName }}-golang-artifact
     add: /{{ $.ImageName }}
     to: /{{ $.ImageName }}
+<<<<<<< HEAD
     before: setup
+=======
+    before: install
+>>>>>>> bf7e024 (Prepare to CSE build (#118))
 
 imageSpec:
   config:

@@ -16,7 +16,11 @@ config:
   secrets:
     allowValueIds:
       - GOPROXY
+<<<<<<< HEAD
       - SOURCE_REPO
+=======
+      - SOURCE_REPO  
+>>>>>>> bf7e024 (Prepare to CSE build (#118))
   stapel:
     mount:
       allowBuildDir: true

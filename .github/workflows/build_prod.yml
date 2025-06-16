@@ -15,6 +15,7 @@ env:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   BASE_IMAGES_VERSION: "v0.5.25"
 =======
   BASE_IMAGES_VERSION: "v0.5.8"
@@ -28,6 +29,9 @@ env:
 =======
   BASE_IMAGES_VERSION: "v0.4.3"
 >>>>>>> 890babe ([internal] Fixes in CI, module structure and build (#114))
+=======
+  BASE_IMAGES_VERSION: "v0.5.6"
+>>>>>>> bf7e024 (Prepare to CSE build (#118))
 
 on:
   push:
@@ -249,7 +253,11 @@ jobs:
           secondary_repo: "${{ vars.DEV_MODULE_SOURCE }}/${{ vars.MODULE_NAME }}"
           source_repo: ${{ secrets.SOURCE_REPO }}
 <<<<<<< HEAD
+<<<<<<< HEAD
           source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
 =======
           source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
 >>>>>>> 890babe ([internal] Fixes in CI, module structure and build (#114))
+=======
+          source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
+>>>>>>> bf7e024 (Prepare to CSE build (#118))
