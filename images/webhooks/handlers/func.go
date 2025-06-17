@@ -37,7 +37,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	mc "github.com/deckhouse/sds-local-volume/images/webhooks/api"
+	mc "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
