@@ -1,4 +1,5 @@
 name: "sds-local-volume"
+stage: "General Availability"
 weight: 920
 descriptions:
   en: "SDS local volume"
