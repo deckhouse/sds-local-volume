@@ -28,7 +28,6 @@ import (
 	kwhmutating "github.com/slok/kubewebhook/v2/pkg/webhook/mutating"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/resource/v1alpha2"
 	sv1 "k8s.io/api/storage/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,7 +37,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -58,7 +56,6 @@ func NewKubeClient(kubeconfigPath string) (client.Client, error) {
 
 	var (
 		resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
-			v1alpha2.AddToScheme,
 			d8commonapi.AddToScheme,
 			snc.AddToScheme,
 			clientgoscheme.AddToScheme,
