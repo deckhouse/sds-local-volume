@@ -23,6 +23,7 @@ import (
 	"slices"
 	"strings"
 
+	d8commonapi "github.com/deckhouse/sds-common-lib/api/v1alpha1"
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,7 +31,6 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	mc "github.com/deckhouse/deckhouse/deckhouse-controller/pkg/apis/deckhouse.io/v1alpha1"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
@@ -104,7 +104,7 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 			klog.Fatal(err.Error())
 		}
 
-		slvModuleConfig := &mc.ModuleConfig{}
+		slvModuleConfig := &d8commonapi.ModuleConfig{}
 
 		err = cl.Get(ctx, types.NamespacedName{Name: sdsLocalVolumeModuleName, Namespace: ""}, slvModuleConfig)
 		if err != nil {
