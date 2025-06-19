@@ -1,6 +1,10 @@
 module github.com/deckhouse/sds-local-volume/api
 
+<<<<<<< HEAD
 go 1.24.6
+=======
+go 1.24.4
+>>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
 
 require k8s.io/apimachinery v0.30.2
 

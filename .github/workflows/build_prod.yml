@@ -11,7 +11,11 @@ env:
   GOPROXY: ${{ secrets.GOPROXY }}
   SOURCE_REPO: ${{ secrets.SOURCE_REPO }}
   SOURCE_REPO_SSH_KEY: ${{ secrets.SOURCE_REPO_SSH_KEY }}
+<<<<<<< HEAD
   BASE_IMAGES_VERSION: "v0.5.25"
+=======
+  BASE_IMAGES_VERSION: "v0.5.8"
+>>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
 
 on:
   push:

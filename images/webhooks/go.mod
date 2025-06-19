@@ -1,6 +1,10 @@
 module github.com/deckhouse/sds-local-volume/images/webhooks
 
+<<<<<<< HEAD
 go 1.24.6
+=======
+go 1.24.4
+>>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
 
 require (
 	github.com/deckhouse/sds-common-lib v0.5.0
@@ -41,7 +45,11 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/net v0.38.0 // indirect
+<<<<<<< HEAD
 	golang.org/x/oauth2 v0.27.0 // indirect
+=======
+	golang.org/x/oauth2 v0.25.0 // indirect
+>>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
