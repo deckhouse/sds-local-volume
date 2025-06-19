@@ -55,7 +55,11 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- else }}
 {{- $_ := set $csiControllerConfig "snapshotterEnabled" true }}
 {{- end }}
+<<<<<<< HEAD
 >>>>>>> a87f740 ([internal] Remove snapshotter from CE (#120))
+=======
+{{- $_ := set $csiControllerConfig "csiControllerHaMode" true }}
+>>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
 {{- $_ := set $csiControllerConfig "resizerEnabled" true }}
 {{- $_ := set $csiControllerConfig "provisionerTimeout" "1m" }}
 {{- $_ := set $csiControllerConfig "extraCreateMetadataEnabled" true }}

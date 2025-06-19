@@ -3,6 +3,7 @@ module github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 go 1.24.6
 =======
 go 1.24.4
@@ -13,6 +14,9 @@ go 1.24.5
 =======
 go 1.24.6
 >>>>>>> 892194d ([internal] fix CVE (#135))
+=======
+go 1.24.4
+>>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
 
 require (
 	github.com/container-storage-interface/spec v1.10.0
