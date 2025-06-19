@@ -44,6 +44,7 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- else }}
 {{- $_ := set $csiControllerConfig "snapshotterEnabled" true }}
 {{- end }}
+{{- $_ := set $csiControllerConfig "csiControllerHaMode" true }}
 {{- $_ := set $csiControllerConfig "resizerEnabled" true }}
 {{- $_ := set $csiControllerConfig "provisionerTimeout" "1m" }}
 {{- $_ := set $csiControllerConfig "extraCreateMetadataEnabled" true }}
