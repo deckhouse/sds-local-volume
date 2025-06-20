@@ -333,3 +333,54 @@ while [[ $kubectl_completed_check -eq 0 ]]; do
 done
 echo "Data migration completed"
 ```
+
+## Как создавать снимки томов?
+
+Подробную информацию о снимках можно найти [здесь](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).
+
+1. Включение snapshot-controller
+
+Сначала необходимо включить snapshot-controller:
+
+```shell
+kubectl apply -f -<<EOF
+apiVersion: deckhouse.io/v1alpha1
+kind: ModuleConfig
+metadata:
+  name: snapshot-controller
+spec:
+  enabled: true
+  version: 1
+EOF
+
+```
+
+2. Создание снимка тома
+
+Теперь вы можете создавать снимки томов. Для этого выполните следующую команду с необходимыми параметрами:
+
+```shell
+kubectl apply -f -<<EOF
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: my-snapshot
+  namespace: <name of the namespace where the PVC is located>
+spec:
+  volumeSnapshotClassName: sds-local-volume-snapshot-class
+  source:
+    persistentVolumeClaimName: <name of the PVC to snapshot>
+EOF
+```
+
+Обратите внимание, что `sds-local-volume-snapshot-class` создается автоматически, и его `deletionPolicy` установлена в `Delete`, что означает, что `VolumeSnapshotContent` будет удален при удалении связанного `VolumeSnapshot`.
+
+3. Проверка статуса снимка
+
+Чтобы проверить статус созданного снимка, выполните команду:
+
+```shell
+kubectl get volumesnapshot
+```
+
+Эта команда выведет список всех снимков и их текущий статус.
