@@ -69,7 +69,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	log, err := logger.NewLogger(cfgParams.Loglevel)
+	log, err := logger.NewLogger(logger.TraceLevel)
 	if err != nil {
 		fmt.Printf("unable to create NewLogger, err: %v\n", err)
 		os.Exit(1)
