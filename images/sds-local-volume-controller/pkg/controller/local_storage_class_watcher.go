@@ -53,7 +53,7 @@ const (
 
 	LocalStorageClassProvisioner = "local.csi.storage.deckhouse.io"
 	TypeParamKey                 = LocalStorageClassProvisioner + "/type"
-	LVMTypeParamKey              = LocalStorageClassProvisioner + "/lvm-type"
+	LVMTypeParamKey              = "csi.storage.deckhouse.io/lvm-type"
 	LVMVolumeBindingModeParamKey = LocalStorageClassProvisioner + "/volume-binding-mode"
 	LVMVolumeGroupsParamKey      = "csi.storage.deckhouse.io/lvm-volume-groups"
 	LVMThickContiguousParamKey   = LocalStorageClassProvisioner + "/lvm-thick-contiguous"
