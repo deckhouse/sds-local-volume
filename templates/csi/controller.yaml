@@ -53,7 +53,7 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiControllerConfig "csiControllerHaMode" true }}
 =======
 {{- else }}
-{{- $_ := set $csiControllerConfig "snapshotterEnabled" true }}
+{{- $_ := set $csiControllerConfig "snapshotterEnabled" false }}
 {{- end }}
 <<<<<<< HEAD
 >>>>>>> a87f740 ([internal] Remove snapshotter from CE (#120))
