@@ -9,6 +9,9 @@ config:
       - GOPROXY
       - SOURCE_REPO
       - MODULE_EDITION
+      - SVACE_ENABLED
+      - SVACE_ANALYZE_HOST
+      - SVACE_ANALYZE_SSH_USER
     allowUncommittedFiles:
       - "base_images.yml"
   secrets:
