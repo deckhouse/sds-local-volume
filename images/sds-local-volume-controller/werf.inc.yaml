@@ -2,6 +2,7 @@
 image: {{ .ModuleNamePrefix }}{{ .ImageName }}-src-artifact
 fromImage: builder/src
 final: false
+
 git:
   - add: {{ .ModuleDir }}
     to: /src
@@ -20,7 +21,7 @@ shell:
 
 ---
 image: {{ .ModuleNamePrefix }}{{ .ImageName }}-golang-artifact
-fromImage: builder/golang-alpine
+fromImage: {{ eq $.Constants.SVACE_ENABLED "false" | ternary "builder/golang-alpine" "builder/alt-go-svace" }}
 final: false
 
 import:
@@ -40,7 +41,8 @@ shell:
   setup:
     - cd /src/images/{{ $.ImageName }}/cmd
     - GOPROXY=$(cat /run/secrets/GOPROXY) go mod download
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
+    - |
+      {{- include "image-build.build" (set $ "BuildCommand" (printf "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags=\"-s -w\" -tags \"%s\" -o /%s" $.ImageName .MODULE_EDITION)) | nindent 6 }}
     - chmod +x /{{ $.ImageName }}
 
 ---
@@ -51,7 +53,7 @@ import:
   - image: {{ .ModuleNamePrefix }}{{ .ImageName }}-golang-artifact
     add: /{{ $.ImageName }}
     to: /{{ $.ImageName }}
-    before: install
+    before: setup
 
 imageSpec:
   config:
