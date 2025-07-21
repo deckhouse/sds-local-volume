@@ -97,7 +97,6 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $csiNodeImage := include "helm_lib_module_image" (list . "sdsLocalVolumeCsi") }}
 
 {{- $csiNodeConfig := dict }}
-{{- $_ := set $csiNodeConfig "fullname" "sds-local-volume" }}
 {{- $_ := set $csiNodeConfig "nodeImage" $csiNodeImage }}
 {{- $_ := set $csiNodeConfig "driverFQDN" "local.csi.storage.deckhouse.io" }}
 {{- $_ := set $csiNodeConfig "livenessProbePort" 4251 }}
