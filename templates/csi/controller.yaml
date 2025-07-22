@@ -46,6 +46,9 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiControllerConfig "snapshotterEnabled" true }}
 {{- $_ := set $csiControllerConfig "snapshotterTimeout" "1m" }}
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 18a83d1 ([internal] fix snapshot prefix name (#126))
 {{- $_ := set $csiControllerConfig "snapshotterSnapshotNamePrefix" "snap" }}
 {{- else }}
 {{- $_ := set $csiControllerConfig "snapshotterEnabled" false }}
