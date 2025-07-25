@@ -17,8 +17,8 @@ limitations under the License.
 package internal
 
 const (
-	SLVStorageClassCtrlName 							= "d8-sds-local-volume-storage-class-controller"
-	SLVStorageClassVolumeSnapshotClassAnnotationKey 	= "storage.deckhouse.io/volumesnapshotclass"
-	SLVStorageClassVolumeSnapshotClassAnnotationValue 	= "sds-local-volume-snapshot-class"
-	SLVStorageManagedLabelKey                       	= "storage.deckhouse.io/managed-by"
+	SLVStorageClassCtrlName                           = "d8-sds-local-volume-storage-class-controller"
+	SLVStorageClassVolumeSnapshotClassAnnotationKey   = "storage.deckhouse.io/volumesnapshotclass"
+	SLVStorageClassVolumeSnapshotClassAnnotationValue = "sds-local-volume-snapshot-class"
+	SLVStorageManagedLabelKey                         = "storage.deckhouse.io/managed-by"
 )
