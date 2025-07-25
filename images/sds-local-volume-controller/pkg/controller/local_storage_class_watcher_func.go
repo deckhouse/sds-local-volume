@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
@@ -462,8 +463,11 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 			APIVersion: StorageClassAPIVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       lsc.Name,
-			Namespace:  lsc.Namespace,
+			Name:      lsc.Name,
+			Namespace: lsc.Namespace,
+			Annotations: map[string]string{
+				internal.SLVStorageClassVolumeSnapshotClassAnnotationKey: internal.SLVStorageClassVolumeSnapshotClassAnnotationValue,
+			},
 			Finalizers: []string{LocalStorageClassFinalizerName},
 		},
 		Provisioner:          LocalStorageClassProvisioner,
@@ -471,6 +475,15 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 		ReclaimPolicy:        &reclaimPolicy,
 		AllowVolumeExpansion: &AllowVolumeExpansion,
 		VolumeBindingMode:    &volumeBindingMode,
+	}
+
+	if lsc.Labels != nil {
+		sc.Labels = lsc.Labels
+		sc.Labels[internal.SLVStorageManagedLabelKey] = internal.SLVStorageClassCtrlName
+	} else {
+		sc.Labels = map[string]string{
+			internal.SLVStorageManagedLabelKey: internal.SLVStorageClassCtrlName,
+		}
 	}
 
 	return sc, nil
