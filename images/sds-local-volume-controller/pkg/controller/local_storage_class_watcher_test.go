@@ -160,8 +160,10 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		sc := &v1.StorageClass{}
 		err := cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(sc.Labels).To(HaveLen(1))
+		Expect(sc.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassCtrlName))
 		Expect(sc.Annotations).To(HaveLen(1))
-		Expect(sc.Annotations).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassCtrlName))
+		Expect(sc.Annotations).To(HaveKeyWithValue(internal.SLVStorageClassVolumeSnapshotClassAnnotationKey, internal.SLVStorageClassVolumeSnapshotClassAnnotationValue))
 	})
 
 	It("Update_local_sc_remove_existing_lvg", func() {
