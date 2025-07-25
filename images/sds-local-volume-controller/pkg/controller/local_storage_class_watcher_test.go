@@ -31,6 +31,7 @@ import (
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/controller"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
@@ -115,23 +116,6 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		performStandartChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC, controller.DefaultFSType)
 	})
 
-	It("Annotate_sc_as_default_sc", func() {
-		sc := &v1.StorageClass{}
-		err := cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(sc.Annotations).To(BeNil())
-
-		sc.Annotations = map[string]string{
-			controller.StorageClassDefaultAnnotationKey: controller.StorageClassDefaultAnnotationValTrue,
-		}
-
-		err = cl.Update(ctx, sc)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(sc.Annotations).To(HaveLen(1))
-		Expect(sc.Annotations).To(HaveKeyWithValue(controller.StorageClassDefaultAnnotationKey, controller.StorageClassDefaultAnnotationValTrue))
-
-	})
-
 	It("Update_local_sc_add_existing_lvg", func() {
 		lvgSpec := []slv.LocalStorageClassLVG{
 			{Name: existingThickLVG1Name},
@@ -177,8 +161,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		err := cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(sc.Annotations).To(HaveLen(1))
-		Expect(sc.Annotations).To(HaveKeyWithValue(controller.StorageClassDefaultAnnotationKey, controller.StorageClassDefaultAnnotationValTrue))
-
+		Expect(sc.Annotations).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassCtrlName))
 	})
 
 	It("Update_local_sc_remove_existing_lvg", func() {
