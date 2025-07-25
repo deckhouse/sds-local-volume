@@ -121,7 +121,11 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 		performStandardChecksForSC(sc, lvgSpec, nameForLocalStorageClass, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC, controller.DefaultFSType)
 	})
 
+<<<<<<< HEAD
 	It("Update_local_sc_add_existing_lvg", func(ctx SpecContext) {
+=======
+	It("Update_local_sc_add_existing_lvg", func() {
+>>>>>>> 4f12da4 ([internal] add volumesnapshotclassname annotations to storageclasses (#127))
 		lvgSpec := []slv.LocalStorageClassLVG{
 			{Name: existingThickLVG1Name},
 			{Name: existingThickLVG2Name},
