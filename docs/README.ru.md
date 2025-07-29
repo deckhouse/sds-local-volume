@@ -21,8 +21,8 @@ description: "Модуль sds-local-volume: общие концепции и п
 
   Создание StorageClass для CSI-драйвера `local.csi.storage.deckhouse.io` пользователем **запрещено**.
 
-Модуль поддерживает два режима работы: LVM и LVMThin.
-У каждого из них есть свои особенности, преимущества и ограничения. Подробнее о различиях можно узнать в [FAQ](./faq.html#когда-следует-использовать-lvm-а-когда-lvmthin).
+Модуль поддерживает два режима работы: LVM (Thick) и LVM Thin.
+У каждого из них есть свои особенности, преимущества и ограничения. Подробнее о различиях можно узнать в [FAQ](./faq.html#когда-следует-использовать-lvm-а-когда-lvm-thin).
 
 ## Быстрый старт
 
@@ -247,10 +247,14 @@ kubectl -n d8-sds-local-volume get pod -owide
      lvm:
        lvmVolumeGroups:
         - name: vg-1-on-worker-0
+          thin:
+            poolName: thin-1
         - name: vg-1-on-worker-1
+          thin:
+            poolName: thin-1
         - name: vg-1-on-worker-2
-           thin:
-             poolName: thin-1
+          thin:
+            poolName: thin-1
        type: Thin
      reclaimPolicy: Delete
      volumeBindingMode: WaitForFirstConsumer
