@@ -5,16 +5,18 @@ config:
       - /CI_.+/
       - MODULES_MODULE_TAG
       - WERF_DISABLE_META_TAGS
-      - GOLANG_VERSION
       - GOPROXY
       - SOURCE_REPO
       - MODULE_EDITION
+      - SVACE_ENABLED
+      - SVACE_ANALYZE_HOST
+      - SVACE_ANALYZE_SSH_USER
     allowUncommittedFiles:
       - "base_images.yml"
   secrets:
     allowValueIds:
       - GOPROXY
-      - SOURCE_REPO  
+      - SOURCE_REPO
   stapel:
     mount:
       allowBuildDir: true
