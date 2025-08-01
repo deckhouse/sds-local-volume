@@ -24,10 +24,14 @@ shell:
 ---
 image: {{ .ModuleNamePrefix }}{{ .ImageName }}-golang-artifact
 <<<<<<< HEAD
+<<<<<<< HEAD
 fromImage: {{ eq .SVACE_ENABLED "false" | ternary "builder/golang-alpine" "builder/alt-go-svace" }}
 =======
 fromImage: builder/golang-alpine
 >>>>>>> bf7e024 (Prepare to CSE build (#118))
+=======
+fromImage: {{ eq .SVACE_ENABLED "false" | ternary "builder/golang-alpine" "builder/alt-go-svace" }}
+>>>>>>> 350e0aa ([CI] Svace integration (#125))
 final: false
 
 import:
@@ -48,12 +52,18 @@ shell:
     - cd /src/images/{{ $.ImageName }}/cmd
     - GOPROXY=$(cat /run/secrets/GOPROXY) go mod download
 <<<<<<< HEAD
+<<<<<<< HEAD
     - export GOOS=linux GOARCH=amd64 CGO_ENABLED=0
     - |
       {{- include "image-build.build" (set $ "BuildCommand" (printf `go build -ldflags="-s -w" -tags "%s" -o /%s` .MODULE_EDITION $.ImageName)) | nindent 6 }}
 =======
     - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -tags {{ .MODULE_EDITION }} -o /{{ $.ImageName }}
 >>>>>>> bf7e024 (Prepare to CSE build (#118))
+=======
+    - export GOOS=linux GOARCH=amd64 CGO_ENABLED=0
+    - |
+      {{- include "image-build.build" (set $ "BuildCommand" (printf `go build -ldflags="-s -w" -tags "%s" -o /%s` .MODULE_EDITION $.ImageName)) | nindent 6 }}
+>>>>>>> 350e0aa ([CI] Svace integration (#125))
     - chmod +x /{{ $.ImageName }}
 
 ---

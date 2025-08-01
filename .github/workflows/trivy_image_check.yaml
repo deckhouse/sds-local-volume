@@ -29,6 +29,10 @@ on:
 =======
 >>>>>>> 890babe ([internal] Fixes in CI, module structure and build (#114))
         required: false
+      svace_enabled:
+        description: 'Enable svace build and analyze'
+        type: boolean
+        required: false
 
 jobs:
   build_dev:

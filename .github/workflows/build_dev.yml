@@ -16,6 +16,7 @@ env:
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   BASE_IMAGES_VERSION: "v0.5.25"
 =======
   BASE_IMAGES_VERSION: "v0.5.8"
@@ -35,6 +36,9 @@ env:
 =======
   BASE_IMAGES_VERSION: "v0.5.8"
 >>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
+=======
+  BASE_IMAGES_VERSION: "v0.5.12"
+>>>>>>> 350e0aa ([CI] Svace integration (#125))
 
 on:
   #pull_request:
@@ -187,9 +191,12 @@ jobs:
           svacer_import_user: "${{ secrets.SVACER_IMPORT_USER }}"
           svacer_import_password: "${{ secrets.SVACER_IMPORT_PASSWORD }}"
           svace_analyze_ssh_private_key: "${{ secrets.SVACE_ANALYZE_SSH_PRIVATE_KEY }}"
+<<<<<<< HEAD
 =======
           source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
 >>>>>>> 890babe ([internal] Fixes in CI, module structure and build (#114))
 =======
           source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
 >>>>>>> bf7e024 (Prepare to CSE build (#118))
+=======
+>>>>>>> 350e0aa ([CI] Svace integration (#125))
