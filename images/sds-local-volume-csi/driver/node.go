@@ -19,7 +19,7 @@ package driver
 import (
 	"context"
 	"fmt"
-	"os"
+	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -324,29 +324,17 @@ func (d *Driver) NodeUnpublishVolume(_ context.Context, request *csi.NodeUnpubli
 
 // getBlockSizeBytes returns the size of the block device in bytes
 func getBlockSizeBytes(devicePath string) (int64, error) {
-	// Read size from /sys/block/device/size
-	// Extract device name from path (e.g., /dev/sdb -> sdb)
-	deviceName := ""
-	if strings.HasPrefix(devicePath, "/dev/") {
-		deviceName = strings.TrimPrefix(devicePath, "/dev/")
-	} else {
-		return 0, fmt.Errorf("device path %s is not in /dev/ format", devicePath)
-	}
-
-	sizePath := fmt.Sprintf("/sys/block/%s/size", deviceName)
-	sizeBytes, err := os.ReadFile(sizePath)
+	cmd := exec.Command("blockdev", "--getsize64", devicePath)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return 0, fmt.Errorf("failed to read device size from %s: %v", sizePath, err)
+		return -1, fmt.Errorf("error when getting size of block volume at path %s: output: %s, err: %v", devicePath, string(output), err)
 	}
-
-	// Size is in 512-byte sectors, convert to bytes
-	sizeStr := strings.TrimSpace(string(sizeBytes))
-	sectors, err := strconv.ParseInt(sizeStr, 10, 64)
+	strOut := strings.TrimSpace(string(output))
+	gotSizeBytes, err := strconv.ParseInt(strOut, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse device size %s: %v", sizeStr, err)
+		return -1, fmt.Errorf("failed to parse size %s as int", strOut)
 	}
-
-	return sectors * 512, nil
+	return gotSizeBytes, nil
 }
 
 func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
