@@ -337,7 +337,7 @@ func getBlockSizeBytes(devicePath string) (int64, error) {
 	return gotSizeBytes, nil
 }
 
-func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	d.log.Info("method NodeGetVolumeStats")
 
 	volumePath := req.GetVolumePath()
@@ -364,9 +364,7 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 		return &csi.NodeGetVolumeStatsResponse{
 			Usage: []*csi.VolumeUsage{
 				{
-					Available: total,
 					Total:     total,
-					Used:      0,
 					Unit:      csi.VolumeUsage_BYTES,
 				},
 			},
@@ -379,9 +377,9 @@ func (d *Driver) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeS
 		return nil, status.Errorf(codes.Internal, "failed to statfs %s: %v", volumePath, err)
 	}
 
-	available := int64(fsStat.Bavail) * int64(fsStat.Bsize)
-	total := int64(fsStat.Blocks) * int64(fsStat.Bsize)
-	used := (int64(fsStat.Blocks) - int64(fsStat.Bfree)) * int64(fsStat.Bsize)
+	available := int64(fsStat.Bavail) * fsStat.Bsize
+	total := int64(fsStat.Blocks) * fsStat.Bsize
+	used := (int64(fsStat.Blocks) - int64(fsStat.Bfree)) * fsStat.Bsize
 
 	inodes := int64(fsStat.Files)
 	inodesFree := int64(fsStat.Ffree)
