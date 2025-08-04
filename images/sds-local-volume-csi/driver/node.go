@@ -364,8 +364,8 @@ func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeSta
 		return &csi.NodeGetVolumeStatsResponse{
 			Usage: []*csi.VolumeUsage{
 				{
-					Unit:      csi.VolumeUsage_BYTES,
-					Total:     total,
+					Unit:  csi.VolumeUsage_BYTES,
+					Total: total,
 				},
 			},
 		}, nil
