@@ -339,7 +339,7 @@ func (d *Driver) IsBlockDevice(fullPath string) (bool, error) {
 
 // getBlockSizeBytes returns the size of the block device in bytes
 func (d *Driver) getBlockSizeBytes(devicePath string) (uint64, error) {
-	file, err := os.OpenFile(fmt.Sprintf("/dev/%s", devicePath), os.O_RDONLY, 0)
+	file, err := os.OpenFile(devicePath, os.O_RDONLY, 0)
 	if err != nil {
 		return 0, fmt.Errorf("failed to open device %s: %w", devicePath, err)
 	}
