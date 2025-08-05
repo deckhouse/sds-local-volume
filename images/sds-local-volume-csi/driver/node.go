@@ -327,12 +327,12 @@ func getBlockSizeBytes(devicePath string) (int64, error) {
 	cmd := exec.Command("blockdev", "--getsize64", devicePath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return -1, fmt.Errorf("error when getting size of block volume at path %s: output: %s, err: %v", devicePath, string(output), err)
+		return 0, fmt.Errorf("error when getting size of block volume at path %s: output: %s, err: %v", devicePath, string(output), err)
 	}
 	strOut := strings.TrimSpace(string(output))
 	gotSizeBytes, err := strconv.ParseInt(strOut, 10, 64)
 	if err != nil {
-		return -1, fmt.Errorf("failed to parse size %s as int", strOut)
+		return 0, fmt.Errorf("failed to parse size %s as int", strOut)
 	}
 	return gotSizeBytes, nil
 }
