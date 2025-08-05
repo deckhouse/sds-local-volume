@@ -359,7 +359,7 @@ func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeSta
 	}
 
 	// Check if it's a block device (S_ISBLK)
-	if stat.Mode&syscall.S_IFMT == syscall.S_IFBLK {
+	if (stat.Mode & syscall.S_IFMT) == syscall.S_IFBLK {
 		// For block devices, get the device size
 		d.log.Info(fmt.Sprintf("Volume path %s is a block device, getting device size", volumePath))
 
