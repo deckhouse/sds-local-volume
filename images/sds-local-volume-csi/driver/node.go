@@ -19,11 +19,12 @@ package driver
 import (
 	"context"
 	"fmt"
-	"os/exec"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"syscall"
+	"unsafe"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -38,6 +39,8 @@ const (
 
 	// VolumeOperationAlreadyExists is message fmt returned to CO when there is another in-flight call on the given volumeID
 	VolumeOperationAlreadyExists = "An operation with the given volume=%q is already in progress"
+
+	BLKGETSIZE64 = 0x80081272
 )
 
 var (
@@ -323,18 +326,22 @@ func (d *Driver) NodeUnpublishVolume(_ context.Context, request *csi.NodeUnpubli
 }
 
 // getBlockSizeBytes returns the size of the block device in bytes
-func getBlockSizeBytes(devicePath string) (int64, error) {
-	cmd := exec.Command("blockdev", "--getsize64", devicePath)
-	output, err := cmd.CombinedOutput()
+func getBlockSizeBytes(devicePath string) (uint64, error) {
+	file, err := os.OpenFile(fmt.Sprintf("/dev/%s", devicePath), os.O_RDONLY, 0)
 	if err != nil {
-		return 0, fmt.Errorf("error when getting size of block volume at path %s: output: %s, err: %v", devicePath, string(output), err)
+		return 0, fmt.Errorf("failed to open device %s: %w", devicePath, err)
 	}
-	strOut := strings.TrimSpace(string(output))
-	gotSizeBytes, err := strconv.ParseInt(strOut, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse size %s as int", strOut)
+	defer file.Close()
+
+	fd := file.Fd()
+
+	var size uint64
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, BLKGETSIZE64, uintptr(unsafe.Pointer(&size)))
+	if errno != 0 {
+		return 0, fmt.Errorf("failed to get device size for %s: %w", devicePath, errno)
 	}
-	return gotSizeBytes, nil
+
+	return size, nil
 }
 
 func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
@@ -365,7 +372,7 @@ func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeSta
 			Usage: []*csi.VolumeUsage{
 				{
 					Unit:  csi.VolumeUsage_BYTES,
-					Total: total,
+					Total: int64(total),
 				},
 			},
 		}, nil
