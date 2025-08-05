@@ -7,6 +7,10 @@
 - "--csi-address=unix://$(ADDRESS)"
 {{- end }}
 
+{{- define "additional_pull_secrets" }} 
+- name: {{ .Chart.Name }}-module-registry
+{{- end }}
+
 {{- define "csi_controller_envs" }}
 - name: ADDRESS
   value: /csi/csi.sock
@@ -51,6 +55,7 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiControllerConfig "extraCreateMetadataEnabled" true }}
 {{- $_ := set $csiControllerConfig "livenessProbePort" 4250 }}
 {{- $_ := set $csiControllerConfig "csiControllerHostNetwork" "false" }}
+{{- $_ := set $csiControllerConfig "additionalPullSecrets" (include "additional_pull_secrets" . | fromYamlArray) }}
 {{- $_ := set $csiControllerConfig "additionalControllerArgs" (include "csi_controller_args" . | fromYamlArray) }}
 {{- $_ := set $csiControllerConfig "additionalControllerEnvs" (include "csi_controller_envs" . | fromYamlArray) }}
 
@@ -107,6 +112,7 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiNodeConfig "additionalNodeVolumes" (include "csi_additional_node_volumes" . | fromYamlArray) }}
 {{- $_ := set $csiNodeConfig "additionalNodeVolumeMounts" (include "csi_additional_node_volume_mounts" . | fromYamlArray) }}
 {{- $_ := set $csiNodeConfig "customNodeSelector" (include "csi_custom_node_selector" . | fromYaml) }}
+{{- $_ := set $csiNodeConfig "additionalPullSecrets" (include "additional_pull_secrets" . | fromYamlArray) }}
 {{- $_ := set $csiNodeConfig "forceCsiNodeAndStaticNodesDepoloy" true }}
 
 {{- include "helm_lib_csi_node_manifests" (list . $csiNodeConfig) }}

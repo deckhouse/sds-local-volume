@@ -19,12 +19,15 @@ package driver
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"syscall"
+	"unsafe"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -37,6 +40,8 @@ const (
 
 	// VolumeOperationAlreadyExists is message fmt returned to CO when there is another in-flight call on the given volumeID
 	VolumeOperationAlreadyExists = "An operation with the given volume=%q is already in progress"
+
+	BLKGETSIZE64 = 0x80081272
 )
 
 var (
@@ -321,9 +326,90 @@ func (d *Driver) NodeUnpublishVolume(_ context.Context, request *csi.NodeUnpubli
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func (d *Driver) NodeGetVolumeStats(_ context.Context, _ *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+// IsBlock checks if the given path is a block device
+func (d *Driver) IsBlockDevice(fullPath string) (bool, error) {
+	var st unix.Stat_t
+	err := unix.Stat(fullPath, &st)
+	if err != nil {
+		return false, err
+	}
+
+	return (st.Mode & unix.S_IFMT) == unix.S_IFBLK, nil
+}
+
+// getBlockSizeBytes returns the size of the block device in bytes
+func (d *Driver) getBlockSizeBytes(devicePath string) (uint64, error) {
+	file, err := os.OpenFile(devicePath, os.O_RDONLY, 0)
+	if err != nil {
+		return 0, fmt.Errorf("failed to open device %s: %w", devicePath, err)
+	}
+	defer file.Close()
+
+	fd := file.Fd()
+
+	var size uint64
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, BLKGETSIZE64, uintptr(unsafe.Pointer(&size)))
+	if errno != 0 {
+		return 0, fmt.Errorf("failed to get device size for %s: %w", devicePath, errno)
+	}
+
+	return size, nil
+}
+
+func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	d.log.Info("method NodeGetVolumeStats")
-	return &csi.NodeGetVolumeStatsResponse{}, nil
+
+	isBlock, err := d.IsBlockDevice(req.VolumePath)
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to determine whether %s is block device: %v", req.VolumePath, err)
+	}
+
+	if isBlock {
+		bcap, err := d.getBlockSizeBytes(req.VolumePath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get block capacity on path %s: %v", req.VolumePath, err)
+		}
+		return &csi.NodeGetVolumeStatsResponse{
+			Usage: []*csi.VolumeUsage{
+				{
+					Unit:  csi.VolumeUsage_BYTES,
+					Total: int64(bcap),
+				},
+			},
+		}, nil
+	}
+
+	// For filesystem mounts, get filesystem statistics
+	var fsStat syscall.Statfs_t
+	if err := syscall.Statfs(req.VolumePath, &fsStat); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to statfs %s: %v", req.VolumePath, err)
+	}
+
+	available := int64(fsStat.Bavail) * fsStat.Bsize
+	total := int64(fsStat.Blocks) * fsStat.Bsize
+	used := (int64(fsStat.Blocks) - int64(fsStat.Bfree)) * fsStat.Bsize
+
+	inodes := int64(fsStat.Files)
+	inodesFree := int64(fsStat.Ffree)
+	inodesUsed := inodes - inodesFree
+
+	return &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{
+			{
+				Available: available,
+				Total:     total,
+				Used:      used,
+				Unit:      csi.VolumeUsage_BYTES,
+			},
+			{
+				Available: inodesFree,
+				Total:     inodes,
+				Used:      inodesUsed,
+				Unit:      csi.VolumeUsage_INODES,
+			},
+		},
+	}, nil
 }
 
 func (d *Driver) NodeExpandVolume(_ context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
