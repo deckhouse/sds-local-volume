@@ -19,7 +19,7 @@ package internal
 const (
 	TypeKey                     = "local.csi.storage.deckhouse.io/type"
 	Lvm                         = "lvm"
-	LvmTypeKey                  = "local.csi.storage.deckhouse.io/lvm-type"
+	LvmTypeKey                  = "csi.storage.deckhouse.io/lvm-type"
 	BindingModeKey              = "local.csi.storage.deckhouse.io/volume-binding-mode"
 	LVMVolumeGroupKey           = "csi.storage.deckhouse.io/lvm-volume-groups"
 	LVMVThickContiguousParamKey = "local.csi.storage.deckhouse.io/lvm-thick-contiguous"
