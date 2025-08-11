@@ -724,6 +724,80 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 	})
 
+	It("Create_thick_sc_with_contiguous_false", func() {
+		contigLVG1 := "contig-vg1"
+		contigLVG2 := "contig-vg2"
+		lscName := nameForLocalStorageClass + "-contig-false"
+		lvgSpec := []slv.LocalStorageClassLVG{{Name: contigLVG1}, {Name: contigLVG2}}
+
+		Expect(cl.Create(ctx, generateLVMVolumeGroup(contigLVG1, []string{}))).To(Succeed())
+		Expect(cl.Create(ctx, generateLVMVolumeGroup(contigLVG2, []string{}))).To(Succeed())
+
+		lscTemplate := generateLocalStorageClass(lscName, reclaimPolicyDelete, volumeBindingModeWFFC, controller.LVMThickType, lvgSpec)
+		contiguous := false
+		lscTemplate.Spec.LVM.Thick = &slv.LocalStorageClassLVMThickSpec{Contiguous: &contiguous}
+		Expect(cl.Create(ctx, lscTemplate)).To(Succeed())
+
+		lsc := &slv.LocalStorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		scList := &v1.StorageClassList{}
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+
+		sc := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, sc)).To(Succeed())
+		performStandartChecksForSC(sc, lvgSpec, lscName, controller.LocalStorageClassLvmType, controller.LVMThickType, reclaimPolicyDelete, volumeBindingModeWFFC, controller.DefaultFSType)
+		Expect(sc.Parameters).NotTo(HaveKey(controller.LVMThickContiguousParamKey))
+
+		// Cleanup: delete and reconcile
+		Expect(cl.Delete(ctx, lsc)).To(Succeed())
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+	})
+
+	It("Create_thick_sc_with_contiguous_true", func() {
+		contigLVG1 := "contig2-vg1"
+		contigLVG2 := "contig2-vg2"
+		lscName := nameForLocalStorageClass + "-contig-true"
+		lvgSpec := []slv.LocalStorageClassLVG{{Name: contigLVG1}, {Name: contigLVG2}}
+
+		Expect(cl.Create(ctx, generateLVMVolumeGroup(contigLVG1, []string{}))).To(Succeed())
+		Expect(cl.Create(ctx, generateLVMVolumeGroup(contigLVG2, []string{}))).To(Succeed())
+
+		lscTemplate := generateLocalStorageClass(lscName, reclaimPolicyDelete, volumeBindingModeWFFC, controller.LVMThickType, lvgSpec)
+		contiguous := true
+		lscTemplate.Spec.LVM.Thick = &slv.LocalStorageClassLVMThickSpec{Contiguous: &contiguous}
+		Expect(cl.Create(ctx, lscTemplate)).To(Succeed())
+
+		lsc := &slv.LocalStorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		scList := &v1.StorageClassList{}
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+
+		sc := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, sc)).To(Succeed())
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.TypeParamKey, controller.LocalStorageClassLvmType))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMTypeParamKey, controller.LVMThickType))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMVolumeBindingModeParamKey, volumeBindingModeWFFC))
+		Expect(sc.Parameters).To(HaveKey(controller.LVMVolumeGroupsParamKey))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.FSTypeParamKey, controller.DefaultFSType))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMThickContiguousParamKey, "true"))
+
+		// Cleanup: delete and reconcile
+		Expect(cl.Delete(ctx, lsc)).To(Succeed())
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+	})
+
 })
 
 func generateLVMVolumeGroup(name string, thinPoolNames []string) *snc.LVMVolumeGroup {
