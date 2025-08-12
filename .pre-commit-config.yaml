@@ -1,6 +1,8 @@
+default_language_version:
+  golang: 1.24.4
 repos:
   - repo: https://github.com/golangci/golangci-lint
-    rev: v1.64.6
+    rev: v1.64.5
     hooks:
       - id: golangci-lint
         name: golangci-lint-ee
