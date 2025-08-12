@@ -53,7 +53,7 @@ var _ = Describe("local-storage-class-controller", func() {
 
 	var (
 		cl  = NewFakeClient()
-		log = logger.Logger{}
+		log = logger.NewLoggerFromLogr(GinkgoLogr)
 
 		reclaimPolicyDelete = string(corev1.PersistentVolumeReclaimDelete)
 		reclaimPolicyRetain = string(corev1.PersistentVolumeReclaimRetain)
