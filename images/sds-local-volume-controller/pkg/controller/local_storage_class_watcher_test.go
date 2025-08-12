@@ -729,7 +729,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 	})
 
-	It("Create_thick_sc_with_contiguous_false", func(ctx SpecContext) {
+	It("creates thick sc with contiguous false", func(ctx SpecContext) {
 		contigLVG1 := "contig-vg1"
 		contigLVG2 := "contig-vg2"
 		lscName := nameForLocalStorageClass + "-contig-false"
