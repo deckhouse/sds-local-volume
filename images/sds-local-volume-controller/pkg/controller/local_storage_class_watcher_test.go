@@ -35,7 +35,8 @@ import (
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
-var _ = Describe("local-storage-class-controller", func() {
+// TODO: Make tests independent and Remove Ordered decorator
+var _ = Describe("local-storage-class-controller", Ordered, func() {
 	const (
 		nameForLocalStorageClass = "sds-local-volume-storage-class"
 
@@ -52,7 +53,7 @@ var _ = Describe("local-storage-class-controller", func() {
 	)
 
 	var (
-		cl  = NewFakeClient()
+		cl  client.Client
 		log = logger.NewLoggerFromLogr(GinkgoLogr)
 
 		reclaimPolicyDelete = string(corev1.PersistentVolumeReclaimDelete)
@@ -69,6 +70,11 @@ var _ = Describe("local-storage-class-controller", func() {
 		existingThinLVG2Template = generateLVMVolumeGroup(existingThinLVG2Name, []string{"thin-pool-1", "thin-pool-2"})
 		newThinLVGTemplate       = generateLVMVolumeGroup(newThinLVGName, []string{"thin-pool-1", "thin-pool-2"})
 	)
+
+	// TODO: replace with JustBeforeEach and remove ordering
+	BeforeAll(func() {
+		cl = NewFakeClient()
+	})
 
 	It("Create_local_sc_with_existing_lvgs", func(ctx SpecContext) {
 		lvgSpec := []slv.LocalStorageClassLVG{
