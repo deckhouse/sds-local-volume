@@ -724,7 +724,7 @@ var _ = Describe(controller.LocalStorageClassCtrlName, func() {
 		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 	})
 
-	It("Create_thick_sc_with_contiguous_false", func() {
+	It("creates thick sc with contiguous false", func() {
 		contigLVG1 := "contig-vg1"
 		contigLVG2 := "contig-vg2"
 		lscName := nameForLocalStorageClass + "-contig-false"
