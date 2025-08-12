@@ -79,3 +79,5 @@ replace github.com/imdario/mergo => github.com/imdario/mergo v0.3.16
 replace github.com/deckhouse/sds-local-volume/api => ../../api
 
 replace github.com/deckhouse/sds-local-volume/lib/go/common => ../../lib/go/common
+
+tool github.com/onsi/ginkgo/v2/ginkgo
