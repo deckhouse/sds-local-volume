@@ -6,7 +6,7 @@ repos:
     hooks:
       - id: golangci-lint
         name: golangci-lint-ee
-        entry: find -type f -name go.mod -execdir sh -c "golangci-lint run --new-from-rev HEAD --build-tags ee --fix" {} +
+        entry: find -type f -name go.mod -execdir sh -c "golangci-lint run --new-from-rev HEAD --build-tags ee --fix --fast" {} +
       - id: golangci-lint
         name: golangci-lint-ce
-        entry: find -type f -name go.mod -execdir sh -c "golangci-lint run --new-from-rev HEAD --build-tags ce --fix" {} +
+        entry: find -type f -name go.mod -execdir sh -c "golangci-lint run --new-from-rev HEAD --build-tags ce --fix --fast" {} +
