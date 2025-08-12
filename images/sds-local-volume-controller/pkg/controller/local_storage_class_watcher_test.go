@@ -36,6 +36,7 @@ import (
 )
 
 // TODO: Make tests independent and Remove Ordered decorator
+// To run tests in random order use `go tool ginkgo run --randomize-all ./...`
 var _ = Describe("local-storage-class-controller", Ordered, func() {
 	const (
 		nameForLocalStorageClass = "sds-local-volume-storage-class"
