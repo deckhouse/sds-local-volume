@@ -1,0 +1,5 @@
+dirs:
+  - /var/lib/kubelet
+  - /csi
+  - /dev
+  - /registration
