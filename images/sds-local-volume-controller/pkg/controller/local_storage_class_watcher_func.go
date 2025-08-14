@@ -447,8 +447,8 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 		FSTypeParamKey:               fsType,
 	}
 
-	if lsc.Spec.LVM.Thick != nil {
-		if lsc.Spec.LVM.Thick.Contiguous {
+	if lsc.Spec.LVM.Thick != nil && lsc.Spec.LVM.Thick.Contiguous != nil {
+		if *lsc.Spec.LVM.Thick.Contiguous {
 			params[LVMThickContiguousParamKey] = "true"
 		}
 	}
