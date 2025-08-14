@@ -122,10 +122,14 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 	})
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	It("Update_local_sc_add_existing_lvg", func(ctx SpecContext) {
 =======
 	It("Update_local_sc_add_existing_lvg", func() {
 >>>>>>> 4f12da4 ([internal] add volumesnapshotclassname annotations to storageclasses (#127))
+=======
+	It("Update_local_sc_add_existing_lvg", func(ctx SpecContext) {
+>>>>>>> 6b5a2f8 ([controller] Make LocalStorageClass.spec.lvm.thick.contiguous nullable to preserve false on updates; add unit tests (#130))
 		lvgSpec := []slv.LocalStorageClassLVG{
 			{Name: existingThickLVG1Name},
 			{Name: existingThickLVG2Name},

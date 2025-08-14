@@ -1,6 +1,7 @@
 default_language_version:
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   golang: 1.24.6
 =======
   golang: 1.24.5
@@ -8,6 +9,9 @@ default_language_version:
 =======
   golang: 1.24.6
 >>>>>>> 892194d ([internal] fix CVE (#135))
+=======
+  golang: 1.24.4
+>>>>>>> 6b5a2f8 ([controller] Make LocalStorageClass.spec.lvm.thick.contiguous nullable to preserve false on updates; add unit tests (#130))
 repos:
   - repo: https://github.com/golangci/golangci-lint
     rev: v1.64.5
