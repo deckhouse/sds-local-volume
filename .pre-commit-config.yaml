@@ -1,5 +1,9 @@
 default_language_version:
+<<<<<<< HEAD
   golang: 1.24.6
+=======
+  golang: 1.24.5
+>>>>>>> 9e457ac ([internal] update base images to v0.5.23 (#134))
 repos:
   - repo: https://github.com/golangci/golangci-lint
     rev: v1.64.5
