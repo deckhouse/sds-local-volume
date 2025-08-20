@@ -1,6 +1,6 @@
 module github.com/deckhouse/sds-local-volume/images/sds-local-volume-scheduler-extender
 
-go 1.24.4
+go 1.24.5
 
 require (
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
@@ -57,7 +57,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20240904232852-e7e105dedf7e // indirect
 	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/oauth2 v0.23.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
