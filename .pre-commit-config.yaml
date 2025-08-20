@@ -1,5 +1,5 @@
 default_language_version:
-  golang: 1.24.4
+  golang: 1.24.5
 repos:
   - repo: https://github.com/golangci/golangci-lint
     rev: v1.64.5
