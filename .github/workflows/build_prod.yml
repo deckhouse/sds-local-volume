@@ -13,6 +13,7 @@ env:
   SOURCE_REPO_SSH_KEY: ${{ secrets.SOURCE_REPO_SSH_KEY }}
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   BASE_IMAGES_VERSION: "v0.5.25"
 =======
   BASE_IMAGES_VERSION: "v0.5.8"
@@ -20,6 +21,9 @@ env:
 =======
   BASE_IMAGES_VERSION: "v0.5.23"
 >>>>>>> 9e457ac ([internal] update base images to v0.5.23 (#134))
+=======
+  BASE_IMAGES_VERSION: "v0.5.25"
+>>>>>>> 892194d ([internal] fix CVE (#135))
 
 on:
   push:
