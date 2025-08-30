@@ -23,6 +23,10 @@ To ensure the correct operation of the `sds-local-volume` module, follow these s
 
   The creation of StorageClasses for the CSI driver `local.csi.storage.deckhouse.io` is **prohibited** for users.
 
+{{< alert level="info" >}}
+For working with snapshots, the [snapshot-controller](../../snapshot-controller/) module must be connected.
+{{< /alert >}}
+
 The module supports two operation modes: LVM (Thick) and LVM Thin.
 Each mode has its own features, advantages, and limitations. For more details on the differences, refer to the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvm-thin).
 
