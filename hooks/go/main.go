@@ -20,6 +20,7 @@ import (
 	"github.com/deckhouse/module-sdk/pkg/app"
 	_ "github.com/deckhouse/sds-local-volume/hooks/go/020-webhook-certs"
 <<<<<<< HEAD
+<<<<<<< HEAD
 	_ "github.com/deckhouse/sds-local-volume/hooks/go/070-generate-certs"
 	_ "github.com/deckhouse/sds-local-volume/hooks/go/090-on-start-checks"
 =======
@@ -29,6 +30,9 @@ import (
 >>>>>>> b3e72c2 (added certs for scheduler_extender and stuff)
 =======
 >>>>>>> 65ebfbf (fix)
+=======
+	_ "github.com/deckhouse/sds-local-volume/hooks/go/090-on-start-checks"
+>>>>>>> 031b772 (oops)
 )
 
 func main() {
