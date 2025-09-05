@@ -16,7 +16,6 @@ go 1.24.6
 
 require (
 	github.com/deckhouse/module-sdk v0.2.0
-	github.com/deckhouse/sds-local-volume/api v0.0.0-20250605061154-22d193a17e6c
 	k8s.io/apimachinery v0.32.3
 	sigs.k8s.io/controller-runtime v0.20.4
 )
@@ -108,4 +107,3 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/deckhouse/sds-local-volume/api v0.0.0-20250605061154-22d193a17e6c => ../../api
