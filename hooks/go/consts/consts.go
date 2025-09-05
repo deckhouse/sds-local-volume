@@ -17,10 +17,11 @@ limitations under the License.
 package consts
 
 const (
-	ModuleName		      string = "sdsLocalVolume"
-	ModuleNamespace 	  string = "d8-sds-local-volume"
-	ModulePluralName      string = "sds-local-volume"
-	WebhookCertCn   	  string = "webhooks"
+	ModuleName       string = "sdsLocalVolume"
+	ModuleNamespace  string = "d8-sds-local-volume"
+	ModulePluralName string = "sds-local-volume"
+	WebhookCertCn    string = "webhooks"
+	SchedulerCertCn  string = "scheduler-extender"
 )
 
 var AllowedProvisioners = []string{
