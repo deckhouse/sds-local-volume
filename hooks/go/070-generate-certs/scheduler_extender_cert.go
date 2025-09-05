@@ -17,8 +17,9 @@ package generatecerts
 
 import (
 	"fmt"
-	"github.com/deckhouse/csi-nfs/hooks/go/consts"
-	"github.com/deckhouse/module-sdk/common-hooks/tls-certificate"
+
+	tlscertificate "github.com/deckhouse/module-sdk/common-hooks/tls-certificate"
+	"github.com/deckhouse/sds-local-volume/hooks/go/consts"
 )
 
 var _ = tlscertificate.RegisterInternalTLSHookEM(tlscertificate.GenSelfSignedTLSHookConf{
