@@ -16,15 +16,7 @@ config:
   secrets:
     allowValueIds:
       - GOPROXY
-<<<<<<< HEAD
-<<<<<<< HEAD
       - SOURCE_REPO
-=======
-      - SOURCE_REPO  
->>>>>>> bf7e024 (Prepare to CSE build (#118))
-=======
-      - SOURCE_REPO
->>>>>>> 350e0aa ([CI] Svace integration (#125))
   stapel:
     mount:
       allowBuildDir: true

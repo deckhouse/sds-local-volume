@@ -21,15 +21,7 @@ shell:
 
 ---
 image: {{ .ModuleNamePrefix }}{{ .ImageName }}-golang-artifact
-<<<<<<< HEAD
-<<<<<<< HEAD
 fromImage: {{ eq .SVACE_ENABLED "false" | ternary "builder/golang-alpine" "builder/alt-go-svace" }}
-=======
-fromImage: builder/golang-alpine
->>>>>>> bf7e024 (Prepare to CSE build (#118))
-=======
-fromImage: {{ eq .SVACE_ENABLED "false" | ternary "builder/golang-alpine" "builder/alt-go-svace" }}
->>>>>>> 350e0aa ([CI] Svace integration (#125))
 final: false
 
 import:
@@ -49,21 +41,10 @@ shell:
   setup:
     - cd /src/images/{{ $.ImageName }}/cmd
     - GOPROXY=$(cat /run/secrets/GOPROXY) go mod download
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 350e0aa ([CI] Svace integration (#125))
     - export GOOS=linux GOARCH=amd64 CGO_ENABLED=0
     - |
       {{- include "image-build.build" (set $ "BuildCommand" (printf `go build -ldflags="-s -w" -tags "%s" -o /%s` .MODULE_EDITION $.ImageName)) | nindent 6 }}
     - chmod +x /{{ $.ImageName }} 
-<<<<<<< HEAD
-=======
-    - GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o /{{ $.ImageName }}
-    - chmod +x /{{ $.ImageName }}
->>>>>>> bf7e024 (Prepare to CSE build (#118))
-=======
->>>>>>> 350e0aa ([CI] Svace integration (#125))
 
 ---
 image: {{ .ModuleNamePrefix }}{{ .ImageName }}

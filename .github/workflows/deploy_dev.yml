@@ -69,19 +69,9 @@ jobs:
           module_tag: ${{ github.event.inputs.tag }}
           source_repo: ${{ secrets.SOURCE_REPO }}
           source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 350e0aa ([CI] Svace integration (#125))
       - uses: deckhouse/modules-actions/deploy@v2
         with:
           module_source: "${{ vars.DEV_MODULE_SOURCE }}"
           module_name: ${{ vars.MODULE_NAME }}
           module_tag: ${{ github.event.inputs.tag }}
           release_channel: ${{ github.event.inputs.channel }}
-<<<<<<< HEAD
-=======
-      - uses: deckhouse/modules-actions/deploy@v2
->>>>>>> 890babe ([internal] Fixes in CI, module structure and build (#114))
-=======
->>>>>>> 350e0aa ([CI] Svace integration (#125))

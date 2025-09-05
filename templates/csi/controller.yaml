@@ -45,24 +45,11 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- if .Values.sdsLocalVolume.internal.featureSnapshotsEnabled }}
 {{- $_ := set $csiControllerConfig "snapshotterEnabled" true }}
 {{- $_ := set $csiControllerConfig "snapshotterTimeout" "1m" }}
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 18a83d1 ([internal] fix snapshot prefix name (#126))
 {{- $_ := set $csiControllerConfig "snapshotterSnapshotNamePrefix" "snap" }}
 {{- else }}
 {{- $_ := set $csiControllerConfig "snapshotterEnabled" false }}
 {{- end }}
 {{- $_ := set $csiControllerConfig "csiControllerHaMode" true }}
-=======
-{{- else }}
-{{- $_ := set $csiControllerConfig "snapshotterEnabled" false }}
-{{- end }}
-<<<<<<< HEAD
->>>>>>> a87f740 ([internal] Remove snapshotter from CE (#120))
-=======
-{{- $_ := set $csiControllerConfig "csiControllerHaMode" true }}
->>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
 {{- $_ := set $csiControllerConfig "resizerEnabled" true }}
 {{- $_ := set $csiControllerConfig "provisionerTimeout" "1m" }}
 {{- $_ := set $csiControllerConfig "extraCreateMetadataEnabled" true }}

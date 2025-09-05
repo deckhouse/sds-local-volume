@@ -21,13 +21,6 @@ on:
         required: false
       severity:
         description: "Optional. Vulnerabilities severity to scan. Default is: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL"
-<<<<<<< HEAD
-        required: false
-      svace_enabled:
-        description: 'Enable svace build and analyze'
-        type: boolean
-=======
->>>>>>> 890babe ([internal] Fixes in CI, module structure and build (#114))
         required: false
       svace_enabled:
         description: 'Enable svace build and analyze'

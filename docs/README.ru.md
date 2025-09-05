@@ -21,13 +21,10 @@ description: "Модуль sds-local-volume: общие концепции и п
 
   Создание StorageClass для CSI-драйвера `local.csi.storage.deckhouse.io` пользователем **запрещено**.
 
-<<<<<<< HEAD
 {{< alert level="info" >}}
 Для работы с снапшотами требуется подключенный модуль [snapshot-controller](../../snapshot-controller/).
 {{< /alert >}}
 
-=======
->>>>>>> 29b038e (Small fixes about thin, thick volumes (#128))
 Модуль поддерживает два режима работы: LVM (Thick) и LVM Thin.
 У каждого из них есть свои особенности, преимущества и ограничения. Подробнее о различиях можно узнать в [FAQ](./faq.html#когда-следует-использовать-lvm-а-когда-lvm-thin).
 

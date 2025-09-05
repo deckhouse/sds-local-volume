@@ -10,35 +10,7 @@ env:
   GOPROXY: ${{ secrets.GOPROXY }}
   SOURCE_REPO: ${{ secrets.SOURCE_REPO }}
   SOURCE_REPO_SSH_KEY: ${{ secrets.SOURCE_REPO_SSH_KEY }}
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
   BASE_IMAGES_VERSION: "v0.5.25"
-=======
-  BASE_IMAGES_VERSION: "v0.5.8"
->>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
-=======
-  BASE_IMAGES_VERSION: "v0.5.23"
->>>>>>> 9e457ac ([internal] update base images to v0.5.23 (#134))
-=======
-  BASE_IMAGES_VERSION: "v0.5.25"
->>>>>>> 892194d ([internal] fix CVE (#135))
-=======
-  BASE_IMAGES_VERSION: "v0.4.3"
->>>>>>> 890babe ([internal] Fixes in CI, module structure and build (#114))
-=======
-  BASE_IMAGES_VERSION: "v0.5.6"
->>>>>>> bf7e024 (Prepare to CSE build (#118))
-=======
-  BASE_IMAGES_VERSION: "v0.5.8"
->>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
-=======
-  BASE_IMAGES_VERSION: "v0.5.12"
->>>>>>> 350e0aa ([CI] Svace integration (#125))
 
 on:
   #pull_request:
@@ -165,8 +137,6 @@ jobs:
           module_name: ${{ vars.MODULE_NAME }}
           module_tag: ${{ env.MODULES_MODULE_TAG }}
           source_repo: ${{ secrets.SOURCE_REPO }}
-<<<<<<< HEAD
-<<<<<<< HEAD
           source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
           svace_enabled: ${{ contains(github.event.pull_request.labels.*.name, 'analyze/svace') || github.event.inputs.svace_enabled }}
           svace_analyze_host: "${{ secrets.SVACE_ANALYZE_HOST }}"
@@ -191,12 +161,3 @@ jobs:
           svacer_import_user: "${{ secrets.SVACER_IMPORT_USER }}"
           svacer_import_password: "${{ secrets.SVACER_IMPORT_PASSWORD }}"
           svace_analyze_ssh_private_key: "${{ secrets.SVACE_ANALYZE_SSH_PRIVATE_KEY }}"
-<<<<<<< HEAD
-=======
-          source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
->>>>>>> 890babe ([internal] Fixes in CI, module structure and build (#114))
-=======
-          source_repo_ssh_key: ${{ secrets.SOURCE_REPO_SSH_KEY }}
->>>>>>> bf7e024 (Prepare to CSE build (#118))
-=======
->>>>>>> 350e0aa ([CI] Svace integration (#125))
