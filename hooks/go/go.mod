@@ -1,29 +1,9 @@
 module github.com/deckhouse/sds-local-volume/hooks/go
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 go 1.24.6
-=======
-go 1.24.4
->>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
-=======
-go 1.24.5
->>>>>>> 9e457ac ([internal] update base images to v0.5.23 (#134))
-=======
-go 1.24.6
->>>>>>> 892194d ([internal] fix CVE (#135))
-=======
-go 1.24.4
->>>>>>> ce62282 ([internal] update lib-helm, enable HA mode for CSI controller and switch to deckhouse api (#121))
 
 require (
 	github.com/deckhouse/module-sdk v0.2.0
-<<<<<<< HEAD
-=======
-	github.com/deckhouse/sds-local-volume/api v0.0.0-20250605061154-22d193a17e6c
->>>>>>> 89e37c1 (added thin provisioning hook)
 	k8s.io/apimachinery v0.32.3
 	sigs.k8s.io/controller-runtime v0.20.4
 )
@@ -115,7 +95,3 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-<<<<<<< HEAD
-=======
-replace github.com/deckhouse/sds-local-volume/api v0.0.0-20250605061154-22d193a17e6c => ../../api
->>>>>>> 89e37c1 (added thin provisioning hook)
