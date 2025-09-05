@@ -15,6 +15,6 @@ webhooks:
       namespace: d8-{{ .Chart.Name }}
       port: 8099
       path: /scheduler
-    caBundle: {{ .Values.sdsLocalVolume.internal.customSchedulerExtenderCert.ca }}
+    caBundle: {{ .Values.sdsLocalVolume.internal.customSchedulerExtenderCert.ca | b64enc }}
   timeoutSeconds: 5
 {{- end }}
