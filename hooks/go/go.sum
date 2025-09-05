@@ -19,8 +19,6 @@ github.com/deckhouse/deckhouse/pkg/log v0.0.0-20241205040953-7b376bae249c h1:dK3
 github.com/deckhouse/deckhouse/pkg/log v0.0.0-20241205040953-7b376bae249c/go.mod h1:Mk5HRzkc5pIcDIZ2JJ6DPuuqnwhXVkb3you8M8Mg+4w=
 github.com/deckhouse/module-sdk v0.2.0 h1:MOK03UZ88T7T52bk+lmAz0bRJiljtN5ysq7y8FjEF3s=
 github.com/deckhouse/module-sdk v0.2.0/go.mod h1:fbs0X7myE8zrPKxs3eoIoFWf68E7r1tZ64uJfYJCsKc=
-github.com/deckhouse/sds-local-volume/api v0.0.0-20250605061154-22d193a17e6c h1:kpSe2jnmGsKyNh/+7fHkwL6C/np2oJwDcr3H44el30o=
-github.com/deckhouse/sds-local-volume/api v0.0.0-20250605061154-22d193a17e6c/go.mod h1:LucHX2fB3tjvLZlGWyf8rJa7pTo0/8cxFCYzZ236bPo=
 github.com/docker/cli v28.0.1+incompatible h1:g0h5NQNda3/CxIsaZfH4Tyf6vpxFth7PYl3hgCPOKzs=
 github.com/docker/cli v28.0.1+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/distribution v2.8.3+incompatible h1:AtKxIZ36LoNK51+Z6RpzLpddBirtxJnzDrHLEKxTAYk=
