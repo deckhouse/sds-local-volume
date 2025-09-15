@@ -1,0 +1,2 @@
+Изменения:
+  - Добавлен метод NodeGetVolumeStats (для поддержки метрик kubelet_volume_stats_*)

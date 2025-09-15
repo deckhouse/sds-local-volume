@@ -1,0 +1,6 @@
+Changes:
+  - Removed isDefault field (use standard k8s SC annotation)
+  - Added support for contiguous volumes
+  - Added antiaffinity rules for controller HA mode
+  - Added AllocationLimit support
+  - Added health and readiness checks in controller
