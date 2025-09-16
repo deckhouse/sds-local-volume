@@ -17,13 +17,13 @@
 # run from repository root
 
 """
-Скрипт для получения списка коммитов, которые не входят в последний тег.
+Script for getting a list of commits that are not included in the latest tag.
 
-Скрипт выполняет следующие действия:
-1. Переключается на ветку main
-2. Выполняет git fetch для получения обновлений
-3. Находит последний тег
-4. Отображает список коммитов после последнего тега
+The script performs the following actions:
+1. Switches to the main branch
+2. Executes git fetch to get updates
+3. Finds the latest tag
+4. Displays a list of commits after the latest tag
 """
 
 import subprocess
@@ -33,7 +33,7 @@ from typing import List, Optional, Tuple
 
 
 def run_git_command(command: List[str], cwd: str = None) -> Tuple[bool, str]:
-    """Выполняет git команду и возвращает результат."""
+    """Executes git command and returns result."""
     try:
         result = subprocess.run(
             command,
@@ -48,7 +48,7 @@ def run_git_command(command: List[str], cwd: str = None) -> Tuple[bool, str]:
 
 
 def get_current_branch() -> Optional[str]:
-    """Получает текущую ветку."""
+    """Gets current branch."""
     success, output = run_git_command(["git", "branch", "--show-current"])
     if success and output:
         return output
@@ -56,96 +56,96 @@ def get_current_branch() -> Optional[str]:
 
 
 def switch_to_main() -> bool:
-    """Переключается на ветку main."""
-    print("🔄 Переключение на ветку main...")
+    """Switches to main branch."""
+    print("🔄 Switching to main branch...")
     
-    # Проверяем, есть ли ветка main
+    # Check if main branch exists
     success, _ = run_git_command(["git", "show-ref", "--verify", "--quiet", "refs/heads/main"])
     if not success:
-        # Пробуем origin/main
+        # Try origin/main
         success, _ = run_git_command(["git", "show-ref", "--verify", "--quiet", "refs/remotes/origin/main"])
         if not success:
-            print("❌ Ветка main не найдена")
+            print("❌ Main branch not found")
             return False
     
-    # Переключаемся на main
+    # Switch to main
     success, error = run_git_command(["git", "checkout", "main"])
     if not success:
-        print(f"❌ Ошибка при переключении на main: {error}")
+        print(f"❌ Error switching to main: {error}")
         return False
     
-    print("✅ Успешно переключились на ветку main")
+    print("✅ Successfully switched to main branch")
     return True
 
 
 def fetch_updates() -> bool:
-    """Выполняет git fetch для получения обновлений."""
-    print("🔄 Получение обновлений (git fetch)...")
+    """Executes git fetch to get updates."""
+    print("🔄 Getting updates (git fetch)...")
     
     success, error = run_git_command(["git", "fetch", "--all"])
     if not success:
-        print(f"❌ Ошибка при выполнении git fetch: {error}")
+        print(f"❌ Error executing git fetch: {error}")
         return False
     
-    print("✅ Обновления получены успешно")
+    print("✅ Updates received successfully")
     return True
 
 
 def get_latest_tag() -> Optional[str]:
-    """Получает последний тег в репозитории."""
-    print("🔍 Поиск последнего тега...")
+    """Gets the latest tag in the repository."""
+    print("🔍 Searching for latest tag...")
     
-    # Получаем все теги, отсортированные по дате
+    # Get all tags sorted by date
     success, output = run_git_command([
         "git", "tag", "--sort=-version:refname", "--merged"
     ])
     
     if not success or not output:
-        print("⚠️  Теги не найдены")
+        print("⚠️  No tags found")
         return None
     
-    # Берем первый тег (самый новый)
+    # Take the first tag (newest)
     tags = output.split('\n')
     latest_tag = tags[0].strip()
     
-    print(f"✅ Последний тег: {latest_tag}")
+    print(f"✅ Latest tag: {latest_tag}")
     return latest_tag
 
 
 def get_commits_after_tag(tag: str) -> List[str]:
-    """Получает список коммитов после указанного тега."""
-    print(f"🔍 Поиск коммитов после тега {tag}...")
+    """Gets list of commits after the specified tag."""
+    print(f"🔍 Searching for commits after tag {tag}...")
     
-    # Получаем коммиты после тега
+    # Get commits after tag
     success, output = run_git_command([
         "git", "log", f"{tag}..HEAD", "--oneline", "--no-merges"
     ])
     
     if not success:
-        print(f"❌ Ошибка при получении коммитов: {output}")
+        print(f"❌ Error getting commits: {output}")
         return []
     
     if not output:
-        print("✅ Коммитов после последнего тега не найдено")
+        print("✅ No commits found after latest tag")
         return []
     
     commits = [line.strip() for line in output.split('\n') if line.strip()]
-    print(f"✅ Найдено {len(commits)} коммитов после тега {tag}")
+    print(f"✅ Found {len(commits)} commits after tag {tag}")
     
     return commits
 
 
 def format_commit_info(commits: List[str]) -> str:
-    """Форматирует информацию о коммитах для вывода."""
+    """Formats commit information for output."""
     if not commits:
-        return "Коммитов после последнего тега не найдено."
+        return "No commits found after latest tag."
     
     result = []
-    result.append(f"\n📋 Список коммитов после последнего тега ({len(commits)} коммитов):")
+    result.append(f"\n📋 List of commits after latest tag ({len(commits)} commits):")
     result.append("=" * 60)
     
     for i, commit in enumerate(commits, 1):
-        # Разбираем коммит: hash и message
+        # Parse commit: hash and message
         parts = commit.split(' ', 1)
         if len(parts) == 2:
             commit_hash = parts[0]
@@ -159,18 +159,18 @@ def format_commit_info(commits: List[str]) -> str:
 
 
 def get_commit_details(commits: List[str]) -> str:
-    """Получает детальную информацию о коммитах."""
+    """Gets detailed information about commits."""
     if not commits:
         return ""
     
     result = []
-    result.append("\n📊 Детальная информация о коммитах:")
+    result.append("\n📊 Detailed commit information:")
     result.append("=" * 60)
     
-    for i, commit in enumerate(commits[:10], 1):  # Показываем только первые 10
+    for i, commit in enumerate(commits[:10], 1):  # Show only first 10
         commit_hash = commit.split(' ')[0]
         
-        # Получаем детальную информацию о коммите
+        # Get detailed commit information
         success, details = run_git_command([
             "git", "show", "--stat", "--no-patch", commit_hash
         ])
@@ -180,47 +180,47 @@ def get_commit_details(commits: List[str]) -> str:
             commit_info = lines[0] if lines else commit
             result.append(f"\n{i}. {commit_info}")
             
-            # Добавляем статистику изменений
+            # Add change statistics
             for line in lines[1:]:
                 if line.strip() and ('file' in line.lower() or 'insertion' in line.lower() or 'deletion' in line.lower()):
                     result.append(f"   {line.strip()}")
     
     if len(commits) > 10:
-        result.append(f"\n... и еще {len(commits) - 10} коммитов")
+        result.append(f"\n... and {len(commits) - 10} more commits")
     
     result.append("=" * 60)
     return "\n".join(result)
 
 
 def main():
-    """Основная функция скрипта."""
-    print("🚀 Скрипт для получения коммитов после последнего тега")
+    """Main script function."""
+    print("🚀 Script for getting commits after latest tag")
     print("=" * 60)
     
-    # Проверяем, что мы в git репозитории
+    # Check that we are in a git repository
     success, _ = run_git_command(["git", "rev-parse", "--git-dir"])
     if not success:
-        print("❌ Ошибка: текущая директория не является git репозиторием")
+        print("❌ Error: current directory is not a git repository")
         return 1
     
-    # Показываем текущую ветку
+    # Show current branch
     current_branch = get_current_branch()
     if current_branch:
-        print(f"📍 Текущая ветка: {current_branch}")
+        print(f"📍 Current branch: {current_branch}")
     
-    # Переключаемся на main
+    # Switch to main
     if not switch_to_main():
         return 1
     
-    # Получаем обновления
+    # Get updates
     if not fetch_updates():
         return 1
     
-    # Находим последний тег
+    # Find latest tag
     latest_tag = get_latest_tag()
     if not latest_tag:
-        print("⚠️  Не удалось найти теги. Показываем все коммиты в ветке main.")
-        # Если тегов нет, показываем все коммиты в main
+        print("⚠️  Could not find tags. Showing all commits in main branch.")
+        # If no tags, show all commits in main
         success, output = run_git_command([
             "git", "log", "--oneline", "--no-merges", "-20"
         ])
@@ -229,17 +229,17 @@ def main():
             print(format_commit_info(commits))
         return 0
     
-    # Получаем коммиты после тега
+    # Get commits after tag
     commits = get_commits_after_tag(latest_tag)
     
-    # Выводим результат
+    # Output result
     print(format_commit_info(commits))
     
-    # Показываем детальную информацию
+    # Show detailed information
     if commits:
         print(get_commit_details(commits))
     
-    print("\n✅ Скрипт завершен успешно!")
+    print("\n✅ Script completed successfully!")
     return 0
 
 

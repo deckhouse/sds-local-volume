@@ -17,11 +17,11 @@
 # run from repository root
 
 """
-Скрипт для генерации файлов RELEASE_NOTES.md и RELEASE_NOTES.ru.md
-из файлов в папке CHANGELOG.
+Script for generating RELEASE_NOTES.md and RELEASE_NOTES.ru.md files
+from files in the CHANGELOG folder.
 
-Скрипт парсит YAML файлы с изменениями и создает markdown файлы
-с релизными заметками в требуемом формате.
+The script parses YAML files with changes and creates markdown files
+with release notes in the required format.
 """
 
 import os
@@ -30,43 +30,65 @@ import glob
 import re
 from pathlib import Path
 from typing import List, Dict, Tuple
+from packaging import version
 
 
 def parse_version_from_filename(filename: str) -> str:
-    """Извлекает версию из имени файла."""
-    # Убираем расширение .yml и .ru
+    """Extracts version from filename."""
+    # Remove .yml and .ru extensions
     base_name = filename.replace('.ru.yml', '').replace('.yml', '')
     return base_name
 
 
+def sort_files_by_version(files: List[str]) -> List[str]:
+    """Sorts files by semantic version."""
+    def version_key(filepath: str) -> version.Version:
+        filename = os.path.basename(filepath)
+        version_str = parse_version_from_filename(filename)
+        try:
+            # Handle versions that start with 'v' (e.g., v0.1.0)
+            if version_str.startswith('v'):
+                version_str = version_str[1:]
+            return version.parse(version_str)
+        except version.InvalidVersion:
+            # Fallback to string comparison for invalid versions
+            return version.parse("0.0.0")
+    
+    return sorted(files, key=version_key)
+
+
 def load_changelog_file(filepath: str) -> Dict:
-    """Загружает и парсит YAML файл с изменениями."""
+    """Loads and parses YAML file with changes."""
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
-            # Парсим YAML с учетом отступов в 2 пробела
+            # Parse YAML with 2-space indentation
             return yaml.safe_load(content)
     except Exception as e:
-        print(f"Ошибка при загрузке файла {filepath}: {e}")
+        print(f"Error loading file {filepath}: {e}")
         return {}
 
 
 def get_changelog_files(changelog_dir: str) -> Tuple[List[str], List[str]]:
-    """Получает списки файлов для английской и русской версий."""
+    """Gets file lists for English and Russian versions."""
     en_files = glob.glob(os.path.join(changelog_dir, "*.yml"))
     ru_files = glob.glob(os.path.join(changelog_dir, "*.ru.yml"))
     
-    # Фильтруем файлы, исключая .ru.yml из английского списка
+    # Filter files, excluding .ru.yml from English list
     en_files = [f for f in en_files if not f.endswith('.ru.yml')]
     
-    return sorted(en_files), sorted(ru_files)
+    # Sort files by semantic version
+    en_files = sort_files_by_version(en_files)
+    ru_files = sort_files_by_version(ru_files)
+    
+    return en_files, ru_files
 
 
 def generate_markdown_content(files: List[str], changelog_dir: str, is_russian: bool = False) -> str:
-    """Генерирует содержимое markdown файла."""
+    """Generates markdown file content."""
     content = []
     
-    # Заголовок
+    # Header
     if is_russian:
         content.append("---")
         content.append('title: "Релизы"')
@@ -78,7 +100,7 @@ def generate_markdown_content(files: List[str], changelog_dir: str, is_russian: 
         content.append("---")
         content.append("")
     
-    # Обрабатываем файлы в обратном порядке (новые версии первыми)
+    # Process files in reverse order (newest versions first)
     for filepath in reversed(files):
         version = parse_version_from_filename(os.path.basename(filepath))
         changelog_data = load_changelog_file(filepath)
@@ -86,11 +108,11 @@ def generate_markdown_content(files: List[str], changelog_dir: str, is_russian: 
         if not changelog_data:
             continue
             
-        # Добавляем заголовок версии
+        # Add version header
         content.append(f"## {version}")
         content.append("")
         
-        # Добавляем изменения
+        # Add changes
         changes_key = "Изменения" if is_russian else "Changes"
         if changes_key in changelog_data:
             changes = changelog_data[changes_key]
@@ -105,7 +127,7 @@ def generate_markdown_content(files: List[str], changelog_dir: str, is_russian: 
 
 
 def remove_existing_files(output_dir: str):
-    """Удаляет существующие файлы release notes."""
+    """Removes existing release notes files."""
     files_to_remove = [
         os.path.join(output_dir, "RELEASE_NOTES.md"),
         os.path.join(output_dir, "RELEASE_NOTES.ru.md")
@@ -115,41 +137,41 @@ def remove_existing_files(output_dir: str):
         if os.path.exists(filepath):
             try:
                 os.remove(filepath)
-                print(f"Удален существующий файл: {filepath}")
+                print(f"Removed existing file: {filepath}")
             except Exception as e:
-                print(f"Ошибка при удалении файла {filepath}: {e}")
+                print(f"Error removing file {filepath}: {e}")
 
 
 def main():
-    """Основная функция скрипта."""
-    # Определяем пути
+    """Main script function."""
+    # Define paths
     script_dir = Path(__file__).parent
     project_root = script_dir.parent
     changelog_dir = project_root / "CHANGELOG"
     output_dir = project_root / "docs"
     
-    print(f"Рабочая директория: {project_root}")
-    print(f"Папка с changelog: {changelog_dir}")
-    print(f"Папка для вывода: {output_dir}")
+    print(f"Working directory: {project_root}")
+    print(f"Changelog folder: {changelog_dir}")
+    print(f"Output folder: {output_dir}")
     
-    # Проверяем существование папки CHANGELOG
+    # Check if CHANGELOG folder exists
     if not changelog_dir.exists():
-        print(f"Ошибка: папка {changelog_dir} не найдена")
+        print(f"Error: folder {changelog_dir} not found")
         return 1
     
-    # Получаем списки файлов
+    # Get file lists
     en_files, ru_files = get_changelog_files(str(changelog_dir))
     
     if not en_files and not ru_files:
-        print("Не найдено файлов changelog")
+        print("No changelog files found")
         return 1
     
-    print(f"Найдено {len(en_files)} английских файлов и {len(ru_files)} русских файлов")
+    print(f"Found {len(en_files)} English files and {len(ru_files)} Russian files")
     
-    # Удаляем существующие файлы
+    # Remove existing files
     remove_existing_files(str(output_dir))
     
-    # Генерируем английскую версию
+    # Generate English version
     if en_files:
         en_content = generate_markdown_content(en_files, str(changelog_dir), is_russian=False)
         en_output_path = output_dir / "RELEASE_NOTES.md"
@@ -157,12 +179,12 @@ def main():
         try:
             with open(en_output_path, 'w', encoding='utf-8') as f:
                 f.write(en_content)
-            print(f"Создан файл: {en_output_path}")
+            print(f"Created file: {en_output_path}")
         except Exception as e:
-            print(f"Ошибка при создании файла {en_output_path}: {e}")
+            print(f"Error creating file {en_output_path}: {e}")
             return 1
     
-    # Генерируем русскую версию
+    # Generate Russian version
     if ru_files:
         ru_content = generate_markdown_content(ru_files, str(changelog_dir), is_russian=True)
         ru_output_path = output_dir / "RELEASE_NOTES.ru.md"
@@ -170,12 +192,12 @@ def main():
         try:
             with open(ru_output_path, 'w', encoding='utf-8') as f:
                 f.write(ru_content)
-            print(f"Создан файл: {ru_output_path}")
+            print(f"Created file: {ru_output_path}")
         except Exception as e:
-            print(f"Ошибка при создании файла {ru_output_path}: {e}")
+            print(f"Error creating file {ru_output_path}: {e}")
             return 1
     
-    print("Генерация release notes завершена успешно!")
+    print("Release notes generation completed successfully!")
     return 0
 
 
