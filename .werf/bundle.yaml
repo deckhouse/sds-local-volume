@@ -39,7 +39,7 @@ git:
 
 shell:
   beforeInstall:
-    - python3 hack/generate_release_notes.py
+    - python hack/generate_release_notes.py
     - rm -rf CHANGELOG
     - rm -rf hack
     - cat docs/RELEASE_NOTES.md
