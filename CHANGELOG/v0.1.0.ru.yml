@@ -1,8 +1,8 @@
 Изменения:
-  - Fix max volumes per node and R/W map
-  - Add LocalStorageClass validation webhook
-  - Add logs and upgrading node scoring
-  - Add module documentation
-  - Add cache for extender-scheduler
-  - Add previous channel release version check
-  - Fix KubeSchedulerConfiguration API version
+  - Исправлена максимальная количество томов на узел и карта чтения/записи
+  - Добавлен веб-хук валидации LocalStorageClass
+  - Добавлены логи и улучшена оценка узлов
+  - Добавлена документация модуля
+  - Добавлен кэш для extender-scheduler
+  - Добавлена проверка версии релиза предыдущего канала
+  - Исправлена версия API KubeSchedulerConfiguration
