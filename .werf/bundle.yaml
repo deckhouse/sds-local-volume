@@ -18,6 +18,7 @@ shell:
     - cd /
     - apt-get update
     - apt-get install -y python3
+    - pip3 install PyYAML packaging
     - python3 /hack/generate_release_notes.py
     - rm -rf CHANGELOG
     - rm -rf hack
