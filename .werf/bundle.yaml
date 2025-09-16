@@ -44,8 +44,8 @@ import:
     to: /openapi
     after: setup
   - image: docs-generator
-    add: docs/RELEASE_NOTES.md
-    to: docs/RELEASE_NOTES.md
+    add: /docs/RELEASE_NOTES.md
+    to: /docs/RELEASE_NOTES.md
     after: setup
   - image: docs-generator
     add: /docs/RELEASE_NOTES.ru.md
