@@ -9,13 +9,17 @@ git:
     includePaths:
       - hack
       - CHANGELOG
+    stageDependencies:
+      setup:
+        - "**/*"
 
-shell: set
-  - python hack/generate_release_notes.py
-  - rm -rf CHANGELOG
-  - rm -rf hack
-  - cat docs/RELEASE_NOTES.md
-  - cat docs/RELEASE_NOTES.ru.md
+shell:
+  setup:
+    - python hack/generate_release_notes.py
+    - rm -rf CHANGELOG
+    - rm -rf hack
+    - cat docs/RELEASE_NOTES.md
+    - cat docs/RELEASE_NOTES.ru.md
 
 # Bundle image, stored in your.registry.io/modules/<module-name>:<semver>
 ---
