@@ -16,6 +16,7 @@ git:
 shell:
   setup:
     - cd /
+    - mkdir -p /docs
     - apt-get update
     - apt-get install -y python3 python3-module-pip
     - pip3 install PyYAML packaging
