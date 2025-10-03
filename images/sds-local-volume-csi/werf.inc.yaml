@@ -55,6 +55,12 @@ git:
 {{- include "image mount points" . }}
 
 import:
+  - image: tools/e2fsprogs
+    add: /
+    to: /
+    before: install
+    includePaths:
+      - usr/sbin/blkid
   - image: {{ .ModuleNamePrefix }}{{ .ImageName }}-golang-artifact
     add: /{{ $.ImageName }}
     to: /{{ $.ImageName }}
