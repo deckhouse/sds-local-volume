@@ -47,6 +47,7 @@ shell:
       {{- include "image-build.build" (set $ "BuildCommand" (printf `go build -ldflags="-s -w" -tags "%s" -o /%s` .MODULE_EDITION $.ImageName)) | nindent 6 }}
     - chmod +x /{{ $.ImageName }}
 
+---
 image: {{ .ModuleNamePrefix }}{{ .ImageName }}
 fromImage: base/distroless
 
