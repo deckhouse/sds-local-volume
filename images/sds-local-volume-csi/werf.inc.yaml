@@ -90,7 +90,7 @@ import:
   - image: tools/util-linux
     add: /
     to: /
-    before: install
+    before: setup
     includePaths:
       - bin/mount
       - bin/umount
@@ -99,7 +99,7 @@ import:
   - image: libs/glibc
     add: /
     to: /
-    before: install
+    before: setup    
     includePaths:
       - lib64/libnss_files.so.2
       - lib64/libnss_dns.so.2
