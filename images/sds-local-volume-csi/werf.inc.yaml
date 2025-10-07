@@ -77,6 +77,16 @@ git:
 {{- include "image mount points" . }}
 
 import:
+  - image: {{ .ModuleNamePrefix }}{{ .ImageName }}-golang-artifact
+    add: /{{ $.ImageName }}
+    to: /{{ $.ImageName }}
+    before: install
+  - image: {{ .ModuleNamePrefix }}{{ .ImageName }}-binaries-artifact
+    add: /relocate
+    to: /
+    before: install
+    includePaths:
+      - '**/*'
   - image: tools/util-linux
     add: /
     to: /
@@ -93,16 +103,6 @@ import:
     includePaths:
       - lib64/libnss_files.so.2
       - lib64/libnss_dns.so.2
-  - image: {{ .ModuleNamePrefix }}{{ .ImageName }}-golang-artifact
-    add: /{{ $.ImageName }}
-    to: /{{ $.ImageName }}
-    before: install
-  - image: {{ .ModuleNamePrefix }}{{ .ImageName }}-binaries-artifact
-    add: /relocate
-    to: /
-    before: install
-    includePaths:
-      - '**/*'
 
 imageSpec:
   config:
