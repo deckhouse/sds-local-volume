@@ -1,6 +1,6 @@
 module github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi
 
-go 1.24.6
+go 1.24.8
 
 require (
 	github.com/container-storage-interface/spec v1.10.0
