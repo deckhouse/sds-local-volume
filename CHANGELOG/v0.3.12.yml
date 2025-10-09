@@ -1,0 +1,3 @@
+Changes:
+  - Updated Go version to 1.24.8
+  - Updated lib-helm to deckhouse_lib_helm-1.63.6
