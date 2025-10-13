@@ -3,13 +3,13 @@ title: "Модуль sds-local-volume: FAQ"
 description: "Модуль sds-local-volume: FAQ"
 ---
 
-## Когда следует использовать LVM, а когда LVMThin?
+## Когда следует использовать LVM, а когда LVM Thin?
 
-- LVM проще и обладает высокой производительностью, сравнимой с производительностью накопителя;
-- LVMThin позволяет использовать overprovisioning, но производительность ниже, чем у LVM.
+- LVM (Thick) проще и обладает высокой производительностью, сравнимой с производительностью накопителя;
+- LVM Thin позволяет использовать overprovisioning, но производительность ниже, чем у LVM.
 
 {{< alert level="warning" >}}
-Overprovisioning в LVMThin нужно использовать с осторожностью, контроллируя наличие свободного места в пуле (В системе мониторинга кластера есть отдельные события при достижении 20%, 10%, 5% и 1% свободного места в пуле)
+Overprovisioning в LVM Thin нужно использовать с осторожностью, контроллируя наличие свободного места в пуле (В системе мониторинга кластера есть отдельные события при достижении 20%, 10%, 5% и 1% свободного места в пуле)
 
 При отсутствии свободного места в пуле будет наблюдатся деградация в работе модуля в целом, а также существует реальная вероятность потери данных!
 {{< /alert >}}
@@ -136,70 +136,70 @@ kubectl get node %node-name% --show-labels
 ## Как проверить, имеются ли зависимые ресурсы `LVMVolumeGroup` на узле?
 
 Для проверки таковых ресурсов необходимо выполнить следующие шаги:
+
 1. Отобразить имеющиеся `LocalStorageClass` ресурсы
 
-   ```shell
-   kubectl get lsc
-   ```
+    ```shell
+    kubectl get lsc
+    ```
 
-2. Проверить у каждого из них список используемых `LVMVolumeGroup` ресурсов
+1. Проверить у каждого из них список используемых `LVMVolumeGroup` ресурсов
 
-   > Вы можете сразу отобразить содержимое всех `LocalStorageClass` ресурсов, выполнив команду:
-   >
-   > ```shell
-   > kubectl get lsc -oyaml
-   > ```
+    Вы можете сразу отобразить содержимое всех `LocalStorageClass` ресурсов, выполнив команду:
 
-   ```shell
-   kubectl get lsc %lsc-name% -oyaml
-   ```
+    ```shell
+    kubectl get lsc -oyaml
+    ```
 
-   Примерный вид `LocalStorageClass`
+    ```shell
+    kubectl get lsc %lsc-name% -oyaml
+    ```
 
-   ```yaml
-   apiVersion: v1
-   items:
-   - apiVersion: storage.deckhouse.io/v1alpha1
-     kind: LocalStorageClass
-     metadata:
-       finalizers:
-       - localstorageclass.storage.deckhouse.io
-       name: test-sc
-     spec:
-       lvm:
-         lvmVolumeGroups:
-         - name: test-vg
-         type: Thick
-       reclaimPolicy: Delete
-       volumeBindingMode: WaitForFirstConsumer
-     status:
-       phase: Created
-   kind: List
-   ```
+    Примерный вид `LocalStorageClass`
 
-   > Обратите внимание на поле spec.lvm.lvmVolumeGroups - именно в нем указаны используемые `LVMVolumeGroup` ресурсы.
+    ```yaml
+    apiVersion: v1
+    items:
+    - apiVersion: storage.deckhouse.io/v1alpha1
+      kind: LocalStorageClass
+      metadata:
+        finalizers:
+        - localstorageclass.storage.deckhouse.io
+        name: test-sc
+      spec:
+        lvm:
+          lvmVolumeGroups:
+          - name: test-vg
+          type: Thick
+        reclaimPolicy: Delete
+        volumeBindingMode: WaitForFirstConsumer
+      status:
+        phase: Created
+    kind: List
+    ```
 
-3. Отобразите список существующих `LVMVolumeGroup` ресурсов
+    Обратите внимание на поле spec.lvm.lvmVolumeGroups - именно в нем указаны используемые `LVMVolumeGroup` ресурсы.
 
-   ```shell
-   kubectl get lvg
-   ```
+1. Отобразите список существующих `LVMVolumeGroup` ресурсов
 
-   Примерный вывод `LVMVolumeGroup` ресурсов:
+    ```shell
+    kubectl get lvg
+    ```
 
-   ```text
-   NAME              HEALTH        NODE                         SIZE       ALLOCATED SIZE   VG        AGE
-   lvg-on-worker-0   Operational   node-worker-0   40956Mi    0                test-vg   15d
-   lvg-on-worker-1   Operational   node-worker-1   61436Mi    0                test-vg   15d
-   lvg-on-worker-2   Operational   node-worker-2   122876Mi   0                test-vg   15d
-   lvg-on-worker-3   Operational   node-worker-3   307196Mi   0                test-vg   15d
-   lvg-on-worker-4   Operational   node-worker-4   307196Mi   0                test-vg   15d
-   lvg-on-worker-5   Operational   node-worker-5   204796Mi   0                test-vg   15d
-   ```
+    Примерный вывод `LVMVolumeGroup` ресурсов:
 
-4. Проверьте, что на узле, который вы собираетесь вывести из-под управления модуля, не присутствует какой-либо `LVMVolumeGroup` ресурс, используемый в `LocalStorageClass` ресурсах.
+    ```text
+    NAME              HEALTH        NODE                         SIZE       ALLOCATED SIZE   VG        AGE
+    lvg-on-worker-0   Operational   node-worker-0   40956Mi    0                test-vg   15d
+    lvg-on-worker-1   Operational   node-worker-1   61436Mi    0                test-vg   15d
+    lvg-on-worker-2   Operational   node-worker-2   122876Mi   0                test-vg   15d
+    lvg-on-worker-3   Operational   node-worker-3   307196Mi   0                test-vg   15d
+    lvg-on-worker-4   Operational   node-worker-4   307196Mi   0                test-vg   15d
+    lvg-on-worker-5   Operational   node-worker-5   204796Mi   0                test-vg   15d
+    ```
 
-   Во избежание непредвиденной потери контроля за уже созданными с помощью модуля томами пользователю необходимо вручную удалить зависимые ресурсы, совершив необходимые операции над томом.
+1. Проверьте, что на узле, который вы собираетесь вывести из-под управления модуля, не присутствует какой-либо `LVMVolumeGroup` ресурс, используемый в `LocalStorageClass` ресурсах.
+    Во избежание непредвиденной потери контроля за уже созданными с помощью модуля томами пользователю необходимо вручную удалить зависимые ресурсы, совершив необходимые операции над томом.
 
 ## Я убрал метки с узла, но pod `sds-local-volume-csi-node` остался. Почему так произошло?
 
@@ -333,3 +333,51 @@ while [[ $kubectl_completed_check -eq 0 ]]; do
 done
 echo "Data migration completed"
 ```
+
+## Как создавать снимки томов?
+
+Подробную информацию о снимках можно найти [здесь](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).
+
+1. Включение snapshot-controller
+    Сначала необходимо включить snapshot-controller:
+
+    ```shell
+    kubectl apply -f -<<EOF
+    apiVersion: deckhouse.io/v1alpha1
+    kind: ModuleConfig
+    metadata:
+      name: snapshot-controller
+    spec:
+      enabled: true
+      version: 1
+    EOF
+
+    ```
+
+1. Создание снимка тома
+    Теперь вы можете создавать снимки томов. Для этого выполните следующую команду с необходимыми параметрами:
+
+    ```shell
+    kubectl apply -f -<<EOF
+    apiVersion: snapshot.storage.k8s.io/v1
+    kind: VolumeSnapshot
+    metadata:
+      name: my-snapshot
+      namespace: <name of the namespace where the PVC is located>
+    spec:
+      volumeSnapshotClassName: sds-local-volume-snapshot-class
+      source:
+        persistentVolumeClaimName: <name of the PVC to snapshot>
+    EOF
+    ```
+
+    Обратите внимание, что `sds-local-volume-snapshot-class` создается автоматически, и его `deletionPolicy` установлена в `Delete`, что означает, что `VolumeSnapshotContent` будет удален при удалении связанного `VolumeSnapshot`.
+
+1. Проверка статуса снимка
+    Чтобы проверить статус созданного снимка, выполните команду:
+
+    ```shell
+    kubectl get volumesnapshot
+    ```
+
+    Эта команда выведет список всех снимков и их текущий статус.

@@ -3,13 +3,13 @@ title: "The sds-local-volume module: FAQ"
 description: "The sds-local-volume module: FAQ"
 ---
 
-## What is difference between LVM and LVMThin?
+## What is difference between LVM and LVM Thin?
 
-- LVM is simpler and has high performance that is similar to that of native disk drives;
-- LVMThin allows overprovisioning; however, it is slower than LVM.
+- LVM (Thick) is simpler and has high performance that is similar to that of native disk drives;
+- LVM Thin allows overprovisioning; however, it is slower than LVM.
 
 {{< alert level="warning" >}}
-Overprovisioning in LVMThin should be used with caution, monitoring the availability of free space in the pool (The cluster monitoring system generates separate events when the free space in the pool reaches 20%, 10%, 5%, and 1%).
+Overprovisioning in LVM Thin should be used with caution, monitoring the availability of free space in the pool (The cluster monitoring system generates separate events when the free space in the pool reaches 20%, 10%, 5%, and 1%).
 
 In case of no free space in the pool, degradation in the module's operation as a whole will be observed, and there is a real possibility of data loss!
 {{< /alert >}}
@@ -136,70 +136,70 @@ On the node itself, the label `storage.deckhouse.io/sds-local-volume-need-manual
 ## How to check if there are dependent resources `LVMVolumeGroup` on the node?
 
 To check for such resources, follow these steps:
+
 1. Display the existing `LocalStorageClass` resources
 
-   ```shell
-   kubectl get lsc
-   ```
+    ```shell
+    kubectl get lsc
+    ```
 
-2. Check each of them for the list of used `LVMVolumeGroup` resources.
+1. Check each of them for the list of used `LVMVolumeGroup` resources.
 
-   > If you want to list all `LocalStorageClass` resources at once, run the command:
-   >
-   > ```shell
-   > kubectl get lsc -oyaml
-   > ```
+    If you want to list all `LocalStorageClass` resources at once, run the command:
 
-   ```shell
-   kubectl get lsc %lsc-name% -oyaml
-   ```
+    ```shell
+    kubectl get lsc -oyaml
+    ```
 
-   An approximate representation of `LocalStorageClass` could be:
+    ```shell
+    kubectl get lsc %lsc-name% -oyaml
+    ```
 
-   ```yaml
-   apiVersion: v1
-   items:
-   - apiVersion: storage.deckhouse.io/v1alpha1
-     kind: LocalStorageClass
-     metadata:
-       finalizers:
-       - localstorageclass.storage.deckhouse.io
-       name: test-sc
-     spec:
-       lvm:
-         lvmVolumeGroups:
-         - name: test-vg
-         type: Thick
-       reclaimPolicy: Delete
-       volumeBindingMode: WaitForFirstConsumer
-     status:
-       phase: Created
-   kind: List
-   ```
+    An approximate representation of `LocalStorageClass` could be:
 
-   > Please pay attention to the `spec.lvm.lvmVolumeGroups` field - it specifies the used `LVMVolumeGroup` resources.
+    ```yaml
+    apiVersion: v1
+    items:
+    - apiVersion: storage.deckhouse.io/v1alpha1
+      kind: LocalStorageClass
+      metadata:
+        finalizers:
+        - localstorageclass.storage.deckhouse.io
+        name: test-sc
+      spec:
+        lvm:
+          lvmVolumeGroups:
+          - name: test-vg
+          type: Thick
+        reclaimPolicy: Delete
+        volumeBindingMode: WaitForFirstConsumer
+      status:
+        phase: Created
+    kind: List
+    ```
 
-3. Display the list of existing `LVMVolumeGroup` resources.
+    Please pay attention to the `spec.lvm.lvmVolumeGroups` field - it specifies the used `LVMVolumeGroup` resources.
 
-   ```shell
-   kubectl get lvg
-   ```
+1. Display the list of existing `LVMVolumeGroup` resources.
 
-   An approximate representation of `LVMVolumeGroup` could be:
+    ```shell
+    kubectl get lvg
+    ```
 
-   ```text
-   NAME              HEALTH        NODE                         SIZE       ALLOCATED SIZE   VG        AGE
-   lvg-on-worker-0   Operational   node-worker-0   40956Mi    0                test-vg   15d
-   lvg-on-worker-1   Operational   node-worker-1   61436Mi    0                test-vg   15d
-   lvg-on-worker-2   Operational   node-worker-2   122876Mi   0                test-vg   15d
-   lvg-on-worker-3   Operational   node-worker-3   307196Mi   0                test-vg   15d
-   lvg-on-worker-4   Operational   node-worker-4   307196Mi   0                test-vg   15d
-   lvg-on-worker-5   Operational   node-worker-5   204796Mi   0                test-vg   15d
-   ```
+    An approximate representation of `LVMVolumeGroup` could be:
 
-4. Ensure that the node you intend to remove from the module's control does not have any `LVMVolumeGroup` resources used in `LocalStorageClass` resources.
+    ```text
+    NAME              HEALTH        NODE                         SIZE       ALLOCATED SIZE   VG        AGE
+    lvg-on-worker-0   Operational   node-worker-0   40956Mi    0                test-vg   15d
+    lvg-on-worker-1   Operational   node-worker-1   61436Mi    0                test-vg   15d
+    lvg-on-worker-2   Operational   node-worker-2   122876Mi   0                test-vg   15d
+    lvg-on-worker-3   Operational   node-worker-3   307196Mi   0                test-vg   15d
+    lvg-on-worker-4   Operational   node-worker-4   307196Mi   0                test-vg   15d
+    lvg-on-worker-5   Operational   node-worker-5   204796Mi   0                test-vg   15d
+    ```
 
-   To avoid unintentionally losing control over volumes already created using the module, the user needs to manually delete dependent resources by performing necessary operations on the volume.
+1. Ensure that the node you intend to remove from the module's control does not have any `LVMVolumeGroup` resources used in `LocalStorageClass` resources.
+    To avoid unintentionally losing control over volumes already created using the module, the user needs to manually delete dependent resources by performing necessary operations on the volume.
 
 ## I removed the labels from the node, but the `sds-local-volume-csi-node` pod is still there. Why did this happen?
 
@@ -338,50 +338,48 @@ echo "Data migration completed"
 
 You can read more about snapshots [here](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).
 
-### Step 1: Enabling the snapshot-controller
+1. Enabling the snapshot-controller
 
-First, you need to enable the snapshot-controller:
+    First, you need to enable the snapshot-controller:
 
-```shell
-kubectl apply -f -<<EOF
-apiVersion: deckhouse.io/v1alpha1
-kind: ModuleConfig
-metadata:
-  name: snapshot-controller
-spec:
-  enabled: true
-  version: 1
-EOF
+    ```shell
+    kubectl apply -f -<<EOF
+    apiVersion: deckhouse.io/v1alpha1
+    kind: ModuleConfig
+    metadata:
+      name: snapshot-controller
+    spec:
+      enabled: true
+      version: 1
+    EOF
+    ```
 
-```
+1. Creating a Volume Snapshot
 
-### Step 2: Creating a Volume Snapshot
+    Now you can create volume snapshots. To do this, execute the following command with the necessary parameters:
 
-Now you can create volume snapshots. To do this, execute the following command with the necessary parameters:
+    ```shell
+    kubectl apply -f -<<EOF
+    apiVersion: snapshot.storage.k8s.io/v1
+    kind: VolumeSnapshot
+    metadata:
+      name: my-snapshot
+      namespace: <name of the namespace where the PVC is located>
+    spec:
+      volumeSnapshotClassName: sds-local-volume-snapshot-class
+      source:
+        persistentVolumeClaimName: <name of the PVC to snapshot>
+    EOF
+    ```
 
-```shell
-kubectl apply -f -<<EOF
-apiVersion: snapshot.storage.k8s.io/v1
-kind: VolumeSnapshot
-metadata:
-  name: my-snapshot
-  namespace: <name of the namespace where the PVC is located>
-spec:
-  volumeSnapshotClassName: sds-local-volume-snapshot-class
-  source:
-    persistentVolumeClaimName: <name of the PVC to snapshot>
-EOF
-```
+    Note that `sds-local-volume-snapshot-class` is created automatically, and it's `deletionPolicy` is `Delete`, which means that `VolumeSnapshotContent` should be deleted when its bound `VolumeSnapshot` is deleted.
 
-Note that `sds-local-volume-snapshot-class` is created automatically, and it's `deletionPolicy` is `Delete`, which means that `VolumeSnapshotContent` should be deleted when its bound `VolumeSnapshot` is deleted.
+1. Checking the Snapshot Status
 
+    To check the status of the created snapshot, execute the command:
 
-### Step 3: Checking the Snapshot Status
+    ```shell
+    kubectl get volumesnapshot
+    ```
 
-To check the status of the created snapshot, execute the command:
-
-```shell
-kubectl get volumesnapshot
-```
-
-This command will display a list of all snapshots and their current status.
+    This command will display a list of all snapshots and their current status.

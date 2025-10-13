@@ -1,17 +1,18 @@
 module github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi
 
-go 1.24.2
+go 1.24.8
 
 require (
 	github.com/container-storage-interface/spec v1.10.0
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
 	github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-20250215220933-9c8f9f5ab53d
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20250415082951-df02a2a67de3
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20250424082358-e271071c2a57
 	github.com/go-logr/logr v1.4.2
 	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/sync v0.12.0
+	golang.org/x/sys v0.31.0
 	google.golang.org/grpc v1.66.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.31.0
@@ -54,8 +55,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/oauth2 v0.23.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.7.0 // indirect

@@ -23,8 +23,12 @@ To ensure the correct operation of the `sds-local-volume` module, follow these s
 
   The creation of StorageClasses for the CSI driver `local.csi.storage.deckhouse.io` is **prohibited** for users.
 
-The module supports two operation modes: LVM and LVMThin.
-Each mode has its own features, advantages, and limitations. For more details on the differences, refer to the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvmthin).
+{{< alert level="info" >}}
+For working with snapshots, the [snapshot-controller](../../snapshot-controller/) module must be connected.
+{{< /alert >}}
+
+The module supports two operation modes: LVM (Thick) and LVM Thin.
+Each mode has its own features, advantages, and limitations. For more details on the differences, refer to the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvm-thin).
 
 ## Quickstart guide
 
@@ -249,10 +253,14 @@ kubectl -n d8-sds-local-volume get pod -owide
      lvm:
        lvmVolumeGroups:
         - name: vg-1-on-worker-0
+          thin:
+            poolName: thin-1
         - name: vg-1-on-worker-1
+          thin:
+            poolName: thin-1
         - name: vg-1-on-worker-2
-           thin:
-             poolName: thin-1
+          thin:
+            poolName: thin-1
        type: Thin
      reclaimPolicy: Delete
      volumeBindingMode: WaitForFirstConsumer

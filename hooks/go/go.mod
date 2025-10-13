@@ -1,8 +1,12 @@
 module github.com/deckhouse/sds-local-volume/hooks/go
 
-go 1.24.2
+go 1.24.8
 
-require github.com/deckhouse/module-sdk v0.2.0
+require (
+	github.com/deckhouse/module-sdk v0.2.0
+	k8s.io/apimachinery v0.32.3
+	sigs.k8s.io/controller-runtime v0.20.4
+)
 
 require (
 	github.com/DataDog/gostackparse v0.7.0 // indirect
@@ -12,7 +16,7 @@ require (
 	github.com/cloudflare/cfssl v1.6.5 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.16.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/deckhouse/deckhouse/pkg/log v0.0.0-20250227202034-eda49647c2d9 // indirect
+	github.com/deckhouse/deckhouse/pkg/log v0.0.0-20241205040953-7b376bae249c // indirect
 	github.com/docker/cli v28.0.1+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.8.2 // indirect
@@ -82,15 +86,11 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.32.3 // indirect
 	k8s.io/apiextensions-apiserver v0.32.2 // indirect
-	k8s.io/apimachinery v0.32.3 // indirect
 	k8s.io/client-go v0.32.3 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241212222426-2c72e554b1e7 // indirect
 	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
-	sigs.k8s.io/controller-runtime v0.20.4 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.5.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
-replace github.com/deckhouse/sds-local-volume/api => ../../api

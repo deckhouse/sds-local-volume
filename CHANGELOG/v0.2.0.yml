@@ -1,0 +1,4 @@
+Changes:
+  - Updated golang API libraries for sds-node-configurator v0.4.0 support
+  - Multiple fixes in controllers and documentation
+  - Added XFS filesystem support
