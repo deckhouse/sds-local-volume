@@ -185,7 +185,6 @@ import:
   - image: tools/util-linux
     add: /sbin/blkid
     to: /usr/sbin/blkid
-    before: setup
     add: /sbin/blockdev
     to: /usr/sbin/blockdev
     before: setup
