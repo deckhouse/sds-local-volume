@@ -183,11 +183,14 @@ import:
       - usr/sbin/vgscan
       - usr/sbin/vgsplit
   - image: tools/util-linux
-    add: /sbin/blkid
+    add: /sbin
     to: /usr/sbin
-    add: /sbin/blockdev
+    add: /sbin
     to: /usr/sbin
     before: setup
+    includePaths:
+      - blkid
+      - blockdev
   - image: tools/util-linux
     add: /
     to: /
