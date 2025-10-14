@@ -47,27 +47,6 @@ shell:
       {{- include "image-build.build" (set $ "BuildCommand" (printf `go build -ldflags="-s -w" -tags "%s" -o /%s` .MODULE_EDITION $.ImageName)) | nindent 6 }}
     - chmod +x /{{ $.ImageName }}
 
-# ---
-# image: {{ .ModuleNamePrefix }}{{ .ImageName }}-binaries-artifact
-# fromImage: builder/alt
-# final: false
-
-# git:
-#   - add: {{ .ModuleDir }}/tools/dev_images/additional_tools/binary_replace.sh
-#     to: /binary_replace.sh
-#     stageDependencies:
-#       install:
-#         - '**/*'
-
-# shell:
-#   install:
-#     {{- include "alt packages proxy" . | nindent 4 }}
-#     - apt-get update
-#     - apt-get -y install glibc-utils glibc-core glibc-nss mount nfs-utils curl curl lvm2 e2fsprogs xfsprogs
-#     - rm -rf /var/lib/apt/lists/* /var/cache/apt/* && mkdir -p /var/lib/apt/lists/partial /var/cache/apt/archives/partial
-#     - chmod +x /binary_replace.sh
-#     - /binary_replace.sh -i "{{ $csiBinaries }}" -o /relocate
-
 ---
 image: {{ .ModuleNamePrefix }}{{ .ImageName }}
 fromImage: base/distroless
