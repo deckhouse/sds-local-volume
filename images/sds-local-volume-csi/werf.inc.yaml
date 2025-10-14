@@ -184,9 +184,9 @@ import:
       - usr/sbin/vgsplit
   - image: tools/util-linux
     add: /sbin/blkid
-    to: /usr/sbin/blkid
+    to: /usr/sbin
     add: /sbin/blockdev
-    to: /usr/sbin/blockdev
+    to: /usr/sbin
     before: setup
   - image: tools/util-linux
     add: /
