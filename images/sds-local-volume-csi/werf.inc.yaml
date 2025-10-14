@@ -185,8 +185,6 @@ import:
   - image: tools/util-linux
     add: /sbin
     to: /usr/sbin
-    add: /sbin
-    to: /usr/sbin
     before: setup
     includePaths:
       - blkid
