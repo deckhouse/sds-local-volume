@@ -85,8 +85,6 @@ import:
     add: /relocate
     to: /
     before: install
-    includePaths:
-      - '**/*'
   - image: tools/util-linux
     add: /
     to: /
