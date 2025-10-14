@@ -196,8 +196,6 @@ import:
     to: /
     before: setup
     includePaths:
-      - sbin/blkid
-      - sbin/blockdev
       - bin/mount
       - bin/umount
       - sbin/swapon
