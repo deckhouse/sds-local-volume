@@ -27,6 +27,10 @@ To ensure the correct operation of the `sds-local-volume` module, follow these s
 For working with snapshots, the [snapshot-controller](../../snapshot-controller/) module must be connected.
 {{< /alert >}}
 
+{{< alert level="warning" >}}
+**Volume snapshots functionality is only available in commercial editions of Deckhouse.**
+{{< /alert >}}
+
 The module supports two operation modes: LVM (Thick) and LVM Thin.
 Each mode has its own features, advantages, and limitations. For more details on the differences, refer to the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvm-thin).
 
@@ -283,6 +287,10 @@ kubectl -n d8-sds-local-volume get pod -owide
 If StorageClass with the name `local-storage-class` is shown, then the configuration of the `sds-local-volume` module is complete. Now users can create PVCs by specifying StorageClass with the name `local-storage-class`.
 
 ### Selects the method to clean the volume before deleting the PV
+
+{{< alert level="warning" >}}
+**Volume cleanup functionality is only available in commercial editions of Deckhouse.**
+{{< /alert >}}
 
 When deleting files, the operating system does not physically delete the contents, but only marks the corresponding blocks as “free”. If a new volume receives physical blocks previously used by another volume, the previous user's data may remain in them.
 
