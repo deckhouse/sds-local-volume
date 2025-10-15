@@ -82,19 +82,16 @@ import:
       - usr/sbin/fsck.ext2
       - usr/sbin/fsck.ext3
       - usr/sbin/fsck.ext4
-      - usr/sbin/fsck.ext4dev
       - usr/sbin/logsave
       - usr/sbin/mke2fs
       - usr/sbin/mkfs.ext2
       - usr/sbin/mkfs.ext3
       - usr/sbin/mkfs.ext4
-      - usr/sbin/mkfs.ext4dev
       - usr/sbin/mklost+found
       - usr/sbin/resize2fs
       - usr/sbin/tune2fs
       - usr/bin/chattr
       - usr/bin/lsattr
-      - usr/sbin/dmfilemapd
   - image: tools/xfsprogs
     add: /
     to: /
@@ -120,8 +117,6 @@ import:
       - usr/sbin/xfs_quota
       - usr/sbin/xfs_repair
       - usr/sbin/xfs_rtcp
-      - usr/sbin/xfs_scrub
-      - usr/sbin/xfs_scrub_all
       - usr/sbin/xfs_spaceman
   - image: tools/lvm2
     add: /
@@ -140,7 +135,6 @@ import:
       - usr/sbin/lvmdevices
       - usr/sbin/lvmdiskscan
       - usr/sbin/lvmdump
-      - usr/sbin/lvmpolld
       - usr/sbin/lvmsadc
       - usr/sbin/lvmsar
       - usr/sbin/lvreduce
