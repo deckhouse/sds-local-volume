@@ -336,6 +336,10 @@ echo "Data migration completed"
 
 ## Как создавать снимки томов?
 
+{{< alert level="warning" >}}
+**Функционал снимков томов доступен только в коммерческих редакциях Deckhouse.**
+{{< /alert >}}
+
 Подробную информацию о снимках можно найти [здесь](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).
 
 1. Включение snapshot-controller

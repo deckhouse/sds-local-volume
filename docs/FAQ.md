@@ -336,6 +336,10 @@ echo "Data migration completed"
 
 ## How to Create Volume Snapshots?
 
+{{< alert level="warning" >}}
+**Volume snapshots functionality is only available in commercial editions of Deckhouse.**
+{{< /alert >}}
+
 You can read more about snapshots [here](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).
 
 1. Enabling the snapshot-controller
