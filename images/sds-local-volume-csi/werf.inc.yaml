@@ -70,7 +70,7 @@ import:
       - usr/sbin/e2freefrag
       - usr/sbin/e2fsck
       - usr/sbin/e2image
-      - usr/sbin/e2initrd_helper
+      - usr/lib/e2initrd_helper
       - usr/sbin/e2label
       - usr/sbin/e2mmpstatus
       - usr/sbin/e2scrub
@@ -92,8 +92,8 @@ import:
       - usr/sbin/mklost+found
       - usr/sbin/resize2fs
       - usr/sbin/tune2fs
-      - usr/sbin/chattr
-      - usr/sbin/lsattr
+      - usr/bin/chattr
+      - usr/bin/lsattr
       - usr/sbin/dmfilemapd
   - image: tools/xfsprogs
     add: /
