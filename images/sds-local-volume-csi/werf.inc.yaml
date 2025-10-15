@@ -64,36 +64,36 @@ import:
     to: /
     before: install
     includePaths:
-      - sbin/badblocks
-      - sbin/debugfs
-      - sbin/dumpe2fs
-      - sbin/e2freefrag
-      - sbin/e2fsck
-      - sbin/e2image
-      - sbin/e2initrd_helper
-      - sbin/e2label
-      - sbin/e2mmpstatus
-      - sbin/e2scrub
-      - sbin/e2scrub_all
-      - sbin/e2undo
-      - sbin/e4crypt
-      - sbin/e4defrag
-      - sbin/filefrag
-      - sbin/fsck.ext2
-      - sbin/fsck.ext3
-      - sbin/fsck.ext4
-      - sbin/fsck.ext4dev
-      - sbin/logsave
-      - sbin/mke2fs
-      - sbin/mkfs.ext2
-      - sbin/mkfs.ext3
-      - sbin/mkfs.ext4
-      - sbin/mkfs.ext4dev
-      - sbin/mklost+found
-      - sbin/resize2fs
-      - sbin/tune2fs
-      - usr/bin/chattr
-      - usr/bin/lsattr
+      - usr/sbin/badblocks
+      - usr/sbin/debugfs
+      - usr/sbin/dumpe2fs
+      - usr/sbin/e2freefrag
+      - usr/sbin/e2fsck
+      - usr/sbin/e2image
+      - usr/sbin/e2initrd_helper
+      - usr/sbin/e2label
+      - usr/sbin/e2mmpstatus
+      - usr/sbin/e2scrub
+      - usr/sbin/e2scrub_all
+      - usr/sbin/e2undo
+      - usr/sbin/e4crypt
+      - usr/sbin/e4defrag
+      - usr/sbin/filefrag
+      - usr/sbin/fsck.ext2
+      - usr/sbin/fsck.ext3
+      - usr/sbin/fsck.ext4
+      - usr/sbin/fsck.ext4dev
+      - usr/sbin/logsave
+      - usr/sbin/mke2fs
+      - usr/sbin/mkfs.ext2
+      - usr/sbin/mkfs.ext3
+      - usr/sbin/mkfs.ext4
+      - usr/sbin/mkfs.ext4dev
+      - usr/sbin/mklost+found
+      - usr/sbin/resize2fs
+      - usr/sbin/tune2fs
+      - usr/sbin/chattr
+      - usr/sbin/lsattr
       - usr/sbin/dmfilemapd
   - image: tools/xfsprogs
     add: /
