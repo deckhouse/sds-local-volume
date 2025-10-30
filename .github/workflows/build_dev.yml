@@ -25,6 +25,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: "0 14 * * 6"
 
 defaults:
   run:
