@@ -66,10 +66,10 @@ nodeSelector:
 Nodes whose labels include the set specified in the settings are selected by the module as targets for usage. Therefore, by changing the `nodeSelector` field, you can influence the list of nodes that the module will use.
 
 {{< alert level="warning" >}}
-The `nodeSelector` field can contain any number of labels, but it's crucial that each of the specified labels is present on the node you intend to use for working with the module. It's only when all the specified labels are present on the selected node that the `sds-local-volume-csi-node` pod will be launched.
+The `nodeSelector` field can contain any number of labels, but it's crucial that each of the specified labels is present on the node you intend to use for working with the module. It's only when all the specified labels are present on the selected node that the `csi-node` pod will be launched.
 {{< /alert >}}
 
-After adding labels to the nodes, the `sds-local-volume-csi-node` pods should be started. You can check their presence using the command:
+After adding labels to the nodes, the `csi-node` pods should be started. You can check their presence using the command:
 
 ```shell
  kubectl -n d8-sds-local-volume get pod -owide
@@ -77,7 +77,7 @@ After adding labels to the nodes, the `sds-local-volume-csi-node` pods should be
 
 ## Why can't I create a PVC on the selected node using the module?
 
-Please verify that the pod `sds-local-volume-csi-node` is running on the selected node.
+Please verify that the pod `csi-node` is running on the selected node.
 
 ```shell
 kubectl -n d8-sds-local-volume get po -owide
@@ -112,13 +112,13 @@ kubectl label node %node-name% %label-from-selector%-
 To remove a label, you need to add a hyphen immediately after its key instead of its value.
 {{< /alert >}}
 
-As a result, the `sds-local-volume-csi-node` pod should be deleted from the desired node. You can check its status using the command:
+As a result, the `csi-node` pod should be deleted from the desired node. You can check its status using the command:
 
 ```shell
 kubectl -n d8-sds-local-volume get po -owide
 ```
 
-If the `sds-local-volume-csi-node` pod remains on the node after removing the `nodeSelector` label, please ensure that the labels specified in the `nodeSelector` field of the `d8-sds-local-volume-controller-config` in the config have indeed been successfully removed from the selected node.
+If the `csi-node` pod remains on the node after removing the `nodeSelector` label, please ensure that the labels specified in the `nodeSelector` field of the `d8-sds-local-volume-controller-config` in the config have indeed been successfully removed from the selected node.
 
 You can verify this using the command:
 
@@ -201,7 +201,7 @@ To check for such resources, follow these steps:
 1. Ensure that the node you intend to remove from the module's control does not have any `LVMVolumeGroup` resources used in `LocalStorageClass` resources.
     To avoid unintentionally losing control over volumes already created using the module, the user needs to manually delete dependent resources by performing necessary operations on the volume.
 
-## I removed the labels from the node, but the `sds-local-volume-csi-node` pod is still there. Why did this happen?
+## I removed the labels from the node, but the `csi-node` pod is still there. Why did this happen?
 
 Most likely, there are `LVMVolumeGroup` resources present on the node, which are used in one of the `LocalStorageClass` resources.
 
@@ -387,3 +387,155 @@ You can read more about snapshots [here](https://kubernetes.io/docs/concepts/sto
     ```
 
     This command will display a list of all snapshots and their current status.
+
+## How to create thin storage?
+
+1. Get all [BlockDevice](../../sds-node-configurator/stable/cr.html#blockdevice) resources available in your cluster:
+
+   ```shell
+   kubectl get bd
+
+   NAME                                           NODE       CONSUMABLE   SIZE           PATH
+   dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa   worker-0   false        100Gi          /dev/nvme1n1
+   dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0   worker-1   false        100Gi          /dev/nvme1n1
+   dev-53d904f18b912187ac82de29af06a34d9ae23199   worker-2   false        100Gi          /dev/nvme1n1
+   ```
+
+1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for the `worker-0` node:
+
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroup
+   metadata:
+     name: "vg-2-on-worker-0"
+   spec:
+     type: Local
+     local:
+       nodeName: "worker-0"
+     blockDeviceSelector:
+       matchExpressions:
+         - key: kubernetes.io/metadata.name
+           operator: In
+           values:
+             - dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa
+     actualVGNameOnTheNode: "vg-2"
+     thinPools:
+     - name: thindata
+       size: 100Gi
+   EOF
+   ```
+
+1. Wait for the created LVMVolumeGroup resource to become `Ready`:
+
+   ```shell
+   kubectl get lvg vg-2-on-worker-0 -w
+   ```
+
+   The resource becoming `Ready` means that on the `worker-0` node an LVM VG named `vg-2` has been created from the `/dev/nvme1n1` block device, and a thin pool named `thindata` has been created on it.
+
+1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for the `worker-1` node:
+
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroup
+   metadata:
+     name: "vg-2-on-worker-1"
+   spec:
+     type: Local
+     local:
+       nodeName: "worker-1"
+     blockDeviceSelector:
+       matchExpressions:
+         - key: kubernetes.io/metadata.name
+           operator: In
+           values:
+             - dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0
+     actualVGNameOnTheNode: "vg-2"
+     thinPools:
+     - name: thindata
+       size: 100Gi
+   EOF
+   ```
+
+1. Wait for the created LVMVolumeGroup resource to become `Ready`:
+
+   ```shell
+   kubectl get lvg vg-2-on-worker-1 -w
+   ```
+
+   The resource becoming `Ready` means that on the `worker-1` node an LVM VG named `vg-2` has been created from the `/dev/nvme1n1` block device, and a thin pool named `thindata` has been created on it.
+
+1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for the `worker-2` node:
+
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroup
+   metadata:
+     name: "vg-2-on-worker-2"
+   spec:
+     type: Local
+     local:
+       nodeName: "worker-2"
+     blockDeviceSelector:
+       matchExpressions:
+         - key: kubernetes.io/metadata.name
+           operator: In
+           values:
+             - dev-53d904f18b912187ac82de29af06a34d9ae23199
+     actualVGNameOnTheNode: "vg-2"
+     thinPools:
+     - name: thindata
+       size: 100Gi
+   EOF
+   ```
+
+1. Wait for the created LVMVolumeGroup resource to become `Ready`:
+
+   ```shell
+   kubectl get lvg vg-2-on-worker-2 -w
+   ```
+
+   The resource becoming `Ready` means that on the `worker-2` node an LVM VG named `vg-2` has been created from the `/dev/nvme1n1` block device, and a thin pool named `thindata` has been created on it.
+
+1. Create a [LocalStorageClass](./cr.html#localstorageclass) resource:
+
+   ```yaml
+   kubectl apply -f -<<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: local-storage-class
+   spec:
+     lvm:
+       lvmVolumeGroups:
+        - name: vg-2-on-worker-0
+          thin:
+            poolName: thindata
+        - name: vg-2-on-worker-1
+          thin:
+            poolName: thindata
+        - name: vg-2-on-worker-2
+          thin:
+            poolName: thindata
+       type: Thin
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+   EOF
+   ```
+
+1. Wait for the created LocalStorageClass resource to become `Created`:
+
+   ```shell
+   kubectl get lsc local-storage-class -w
+   ```
+
+1. Confirm that the corresponding StorageClass has been created:
+
+   ```shell
+   kubectl get sc local-storage-class
+   ```
+
+Now users can create PVCs by specifying the StorageClass named `local-storage-class`.

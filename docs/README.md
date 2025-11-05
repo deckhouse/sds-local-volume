@@ -23,12 +23,9 @@ To ensure the correct operation of the `sds-local-volume` module, follow these s
 
   The creation of StorageClasses for the CSI driver `local.csi.storage.deckhouse.io` is **prohibited** for users.
 
-{{< alert level="info" >}}
-For working with snapshots, the [snapshot-controller](../../snapshot-controller/) module must be connected.
-{{< /alert >}}
-
 {{< alert level="warning" >}}
-**Volume snapshots functionality is only available in commercial editions of Deckhouse.**
+- For working with snapshots, the [snapshot-controller](../../snapshot-controller/) module must be connected.
+- The snapshot feature is available only in commercial editions of Deckhouse and only when using LVM Thin volumes.
 {{< /alert >}}
 
 The module supports two operation modes: LVM (Thick) and LVM Thin.
@@ -53,10 +50,12 @@ Enabling the `sds-node-configurator` module:
    spec:
      enabled: true
      version: 1
+     settings:
+       enableThinProvisioning: true # if you plan to use LVM Thin volumes
    EOF
    ```
 
-1. Wait for the module to become `Ready`. At this stage, there is no need to check the pods in the `d8-sds-node-configurator`.
+1. Wait for the module to become `Ready`. At this stage, there is no need to check the pods in the `d8-sds-node-configurator` namespace.
 
    ```shell
    kubectl get modules sds-node-configurator -w
@@ -75,6 +74,8 @@ Enabling the `sds-local-volume` module:
    spec:
      enabled: true
      version: 1
+     settings:
+       enableThinProvisioning: true # if you plan to use LVM Thin volumes
    EOF
    ```
 
@@ -93,7 +94,7 @@ Enabling the `sds-local-volume` module:
 
 ### Preparing nodes for storage provisioning
 
-To create storage on nodes, it's necessary for the `sds-local-volume-csi-node` pods to be running on the selected nodes.
+To create storage on nodes, it's necessary for the `csi-node` pods to be running on the selected nodes.
 
 By default, the pods will be scheduled on all nodes in the cluster. You can verify their presence using the command:
 
@@ -101,14 +102,14 @@ By default, the pods will be scheduled on all nodes in the cluster. You can veri
 kubectl -n d8-sds-local-volume get pod -owide
 ```
 
-The location of the pod data is determined by special labels (nodeSelector) specified in the [spec.settings.dataNodes.nodeSelector](configuration.html#parameters-datanodes-nodeselector) field in the module settings. Read more in the [module FAQ](./faq.html#i-dont-want-the-module-to-be-used-on-all-nodes-of-the-cluster-how-can-i-select-the-desired-nodes).
+Scheduling of `csi-node` pods is controlled by special labels (nodeSelector). These labels are set in the [spec.settings.dataNodes.nodeSelector](configuration.html#parameters-datanodes-nodeselector) parameter of the module. Read more in the [module FAQ](./faq.html#i-dont-want-the-module-to-be-used-on-all-nodes-of-the-cluster-how-can-i-select-the-desired-nodes).
 
 ### Configuring storage on nodes
 
-You need to create LVM volume groups on the nodes using LVMVolumeGroup custom resources. As part of this quickstart guide, we will create a regular storage Thick.
+You need to create LVM volume groups on the nodes using LVMVolumeGroup custom resources. As part of this quickstart guide, we will create a Thick storage; for Thin, see the [FAQ](./faq.html#how-to-create-thin-storage).
 
 {{< alert level="warning" >}}
-Please ensure that the `sds-local-volume-csi-node` pod is running on the node before creating the `LVMVolumeGroup`. You can do this using the command:
+Please ensure that the `csi-node` pod is running on the node before creating the `LVMVolumeGroup`. You can do this using the command:
 
 ```shell
 kubectl -n d8-sds-local-volume get pod -owide
@@ -118,7 +119,7 @@ kubectl -n d8-sds-local-volume get pod -owide
 
 #### Storage setup steps
 
-1. Get all available [BlockDevice](../../sds-node-configurator/stable/cr.html#blockdevice) resources available in your cluster:
+1. Get all [BlockDevice](../../sds-node-configurator/stable/cr.html#blockdevice) resources in your cluster:
 
    ```shell
    kubectl get bd
@@ -192,7 +193,7 @@ kubectl -n d8-sds-local-volume get pod -owide
    kubectl get lvg vg-1-on-worker-1 -w
    ```
 
-   The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the `worker-1` node.
+  The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block devices has been created on the `worker-1` node.
 
 1. Create an [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) resource for `worker-2`:
 
@@ -223,7 +224,7 @@ kubectl -n d8-sds-local-volume get pod -owide
    kubectl get lvg vg-1-on-worker-2 -w
    ```
 
-   The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block device has been created on the `worker-2` node.
+  The resource becoming `Ready` means that an LVM VG named `vg-1` made up of the `/dev/nvme1n1` and `/dev/nvme0n1p6` block devices has been created on the `worker-2` node.
 
 1. Create a [LocalStorageClass](./cr.html#localstorageclass) resource:
 
@@ -245,32 +246,7 @@ kubectl -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
-   For thin volumes
-
-   ```yaml
-   kubectl apply -f -<<EOF
-   apiVersion: storage.deckhouse.io/v1alpha1
-   kind: LocalStorageClass
-   metadata:
-     name: local-storage-class
-   spec:
-     lvm:
-       lvmVolumeGroups:
-        - name: vg-1-on-worker-0
-          thin:
-            poolName: thin-1
-        - name: vg-1-on-worker-1
-          thin:
-            poolName: thin-1
-        - name: vg-1-on-worker-2
-          thin:
-            poolName: thin-1
-       type: Thin
-     reclaimPolicy: Delete
-     volumeBindingMode: WaitForFirstConsumer
-   EOF
-   ```
-> **Caution.** A `LocalStorageClass` with `type: Thick` cannot use an LocalVolumeGroup that includes even a single thin pool.
+> **Caution.** A `LocalStorageClass` with `type: Thick` cannot use a LocalVolumeGroup that includes even a single thin pool.
 
 1. Wait for the created LocalStorageClass resource to become `Created`:
 
@@ -286,7 +262,7 @@ kubectl -n d8-sds-local-volume get pod -owide
 
 If StorageClass with the name `local-storage-class` is shown, then the configuration of the `sds-local-volume` module is complete. Now users can create PVCs by specifying StorageClass with the name `local-storage-class`.
 
-### Selects the method to clean the volume before deleting the PV
+### Choosing the volume cleanup method before PV deletion
 
 {{< alert level="warning" >}}
 **Volume cleanup functionality is only available in commercial editions of Deckhouse.**
@@ -296,14 +272,14 @@ When deleting files, the operating system does not physically delete the content
 
 This is possible, for example, in the following case:
 
-- user №1 placed files in the volume requested from StorageClass 1 and on node 1 (no matter in “Block” or “Filesystem” mode);
-- user №1 deleted the files and the volume;
+- user #1 placed files in the volume requested from StorageClass 1 and on node 1 (no matter in “Block” or “Filesystem” mode);
+- user #1 deleted the files and the volume;
 - the physical blocks it occupied become “free” but not wiped;
-- user №2 requested a new volume from StorageClass 1 and on node 1 in “Block” mode;
-- there is a risk that some or all of the blocks previously occupied by user №1 will be reallocated to user №2;
-- in which case user №2 has the ability to recover user №1's data.
+- user #2 requested a new volume from StorageClass 1 and on node 1 in “Block” mode;
+- there is a risk that some or all of the blocks previously occupied by user #1 will be reallocated to user #2;
+- in which case user #2 has the ability to recover user #1's data.
 
-### Thick volumes
+#### Thick volumes
 
 The `volumeCleanup` parameter is provided to prevent leaks through thick volumes.
 It allows to select the volume cleanup method before deleting the PV.
@@ -317,11 +293,11 @@ Allowed values:
 
 - `Discard` - all blocks of the volume will be marked as free using the `discard` system call before deletion. This option is only applicable to solid-state drives.
 
-Most modern solid-state drives ensure that a `discard` marked block will not return previous data when read. This makes the `Discard' option the most effective way to prevent leakage when using solid-state drives.
+Most modern solid-state drives ensure that a `discard` marked block will not return previous data when read. This makes the `Discard` option the most effective way to prevent leakage when using solid-state drives.
 However, clearing a cell is a relatively long operation, so it is performed in the background by the device. In addition, many drives cannot clear individual cells, only groups - pages. Because of this, not all drives guarantee immediate unavailability of the freed data. In addition, not all drives that do guarantee this keep the promise.
 If the device does not guarantee Deterministic TRIM (DRAT), Deterministic Read Zero after TRIM (RZAT) and is not tested, then it is not recommended.
 
-### Thin volumes
+#### Thin volumes
 
 When a thin-pool block is released via `discard` by the guest operating system, this command is forwarded to the device. If a hard disk drive is used or if there is no `discard` support from the solid-state drive, the data may remain on the thin-pool until such a block is used again. However, users are only given access to thin volumes, not the thin-pool itself. They can only retrieve a volume from the pool, and the thin volumes are nulled for the thin-pool block on new use, preventing leakage between clients. This is guaranteed by setting `thin_pool_zero=1` in LVM.
 
