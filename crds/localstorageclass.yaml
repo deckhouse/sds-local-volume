@@ -24,14 +24,14 @@ spec:
         openAPIV3Schema:
           type: object
           description: |
-            LocalStorageClass is a Kubernetes Custom Resource that defines a configuration for a Kubernetes Storage class.
+            LocalStorageClass is a Kubernetes Custom Resource that defines a configuration for a Kubernetes StorageClass.
           required:
             - spec
           properties:
             spec:
               type: object
               description: |
-                Defines a Kubernetes Storage class configuration.
+                Defines a Kubernetes StorageClass configuration.
               required:
                 - reclaimPolicy
                 - volumeBindingMode
@@ -43,9 +43,10 @@ spec:
                     - rule: self == oldSelf
                       message: Value is immutable.
                   description: |
-                    The storage class's reclaim policy. Might be:
-                    - Delete (If the Persistent Volume Claim is deleted, deletes the Persistent Volume and its associated storage as well)
-                    - Retain (If the Persistent Volume Claim is deleted, remains the Persistent Volume and its associated storage)
+                    StorageClass reclaim policy. Possible values:
+
+                    - `Delete`: If the PersistentVolumeClaim is deleted, the PersistentVolume and its associated storage are also deleted
+                    - `Retain`: If the PersistentVolumeClaim is deleted, the PersistentVolume and its associated storage remain
                   enum:
                     - Delete
                     - Retain
@@ -55,16 +56,17 @@ spec:
                     - rule: self == oldSelf
                       message: Value is immutable.
                   description: |
-                    The Storage class's binding mode. Might be:
-                    - Immediate (creates a PV as a PVC requested)
-                    - WaitForFirstConsumer (creates a PV after a Pod consumes PVC)
+                    StorageClass binding mode. Possible values:
+
+                    - `Immediate`: Creates a PersistentVolume immediately after the PersistentVolumeClaim is created
+                    - `WaitForFirstConsumer`: Creates a PersistentVolume only after a Pod that uses the PersistentVolumeClaim is created
                   enum:
                     - Immediate
                     - WaitForFirstConsumer
                 lvm:
                   type: object
                   description: |
-                    The field provides a LVM configuration.
+                    LVM configuration.
                   required:
                     - type
                     - lvmVolumeGroups
@@ -85,7 +87,7 @@ spec:
                         - rule: self == oldSelf
                           message: Value is immutable.
                       description: |
-                        The provisioning type of the LVM Logical Volumes (LV) created for Persistent Volumes (PV).
+                        Provisioning type of the LVM Logical Volumes (LV) created for PersistentVolumes (PV).
                       enum:
                         - Thick
                         - Thin
@@ -107,12 +109,12 @@ spec:
                             - rule: 'self == oldSelf'
                               message: Value is immutable.
                           description: |
-                            If true, the Logical Volume will be created with the contiguous flag. Note: This flag should be used with caution because it may lead to poor scheduling of pods using the Persistent Volume. Our scheduler checks the free space in VG and selects nodes with the most free space for pods. However, it cannot determine the maximum amount of sequential free space available. Consequently, there may be situations where a pod is scheduled to a node, but the volume cannot be created due to insufficient contiguous free space. If such a situation arises, manual intervention will be required.
+                            If true, the Logical Volume will be created with the contiguous flag. Note: This flag should be used with caution because it may lead to poor scheduling of pods using the PersistentVolume. Our scheduler checks the free space in VG and selects nodes with the most free space for pods. However, it cannot determine the maximum amount of sequential free space available. Consequently, there may be situations where a pod is scheduled to a node, but the volume cannot be created due to insufficient contiguous free space. If such a situation arises, manual intervention will be required.
                     volumeCleanup:
                       type: string
                       enum: [RandomFillThreePass, RandomFillSinglePass, Discard]
                       description: |
-                        The volume cleanup method after the PV is deleted.
+                        Volume cleanup method after the PersistentVolume is deleted.
                         If this parameter is not set, there's no guarantee that the data will be completely deleted.
 
                         Allowed values:
@@ -123,7 +125,7 @@ spec:
                     lvmVolumeGroups:
                       type: array
                       description: |
-                        LVMVolumeGroup resources where Persistent Volume will be create on.
+                        List of LVMVolumeGroup resources where PersistentVolumes will be created.
                       items:
                         type: object
                         required:
@@ -132,7 +134,7 @@ spec:
                           name:
                             type: string
                             description: |
-                              The LVMVolumeGroup resource's name.
+                              LVMVolumeGroup resource name.
                           thin:
                             type: object
                             description: |
@@ -143,7 +145,7 @@ spec:
                               poolName:
                                 type: string
                                 description: |
-                                  The name of the thin pool.
+                                  Thin pool name.
                                 minLength: 1
                                 pattern: ^.*$
                 fsType:
@@ -153,30 +155,29 @@ spec:
                     - rule: self == oldSelf
                       message: Value is immutable.
                   description: |
-                    The storage class's file system type. Might be:
-                    - ext4 (default)
-                    - xfs
+                    StorageClass file system type.
                   enum:
                     - ext4
                     - xfs
             status:
               type: object
               description: |
-                Displays current information about the Storage Class.
+                Current state of the StorageClass.
               properties:
                 phase:
                   type: string
                   description: |
-                    The Storage class current state. Might be: 
-                    - Failed (if the controller received incorrect resource configuration or some errors occurred during the operation)
-                    - Create (if everything went fine)
+                    StorageClass current state. Possible values:
+
+                    - `Failed`: The controller received incorrect resource configuration or errors occurred during the operation
+                    - `Created`: All operations completed successfully
                   enum:
                     - Failed
                     - Created
                 reason:
                   type: string
                   description: |
-                    Additional information about the current state of the Storage Class.
+                    Additional information about the current state of the StorageClass.
       additionalPrinterColumns:
         - jsonPath: .status.phase
           name: Phase
