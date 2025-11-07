@@ -1,6 +1,6 @@
 module github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller
 
-go 1.24.9
+go 1.24.10
 
 require (
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
