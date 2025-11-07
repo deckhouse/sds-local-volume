@@ -69,6 +69,8 @@ spec:
       app: sds-local-volume-scheduler-extender
   template:
     metadata:
+      annotations:
+        checksum/ca: {{ .Values.sdsLocalVolume.internal.customSchedulerExtenderCert.ca | sha256sum | quote }}
       labels:
         app: sds-local-volume-scheduler-extender
     spec:
