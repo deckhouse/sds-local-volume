@@ -31,6 +31,10 @@ For working with snapshots, the [snapshot-controller](../../snapshot-controller/
 **Volume snapshots functionality is only available in commercial editions of Deckhouse.**
 {{< /alert >}}
 
+{{< alert level="info" >}}
+Available access modes for the module: RWO.
+{{< /alert >}}
+
 The module supports two operation modes: LVM (Thick) and LVM Thin.
 Each mode has its own features, advantages, and limitations. For more details on the differences, refer to the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvm-thin).
 
