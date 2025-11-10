@@ -1,4 +1,5 @@
 /*
+Copyright 2019 The Kubernetes Authors.
 Copyright 2025 Flant JSC
 
 Licensed under the Apache License, Version 2.0 (the "License");
