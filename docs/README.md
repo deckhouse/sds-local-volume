@@ -32,7 +32,7 @@ For working with snapshots, the [snapshot-controller](../../snapshot-controller/
 {{< /alert >}}
 
 {{< alert level="info" >}}
-Available access modes for the module: RWO.
+Supported access modes for the module: RWO.
 {{< /alert >}}
 
 The module supports two operation modes: LVM (Thick) and LVM Thin.
