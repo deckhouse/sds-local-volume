@@ -66,10 +66,10 @@ nodeSelector:
 Узлы, метки которых включают в себя набор, указанный в настройках, выбираются модулем как целевые для использования. Соответственно, изменяя поле `nodeSelector` Вы можете влиять на список узлов, которые будут использованы модулем.
 
 {{< alert level="warning" >}}
-В поле `nodeSelector` может быть указано любое количество меток, но важно, чтобы каждая из указанных меток присутствовала на узле, который Вы собираетесь использовать для работы с модулем. Именно при наличии всех указанных меток на выбранном узле, произойдет запуск pod-а `sds-local-volume-csi-node`.
+В поле `nodeSelector` может быть указано любое количество меток, но важно, чтобы каждая из указанных меток присутствовала на узле, который Вы собираетесь использовать для работы с модулем. Именно при наличии всех указанных меток на выбранном узле, произойдет запуск pod-а `csi-node`.
 {{< /alert >}}
 
-После добавление меток на узлах должны быть запущены pod-ы `sds-local-volume-csi-node`. Проверить их наличие можно командой:
+После добавление меток на узлах должны быть запущены pod-ы `csi-node`. Проверить их наличие можно командой:
 
 ```shell
  kubectl -n d8-sds-local-volume get pod -owide
@@ -77,7 +77,7 @@ nodeSelector:
 
 ## Почему не удается создать PVC на выбранном узле с помощью модуля?
 
-Пожалуйста, проверьте, что на выбранном узле работает pod `sds-local-volume-csi-node`.
+Пожалуйста, проверьте, что на выбранном узле работает pod `csi-node`.
 
 ```shell
 kubectl -n d8-sds-local-volume get po -owide
@@ -112,13 +112,13 @@ kubectl label node %node-name% %label-from-selector%-
 Для снятия метки необходимо после его ключа вместо значения сразу же поставить знак минуса.
 {{< /alert >}}
 
-В результате pod `sds-local-volume-csi-node` должен быть удален с желаемого узла. Для проверки состояния можно выполнить команду:
+В результате pod `csi-node` должен быть удален с желаемого узла. Для проверки состояния можно выполнить команду:
 
 ```shell
 kubectl -n d8-sds-local-volume get po -owide
 ```
 
-Если pod `sds-local-volume-csi-node` после удаления метки `nodeSelector` все же остался на узле, пожалуйста, убедитесь, что указанные в конфиге `d8-sds-local-volume-controller-config` в `nodeSelector` метки действительно успешно снялись с выбранного узла.
+Если pod `csi-node` после удаления метки `nodeSelector` все же остался на узле, пожалуйста, убедитесь, что указанные в конфиге `d8-sds-local-volume-controller-config` в `nodeSelector` метки действительно успешно снялись с выбранного узла.
 Проверить это можно командой:
 
 ```shell
@@ -201,7 +201,7 @@ kubectl get node %node-name% --show-labels
 1. Проверьте, что на узле, который вы собираетесь вывести из-под управления модуля, не присутствует какой-либо `LVMVolumeGroup` ресурс, используемый в `LocalStorageClass` ресурсах.
     Во избежание непредвиденной потери контроля за уже созданными с помощью модуля томами пользователю необходимо вручную удалить зависимые ресурсы, совершив необходимые операции над томом.
 
-## Я убрал метки с узла, но pod `sds-local-volume-csi-node` остался. Почему так произошло?
+## Я убрал метки с узла, но pod `csi-node` остался. Почему так произошло?
 
 Вероятнее всего, на узле присутствуют `LVMVolumeGroup` ресурсы, которые используются в одном из `LocalStorageClass` ресурсов.
 
@@ -385,3 +385,156 @@ echo "Data migration completed"
     ```
 
     Эта команда выведет список всех снимков и их текущий статус.
+
+## Как создать thin хранилище?
+
+1. Получите все ресурсы [BlockDevice](../../sds-node-configurator/stable/cr.html#blockdevice), которые доступны в вашем кластере:
+
+   ```shell
+   kubectl get bd
+
+   NAME                                           NODE       CONSUMABLE   SIZE           PATH
+   dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa   worker-0   false        100Gi          /dev/nvme1n1
+   dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0   worker-1   false        100Gi          /dev/nvme1n1
+   dev-53d904f18b912187ac82de29af06a34d9ae23199   worker-2   false        100Gi          /dev/nvme1n1
+   ```
+
+1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-0`:
+
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroup
+   metadata:
+    name: "vg-2-on-worker-0"
+   spec:
+     type: Local
+     local:
+       nodeName: "worker-0"
+     blockDeviceSelector:
+       matchExpressions:
+         - key: kubernetes.io/metadata.name
+           operator: In
+           values:
+             - dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa
+     actualVGNameOnTheNode: "vg-2"
+     thinPools:
+     - name: thindata
+       size: 100Gi
+   EOF
+   ```
+
+1. Дождитесь, когда созданный ресурс LVMVolumeGroup перейдет в состояние `Ready`:
+
+   ```shell
+   kubectl get lvg vg-2-on-worker-0 -w
+   ```
+
+   Если ресурс перешел в состояние `Ready`, это значит, что на узле `worker-0` из блочного устройства `/dev/nvme1n1` была создана LVM VG с именем `vg-2`, на которой создан thin пул с именем `thindata`.
+
+1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-1`:
+
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroup
+   metadata:
+     name: "vg-2-on-worker-1"
+   spec:
+     type: Local
+     local:
+       nodeName: "worker-1"
+     blockDeviceSelector:
+       matchExpressions:
+         - key: kubernetes.io/metadata.name
+           operator: In
+           values:
+             - dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0
+     actualVGNameOnTheNode: "vg-2"
+     thinPools:
+     - name: thindata
+       size: 100Gi
+   EOF
+   ```
+
+1. Дождитесь, когда созданный ресурс LVMVolumeGroup перейдет в состояние `Ready`:
+
+   ```shell
+   kubectl get lvg vg-2-on-worker-1 -w
+   ```
+
+   Если ресурс перешел в состояние `Ready`, это значит, что на узле `worker-1` из блочного устройства `/dev/nvme1n1` была создана LVM VG с именем `vg-2`, на которой создан thin пул с именем `thindata`.
+
+1. Создайте ресурс [LVMVolumeGroup](../../sds-node-configurator/stable/cr.html#lvmvolumegroup) для узла `worker-2`:
+
+   ```yaml
+   kubectl apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroup
+   metadata:
+     name: "vg-2-on-worker-2"
+   spec:
+     type: Local
+     local:
+       nodeName: "worker-2"
+     blockDeviceSelector:
+       matchExpressions:
+         - key: kubernetes.io/metadata.name
+           operator: In
+           values:
+             - dev-53d904f18b912187ac82de29af06a34d9ae23199
+     actualVGNameOnTheNode: "vg-2"
+     thinPools:
+     - name: thindata
+       size: 100Gi
+   EOF
+   ```
+
+1. Дождитесь, когда созданный ресурс LVMVolumeGroup перейдет в состояние `Ready`:
+
+   ```shell
+   kubectl get lvg vg-1-on-worker-2 -w
+   ```
+
+   Если ресурс перешел в состояние `Ready`, это значит, что на узле `worker-2` из блочного устройства `/dev/nvme1n1` была создана LVM VG с именем `vg-2`, на которой создан thin пул с именем `thindata`.
+
+1. Создайте ресурс [LocalStorageClass](./cr.html#localstorageclass):
+
+   ```yaml
+   kubectl apply -f -<<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: local-storage-class
+   spec:
+     lvm:
+       lvmVolumeGroups:
+        - name: vg-2-on-worker-0
+          thin:
+            poolName: thindata
+        - name: vg-2-on-worker-1
+          thin:
+            poolName: thindata
+        - name: vg-2-on-worker-2
+          thin:
+            poolName: thindata
+       type: Thin
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+   EOF
+   ```
+
+1. Дождитесь, когда созданный ресурс LocalStorageClass перейдет в состояние `Created`:
+
+   ```shell
+   kubectl get lsc local-storage-class -w
+   ```
+
+1. Проверьте, что соответствующий StorageClass создался:
+
+   ```shell
+   kubectl get sc local-storage-class
+   ```
+
+Теперь пользователи могут создавать PVC, указывая StorageClass с именем `local-storage-class`.
+
