@@ -1,5 +1,6 @@
 ---
-title: "Модуль sds-local-volume: быстрый стар"
+title: "Модуль sds-local-volume: быстрый старт."
+linkTitle: Быстрый старт
 description: "Быстрый старт модуля sds-local-volume."
 weight: 2
 ---
@@ -233,7 +234,7 @@ d8 k -n d8-sds-local-volume get pod -owide
    EOF
    ```
 
-> **Внимание.** Не используйте [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup), которые содержат хотя бы один thin pool, в [LocalStorageClass](./cr.html#localstorageclass) с `type: Thick`.
+   > **Внимание.** Не используйте [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup), которые содержат хотя бы один thin pool, в [LocalStorageClass](./cr.html#localstorageclass) с `type: Thick`.
 
 1. Дождитесь перехода созданного ресурса [LocalStorageClass](./cr.html#localstorageclass) в состояние `Created`:
 

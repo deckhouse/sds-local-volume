@@ -1,5 +1,6 @@
 ---
 title: "The sds-local-volume module: quick start"
+linkTitle: Quick start
 description: "The sds-local-volume quick start."
 weight: 2
 ---
@@ -233,7 +234,7 @@ To configure storage on nodes, follow these steps:
    EOF
    ```
 
-> **Warning.** Do not use [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources that contain at least one thin pool in a [LocalStorageClass](./cr.html#localstorageclass) with `type: Thick`.
+   > **Warning.** Do not use [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources that contain at least one thin pool in a [LocalStorageClass](./cr.html#localstorageclass) with `type: Thick`.
 
 1. Wait for the created [LocalStorageClass](./cr.html#localstorageclass) resource to transition to the `Created` state:
 
