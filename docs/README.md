@@ -6,6 +6,16 @@ weight: 1
 
 The module is designed to manage local block storage based on LVM. It enables creating StorageClasses in Kubernetes using the [LocalStorageClass](cr.html#localstorageclass) resource.
 
+{{< alert level="info" >}}
+Creating StorageClass for the `local.csi.storage.deckhouse.io` CSI driver by users is prohibited.
+
+Available access modes for the module: RWO.
+{{< /alert >}}
+
+{{< alert level="warning" >}}
+The ability to work with volume snapshots is available only in commercial editions of Deckhouse. To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be enabled.
+{{< /alert >}}
+
 ## How the module works
 
 The `sds-local-volume` module uses local disks of cluster nodes to create block storage based on LVM.

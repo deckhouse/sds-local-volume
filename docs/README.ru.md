@@ -6,6 +6,16 @@ weight: 1
 
 Модуль предназначен для управления локальным блочным хранилищем на базе LVM. Он позволяет создавать StorageClass в Kubernetes с помощью ресурса [LocalStorageClass](cr.html#localstorageclass).
 
+{{< alert level="info" >}}
+Создание StorageClass для CSI-драйвера `local.csi.storage.deckhouse.io` пользователем запрещено.
+
+Доступные режимы работы для модуля: RWO.
+{{< /alert >}}
+
+{{< alert level="warning" >}}
+Возможность работы со снимками томов доступна только в коммерческих редакциях Deckhouse. Для работы со снимками томов требуется подключенный модуль [snapshot-controller](/modules/snapshot-controller/).
+{{< /alert >}}
+
 ## Как работает модуль
 
 Модуль `sds-local-volume` использует локальные диски узлов кластера для создания блочного хранилища на базе LVM.
