@@ -60,13 +60,14 @@ spec:
       {{- include "helm_lib_priority_class" (tuple . "cluster-medium") | nindent 6 }}
       {{- include "helm_lib_node_selector" (tuple . "system") | nindent 6 }}
       {{- include "helm_lib_tolerations" (tuple . "system") | nindent 6 }}
-      {{- include "helm_lib_module_container_security_context_pss_restricted_flexible" (dict "ro" true "seccompProfile" true) | nindent 8 }}
+      {{- include "helm_lib_module_pod_security_context_run_as_user_nobody" . | nindent 6 }}
       {{- include "helm_lib_pod_anti_affinity_for_ha" (list . (dict "app" "sds-local-volume-controller")) | nindent 6 }}
       imagePullSecrets:
         - name: {{ .Chart.Name }}-module-registry
       serviceAccountName: controller
       containers:
         - name: sds-local-volume-controller
+          {{- include "helm_lib_module_container_security_context_pss_restricted_flexible" (dict "ro" true "seccompProfile" true) | nindent 10 }}
           image: {{ include "helm_lib_module_image" (list . "sdsLocalVolumeController") }}
           imagePullPolicy: IfNotPresent
           readinessProbe:
@@ -90,12 +91,6 @@ spec:
 {{- if not ( .Values.global.enabledModules | has "vertical-pod-autoscaler-crd") }}
               {{- include "sds_local_volume_controller_resources" . | nindent 14 }}
 {{- end }}
-          securityContext:
-            readOnlyRootFilesystem: true
-            privileged: true
-            seLinuxOptions:
-              level: s0
-              type: spc_t
           env:
             - name: LOG_LEVEL
 {{- if eq .Values.sdsLocalVolume.logLevel "ERROR" }}
