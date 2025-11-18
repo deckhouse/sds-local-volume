@@ -1,0 +1,3 @@
+Changes:
+  - Fix HA-mode, now it works correctly
+  - Removed scheduler functionality, remaining for compatibility with old Deckhouse versions
