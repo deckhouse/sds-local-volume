@@ -458,9 +458,10 @@ Follow these steps:
      kind: LocalStorageClass
      metadata:
        finalizers:
-       - localstorageclass.storage.deckhouse.io
+       - storage.deckhouse.io/local-storage-class-controller
        name: test-sc
      spec:
+       fsType: ext4
        lvm:
          lvmVolumeGroups:
          - name: test-vg
@@ -483,13 +484,15 @@ Follow these steps:
    Example output:
 
    ```console
-   NAME              HEALTH        NODE                         SIZE       ALLOCATED SIZE   VG        AGE
-   lvg-on-worker-0   Operational   node-worker-0   40956Mi    0                test-vg   15d
-   lvg-on-worker-1   Operational   node-worker-1   61436Mi    0                test-vg   15d
-   lvg-on-worker-2   Operational   node-worker-2   122876Mi   0                test-vg   15d
-   lvg-on-worker-3   Operational   node-worker-3   307196Mi   0                test-vg   15d
-   lvg-on-worker-4   Operational   node-worker-4   307196Mi   0                test-vg   15d
-   lvg-on-worker-5   Operational   node-worker-5   204796Mi   0                test-vg   15d
+   NAME                 THINPOOLS   CONFIGURATION APPLIED   PHASE   NODE                   SIZE     ALLOCATED SIZE   VG    AGE
+   vg0-on-astra-1-8     0/0         True                    Ready   astra-1-8              5116Mi   0                vg0   180d
+   vg0-on-master-0      0/0         True                    Ready   p-master-0             5116Mi   0                vg0   182d
+   vg0-on-redos-murom   0/0         True                    Ready   redos-murom            5116Mi   0                vg0   32d
+   vg0-on-worker-1      0/0         True                    Ready   p-worker-1             5116Mi   0                vg0   225d
+   vg0-on-worker-2      0/0         True                    Ready   p-worker-2             5116Mi   0                vg0   225d
+   vg1-on-redos-murom   1/1         True                    Ready   redos-murom            3068Mi   3008Mi           vg1   32d
+   vg1-on-worker-1      1/1         True                    Ready   p-worker-1             3068Mi   3068Mi           vg1   190d
+   vg1-on-worker-2      1/1         True                    Ready   p-worker-2             3068Mi   3068Mi           vg1   190d
    ```
 
 1. Verify that the node has no [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources that are used in [LocalStorageClass](cr.html#localstorageclass) resources.

@@ -13,7 +13,7 @@ Available access modes for the module: RWO.
 {{< /alert >}}
 
 {{< alert level="warning" >}}
-The ability to work with volume snapshots is available only in commercial editions of Deckhouse Kubernetes Platform. To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be enabled.
+To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be connected. The ability to work with volume snapshots is available only in commercial editions of Deckhouse and only when using LVM-thin volumes.
 {{< /alert >}}
 
 ## How the module works
@@ -28,7 +28,7 @@ The `sds-local-volume` module is suitable for the following scenarios:
 
 - Maximum storage performance comparable to local disk performance is required (LVM (Thick) mode).
 - Applications need fast access to data on local node disks without network latency.
-- Disk space needs to be used efficiently through on-demand volume allocation (Thin mode).
+- Disk space needs to be used efficiently through on-demand volume allocation (LVM-thin mode).
 
 The module is not suitable for scenarios that require:
 

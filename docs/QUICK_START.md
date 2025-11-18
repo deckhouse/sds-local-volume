@@ -5,10 +5,6 @@ description: "The sds-local-volume quick start."
 weight: 2
 ---
 
-{{< alert level="warning" >}}
-To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be connected. The ability to work with volume snapshots is available only in commercial editions of Deckhouse and only when using LVM-thin volumes.
-{{< /alert >}}
-
 The module supports two operation modes: LVM (Thick) and LVM-thin. Each mode has its own features, advantages, and limitations. For more details on the differences between modes, see the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvm-thin).
 
 ## Quick start
