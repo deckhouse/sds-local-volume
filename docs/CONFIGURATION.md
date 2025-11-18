@@ -25,7 +25,7 @@ All commands must be run on a machine with access to the Kubernetes API and admi
      enabled: true
      version: 1
      settings:
-       enableThinProvisioning: true # if you plan to use LVM Thin volumes
+       enableThinProvisioning: true # if you plan to use LVM-thin volumes
    EOF
    ```
 

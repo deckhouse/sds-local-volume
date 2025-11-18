@@ -122,14 +122,14 @@ echo "Data migration completed"
 ## Создание снимков томов
 
 {{< alert level="warning" >}}
-Возможность работы со снимками томов доступна только в коммерческих редакциях Deckhouse и только при использовании LVM Thin-томов.
+Возможность работы со снимками томов доступна только в коммерческих редакциях Deckhouse Kubernetes Platform и только при использовании LVM-thin томов.
 
 Для работы со снимками томов требуется подключенный модуль [snapshot-controller](/modules/snapshot-controller/).
 {{< /alert >}}
 
 Подробную информацию о снимках см. в [документации Kubernetes](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).
 
-Для того, чтобы создать снимок тома, выполните следующие действия:
+Для того чтобы создать снимок тома, выполните следующие действия:
 
 1. Включите модуль `snapshot-controller`:
 
@@ -137,7 +137,7 @@ echo "Data migration completed"
    d8 s module enable snapshot-controller
    ```
 
-1. Для того, чтобы создать снимок тома, выполните следующую команду с необходимыми параметрами:
+1. Для того чтобы создать снимок тома, выполните следующую команду с необходимыми параметрами:
 
    ```shell
    d8 k apply -f -<<EOF
@@ -275,7 +275,11 @@ d8 k annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kube
 
    ```shell
    d8 k get bd
+   ```
 
+   Пример вывода:
+
+   ```console
    NAME                                           NODE       CONSUMABLE   SIZE           PATH
    dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa   worker-0   false        100Gi          /dev/nvme1n1
    dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0   worker-1   false        100Gi          /dev/nvme1n1

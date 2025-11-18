@@ -122,7 +122,7 @@ echo "Data migration completed"
 ## Creating volume snapshots
 
 {{< alert level="warning" >}}
-The ability to work with volume snapshots is available only in commercial editions of Deckhouse and only when using LVM Thin volumes.
+The ability to work with volume snapshots is available only in commercial editions of Deckhouse Kubernetes Platform and only when using LVM-thin volumes.
 
 To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be connected.
 {{< /alert >}}
@@ -275,7 +275,11 @@ The node itself will have the `storage.deckhouse.io/sds-local-volume-need-manual
 
    ```shell
    d8 k get bd
+   ```
 
+   Example output:
+
+   ```console
    NAME                                           NODE       CONSUMABLE   SIZE           PATH
    dev-ef4fb06b63d2c05fb6ee83008b55e486aa1161aa   worker-0   false        100Gi          /dev/nvme1n1
    dev-7e4df1ddf2a1b05a79f9481cdf56d29891a9f9d0   worker-1   false        100Gi          /dev/nvme1n1

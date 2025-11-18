@@ -25,7 +25,7 @@ weight: 3
      enabled: true
      version: 1
      settings:
-       enableThinProvisioning: true # если планируете использовать LVM Thin-тома
+       enableThinProvisioning: true # если планируете использовать LVM-thin тома
    EOF
    ```
 

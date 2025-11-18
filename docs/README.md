@@ -13,14 +13,14 @@ Available access modes for the module: RWO.
 {{< /alert >}}
 
 {{< alert level="warning" >}}
-The ability to work with volume snapshots is available only in commercial editions of Deckhouse. To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be enabled.
+The ability to work with volume snapshots is available only in commercial editions of Deckhouse Kubernetes Platform. To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be enabled.
 {{< /alert >}}
 
 ## How the module works
 
 The `sds-local-volume` module uses local disks of cluster nodes to create block storage based on LVM.
 
-The module supports two operation modes: **LVM (Thick)** and **LVM Thin**. For more details on the differences between modes, see the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvm-thin).
+The module supports two operation modes: **LVM (Thick)** and **LVM-thin**. For more details on the differences between modes, see the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvm-thin).
 
 ## When to use the module
 
@@ -40,7 +40,7 @@ The module is not suitable for scenarios that require:
 The module has the following system requirements and recommendations:
 
 - It is recommended to use standard Linux kernels included in [supported distributions](/products/kubernetes-platform/documentation/v1/reference/supported_versions.html#linux).
-- It is not recommended to use other SDS (Software Defined Storage) solutions to provide disks for Deckhouse SDS.
+- It is not recommended to use other SDS (Software Defined Storage) solutions to provide SDS disks for Deckhouse Kubernetes Platform.
 
 ## Additional materials
 

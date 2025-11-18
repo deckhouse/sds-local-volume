@@ -4,14 +4,14 @@ description: "The sds-local-volume module FAQ"
 weight: 6
 ---
 
-## When to use LVM and when to use LVM Thin?
+## When to use LVM and when to use LVM-thin?
 
 Use LVM (Thick) if you need maximum performance comparable to the drive's performance. LVM (Thick) is easier to configure.
 
-Use LVM Thin if you need to use overprovisioning. LVM Thin performance is lower than LVM.
+Use LVM-thin if you need to use overprovisioning. LVM-thin performance is lower than LVM.
 
 {{< alert level="warning" >}}
-Use overprovisioning in LVM Thin with caution. Monitor the available space in the pool. The cluster monitoring system has separate events when the pool reaches 20%, 10%, 5%, and 1% free space.
+Use overprovisioning in LVM-thin with caution. Monitor the available space in the pool. The cluster monitoring system has separate events when the pool reaches 20%, 10%, 5%, and 1% free space.
 
 If there is no free space in the pool, module degradation and data loss may occur.
 {{< /alert >}}

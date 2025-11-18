@@ -6,10 +6,10 @@ weight: 2
 ---
 
 {{< alert level="warning" >}}
-Для работы со снимками томов требуется подключенный модуль [snapshot-controller](/modules/snapshot-controller/). Возможность работы со снимками томов доступна только в коммерческих редакциях Deckhouse и только при использовании LVM Thin-томов.
+Для работы со снимками томов требуется подключенный модуль [snapshot-controller](/modules/snapshot-controller/). Возможность работы со снимками томов доступна только в коммерческих редакциях Deckhouse Kubernetes Platform и только при использовании LVM-thin томов.
 {{< /alert >}}
 
-Модуль поддерживает два режима работы: LVM (Thick) и LVM Thin. Каждый режим имеет свои особенности, преимущества и ограничения. См. подробнее о различиях между режимами в [FAQ](./faq.html#когда-следует-использовать-lvm-а-когда-lvm-thin).
+Модуль поддерживает два режима работы: LVM (Thick) и LVM-thin. Каждый режим имеет свои особенности, преимущества и ограничения. См. подробнее о различиях между режимами в [FAQ](./faq.html#когда-следует-использовать-lvm-а-когда-lvm-thin).
 
 ## Быстрый старт
 
@@ -35,7 +35,7 @@ weight: 2
      enabled: true
      version: 1
      settings:
-       enableThinProvisioning: true # Если планируете использовать LVM Thin-тома
+       enableThinProvisioning: true # Если планируете использовать LVM-thin тома
    EOF
    ```
 
@@ -57,7 +57,7 @@ weight: 2
      enabled: true
      version: 1
      settings:
-       enableThinProvisioning: true # если планируете использовать LVM Thin-тома
+       enableThinProvisioning: true # если планируете использовать LVM-thin тома
    EOF
    ```
 
@@ -88,7 +88,7 @@ d8 k -n d8-sds-local-volume get pod -owide
 
 ### Настройка хранилища на узлах
 
-Для настройки хранилища на узлах создайте группы томов LVM с использованием ресурсов [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup). В данном примере создается Thick-хранилище. Инструкции по созданию Thin-хранилища см. в разделе [Создание thin-хранилища](./usage.html#создание-thin-хранилища).
+Для настройки хранилища на узлах создайте группы томов LVM с использованием ресурсов [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup). В данном примере создается Thick-хранилище. Инструкции по созданию thin-хранилища см. в разделе [Создание thin-хранилища](./usage.html#создание-thin-хранилища).
 
 {{< alert level="warning" >}}
 Перед созданием ресурса [LVMVolumeGroup](/modules/sds-node-configurator/stable/cr.html#lvmvolumegroup) убедитесь, что на данном узле запущен под `csi-node`. Для этого выполните команду:

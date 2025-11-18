@@ -6,10 +6,10 @@ weight: 2
 ---
 
 {{< alert level="warning" >}}
-To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be connected. The ability to work with volume snapshots is available only in commercial editions of Deckhouse and only when using LVM Thin volumes.
+To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be connected. The ability to work with volume snapshots is available only in commercial editions of Deckhouse and only when using LVM-thin volumes.
 {{< /alert >}}
 
-The module supports two operation modes: LVM (Thick) and LVM Thin. Each mode has its own features, advantages, and limitations. For more details on the differences between modes, see the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvm-thin).
+The module supports two operation modes: LVM (Thick) and LVM-thin. Each mode has its own features, advantages, and limitations. For more details on the differences between modes, see the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvm-thin).
 
 ## Quick start
 
@@ -35,7 +35,7 @@ All commands below must be run on a machine with access to the Kubernetes API an
      enabled: true
      version: 1
      settings:
-       enableThinProvisioning: true # If you plan to use LVM Thin volumes
+       enableThinProvisioning: true # If you plan to use LVM-thin volumes
    EOF
    ```
 
@@ -57,7 +57,7 @@ All commands below must be run on a machine with access to the Kubernetes API an
      enabled: true
      version: 1
      settings:
-       enableThinProvisioning: true # if you plan to use LVM Thin volumes
+       enableThinProvisioning: true # If you plan to use LVM-thin volumes
    EOF
    ```
 
@@ -88,7 +88,7 @@ Scheduling of `csi-node` pods is controlled by special labels (`nodeSelector`) t
 
 ### Configuring storage on nodes
 
-To configure storage on nodes, create LVM volume groups using [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources. This example creates Thick storage. For instructions on creating Thin storage, see the [Creating thin storage](./usage.html#creating-thin-storage) section.
+To configure storage on nodes, create LVM volume groups using [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources. This example creates Thick storage. For instructions on creating thin storage, see the [Creating thin storage](./usage.html#creating-thin-storage) section.
 
 {{< alert level="warning" >}}
 Before creating an [LVMVolumeGroup](/modules/sds-node-configurator/stable/cr.html#lvmvolumegroup) resource, ensure that the `csi-node` pod is running on the node. To do this, run the command:
