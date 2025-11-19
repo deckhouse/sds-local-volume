@@ -13,7 +13,7 @@ Available access modes for the module: RWO.
 {{< /alert >}}
 
 {{< alert level="warning" >}}
-To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be connected. The ability to work with volume snapshots is available only in commercial editions of Deckhouse and only when using LVM-thin volumes.
+To work with volume snapshots, the [snapshot-controller](/modules/snapshot-controller/) module must be connected. The ability to work with volume snapshots is available only in commercial editions of Deckhouse Kubernetes Platform and only when using LVM-thin volumes.
 {{< /alert >}}
 
 ## How the module works
