@@ -1,6 +1,13 @@
 linters-settings:
   container:
     exclude-rules:
+      no-new-privileges:
+        - kind: DaemonSet
+          name: csi-node
+          container: node
+        - kind: DaemonSet
+          name: csi-node
+          container: node-driver-registrar
       liveness-probe:
         - kind: Deployment
           name: csi-controller
