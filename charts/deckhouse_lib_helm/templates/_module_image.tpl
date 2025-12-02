@@ -119,15 +119,4 @@
   {{- printf "%s" $context.Values }}
   {{- printf "%s" $context.Values.storageFoundation }}
   {{- /* Try to get from storage foundation module if enabled */}}
-  {{- if $context.Values.global.enabledModules | has "storage-foundation" }}
-    {{- $host := trimAll "/" (index $context.Values.storageFoundation "registry" "base") }}
-    {{- $registryBase := join "/" (list $host "modules" "storage-foundation" ) }}
-    {{- $imageDigest = index $context.Values.global.modulesImages.digests.storageFoundation $containerName | default "" }}
-    {{- printf "%s@%s" $registryBase $imageDigest }}
-  {{- /* Fallback to common module if not found in storage foundation */}}
-  {{- else }}
-    {{- $registryBase := $context.Values.global.modulesImages.registry.base }}
-    {{- $imageDigest = index $context.Values.global.modulesImages.digests "common" $containerName | default "" }}
-    {{- printf "%s@%s" $registryBase $imageDigest }}
-  {{- end }}
 {{- end }}
