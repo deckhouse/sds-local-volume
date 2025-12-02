@@ -116,6 +116,7 @@
   {{- $context := index . 0 }} {{- /* Template context with .Values, .Chart, etc */ -}}
   {{- $containerName := index . 1 | trimAll "\"" }} {{- /* Container name */ -}}
   {{- $imageDigest := "" }}
-  {{- printf "%s" (index $context.Values "storageFoundation") }}
+  {{- $moduleName := "storageFoundation"}}
+  {{- printf "%s" (index $context.Values $moduleName) }}
   {{- /* Try to get from storage foundation module if enabled */}}
 {{- end }}
