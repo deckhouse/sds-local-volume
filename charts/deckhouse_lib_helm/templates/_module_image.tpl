@@ -116,6 +116,7 @@
   {{- $context := index . 0 }} {{- /* Template context with .Values, .Chart, etc */ -}}
   {{- $containerName := index . 1 | trimAll "\"" }} {{- /* Container name */ -}}
   {{- $imageDigest := "" }}
+  {{- printf $context.Values.global.enabledModules }}
   {{- /* Try to get from storage foundation module if enabled */}}
   {{- if $context.Values.global.enabledModules | has "storage-foundation" }}
     {{- $storageFoundationModuleName := (include "helm_lib_module_camelcase_name" "storage-foundation") }}
