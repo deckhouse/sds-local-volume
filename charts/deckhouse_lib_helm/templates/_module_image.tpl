@@ -110,20 +110,31 @@
   {{- printf "%s" $imageDigest }}
 {{- end }}
 
-{{- /* Usage: {{ include "helm_lib_csi_image_with_common_fallback" (list . "<container-name>" "<raw-container-name>") }} */ -}}
+{{- /* Usage: {{ include "helm_lib_csi_image_with_common_fallback" (list . "<raw-container-name>" "<semver>") }} */ -}}
 {{- /* returns image name from storage foundation module if enabled, otherwise from common module */ -}}
 {{- define "helm_lib_csi_image_with_common_fallback" }}
   {{- $context := index . 0 }} {{- /* Template context with .Values, .Chart, etc */ -}}
-  {{- $containerName := index . 1 | trimAll "\"" }} {{- /* Container name */ -}}
-  {{- $rawContainerName := index . 2 | trimAll "\"" }} {{- /* Container raw name */ -}}
+  {{- $rawContainerName := index . 1 | trimAll "\"" }} {{- /* Container raw name */ -}}
+  {{- $kubernetesSemVer := index . 2 | trimAll "\"" }} {{- /* Kubernetes version */ -}}
   {{- $imageDigest := "" }}
   {{- $registryBase := $context.Values.global.modulesImages.registry.base }}
   {{- /* Try to get from storage foundation module if enabled */}}
   {{- if $context.Values.global.enabledModules | has "storage-foundation" }}
     {{- $registryBase = join "/" (list $registryBase "modules" "storage-foundation" ) }}
-    {{- $imageDigest = index $context.Values.global.modulesImages.digests "storageFoundation" $rawContainerName | default "" }}
+    {{- range $currentMinor := seq $kubernetesSemVer.Minor 0 -1 }}
+      {{- if not $imageDigest }}
+        {{- $containerName := join "" (list $rawContainerName $kubernetesSemVer.Major $currentMinor) }}
+        {{- printf $containerName }}
+        {{- $imageDigest := index $context.Values.global.modulesImages.digests "storageFoundation" $containerName | default "" }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- if not $found }}
+      {{- $imageDigest = index $storageFoundationDigests $rawContainerName | default "" }}
+    {{- end }}
   {{- /* Fallback to common module if not found in storage foundation */}}
   {{- else }}
+    {{- $containerName := join "" (list $rawContainerName $kubernetesSemVer.Major $kubernetesSemVer.Minor) }}
     {{- $imageDigest = index $context.Values.global.modulesImages.digests "common" $containerName | default "" }}
   {{- end }}
   {{- if $imageDigest }}
