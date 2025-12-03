@@ -78,7 +78,7 @@ memory: 50Mi
   {{- $kubernetesSemVer := semver $context.Values.global.discovery.kubernetesVersion }}
 
   {{- $provisionerImageName := join "" (list "csiExternalProvisioner" $kubernetesSemVer.Major $kubernetesSemVer.Minor) }}
-  {{- $provisionerImage := include "helm_lib_csi_image_with_common_fallback" (list $context $provisionerImageNameioner") }}
+  {{- $provisionerImage := include "helm_lib_csi_image_with_common_fallback" (list $context $provisionerImageName "csiExternalProvisioner") }}
 
   {{- $attacherImageName := join "" (list "csiExternalAttacher" $kubernetesSemVer.Major $kubernetesSemVer.Minor) }}
   {{- $attacherImage := include "helm_lib_csi_image_with_common_fallback" (list $context $attacherImageName "csiExternalAttacher") }}
