@@ -130,7 +130,7 @@
       {{- end }}
     {{- end }}
     {{- if not $imageDigest }}
-      {{- $imageDigest = index $storageFoundationDigests $rawContainerName | default "" }}
+      {{- $imageDigest = index $context.Values.global.modulesImages.digests "storageFoundation" $rawContainerName | default "" }}
     {{- end }}
   {{- /* Fallback to common module if not found in storage foundation */}}
   {{- else }}
