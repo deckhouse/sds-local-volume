@@ -129,7 +129,7 @@
         {{- end }}
       {{- end }}
     {{- end }}
-    {{- if not $found }}
+    {{- if not $imageDigest }}
       {{- $imageDigest = index $storageFoundationDigests $rawContainerName | default "" }}
     {{- end }}
   {{- /* Fallback to common module if not found in storage foundation */}}
