@@ -115,7 +115,7 @@
 {{- define "helm_lib_csi_image_with_common_fallback" }}
   {{- $context := index . 0 }} {{- /* Template context with .Values, .Chart, etc */ -}}
   {{- $rawContainerName := index . 1 | trimAll "\"" }} {{- /* Container raw name */ -}}
-  {{- $kubernetesSemVer := index . 2 | trimAll "\"" }} {{- /* Kubernetes version */ -}}
+  {{- $kubernetesSemVer := index . 2 }} {{- /* Kubernetes semantic version */ -}}
   {{- $imageDigest := "" }}
   {{- $registryBase := $context.Values.global.modulesImages.registry.base }}
   {{- /* Try to get from storage foundation module if enabled */}}
