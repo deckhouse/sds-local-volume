@@ -123,11 +123,12 @@
     {{- $registryBase = join "/" (list $registryBase "modules" "storage-foundation" ) }}
     {{- $storageFoundationDigests := index $context.Values.global.modulesImages.digests "storageFoundation" | default dict }}
     {{- $currentMinor := int $kubernetesSemVer.Minor }}
+    {{- $kubernetesMajor := int $kubernetesSemVer.Major }}
     {{- /* Iterate from currentMinor down to 0: use offset from 0 to currentMinor, then calculate minorVersion = currentMinor - offset */}}
-    {{- range $offset := until (add $currentMinor 1) }}
+    {{- range $offset := until (int (add $currentMinor 1)) }}
       {{- if not $imageDigest }}
-        {{- $minorVersion := sub $currentMinor $offset }}
-        {{- $containerName := join "" (list $rawContainerName $kubernetesSemVer.Major $minorVersion) }}
+        {{- $minorVersion := int (sub $currentMinor $offset) }}
+        {{- $containerName := join "" (list $rawContainerName $kubernetesMajor $minorVersion) }}
         {{- $digest := index $storageFoundationDigests $containerName | default "" }}
         {{- if $digest }}
           {{- $imageDigest = $digest }}
