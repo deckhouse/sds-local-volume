@@ -121,15 +121,22 @@
   {{- /* Try to get from storage foundation module if enabled */}}
   {{- if $context.Values.global.enabledModules | has "storage-foundation" }}
     {{- $registryBase = join "/" (list $registryBase "modules" "storage-foundation" ) }}
-    {{- range $currentMinor := seq $kubernetesSemVer.Minor 0 -1 }}
+    {{- $storageFoundationDigests := index $context.Values.global.modulesImages.digests "storageFoundation" | default dict }}
+    {{- $currentMinor := int $kubernetesSemVer.Minor }}
+    {{- /* Iterate from currentMinor down to 0: use offset from 0 to currentMinor, then calculate minorVersion = currentMinor - offset */}}
+    {{- range $offset := until (add $currentMinor 1) }}
       {{- if not $imageDigest }}
-        {{- $containerName := join "" (list $rawContainerName $kubernetesSemVer.Major $currentMinor) }}
-        {{- printf $containerName }}
-        {{- $imageDigest := index $context.Values.global.modulesImages.digests "storageFoundation" $containerName | default "" }}
+        {{- $minorVersion := sub $currentMinor $offset }}
+        {{- $containerName := join "" (list $rawContainerName $kubernetesSemVer.Major $minorVersion) }}
+        {{- $digest := index $storageFoundationDigests $containerName | default "" }}
+        {{- if $digest }}
+          {{- $imageDigest = $digest }}
+        {{- end }}
       {{- end }}
     {{- end }}
+    {{- /* Fallback to base container name if no versioned image found (when minor reached 0) */}}
     {{- if not $imageDigest }}
-      {{- $imageDigest = index $context.Values.global.modulesImages.digests "storageFoundation" $rawContainerName | default "" }}
+      {{- $imageDigest = index $storageFoundationDigests $rawContainerName | default "" }}
     {{- end }}
   {{- /* Fallback to common module if not found in storage foundation */}}
   {{- else }}
