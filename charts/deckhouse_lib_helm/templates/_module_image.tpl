@@ -126,7 +126,6 @@
         {{- $containerName := join "" (list $rawContainerName $kubernetesSemVer.Major $currentMinor) }}
         {{- printf $containerName }}
         {{- $imageDigest := index $context.Values.global.modulesImages.digests "storageFoundation" $containerName | default "" }}
-        {{- end }}
       {{- end }}
     {{- end }}
     {{- if not $imageDigest }}
