@@ -128,7 +128,7 @@
     {{- range $offset := until (int (add $currentMinor 1)) }}
       {{- if not $imageDigest }}
         {{- $minorVersion := int (sub $currentMinor $offset) }}
-        {{- $containerName := join "" (list $rawContainerName $kubernetesMajor $minorVersion) }}
+        {{- $containerName := join "" (list $rawContainerName "ForK8SGE" $kubernetesMajor $minorVersion) }}
         {{- $digest := index $storageFoundationDigests $containerName | default "" }}
         {{- if $digest }}
           {{- $imageDigest = $digest }}
