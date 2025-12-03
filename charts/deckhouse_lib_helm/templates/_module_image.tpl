@@ -110,12 +110,12 @@
   {{- printf "%s" $imageDigest }}
 {{- end }}
 
-{{- /* Usage: {{ include "helm_lib_csi_image_with_common_fallback" (list . "<container-name>") }} */ -}}
+{{- /* Usage: {{ include "helm_lib_csi_image_with_common_fallback" (list . "<container-name>" "<raw-container-name>") }} */ -}}
 {{- /* returns image name from storage foundation module if enabled, otherwise from common module */ -}}
 {{- define "helm_lib_csi_image_with_common_fallback" }}
   {{- $context := index . 0 }} {{- /* Template context with .Values, .Chart, etc */ -}}
   {{- $containerName := index . 1 | trimAll "\"" }} {{- /* Container name */ -}}
-  {{- $rawContainerName := index . 2 | trimAll "\"" }} {{- /* Container name */ -}}
+  {{- $rawContainerName := index . 2 | trimAll "\"" }} {{- /* Container raw name */ -}}
   {{- $imageDigest := "" }}
   {{- $registryBase := $context.Values.global.modulesImages.registry.base }}
   {{- /* Try to get from storage foundation module if enabled */}}
