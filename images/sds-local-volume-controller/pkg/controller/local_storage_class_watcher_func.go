@@ -740,7 +740,14 @@ func updateStorageClass(lsc *slv.LocalStorageClass, oldSC *v1.StorageClass) (*v1
 	}
 
 	if oldSC.Annotations != nil {
-		newSC.Annotations = oldSC.Annotations
+		if newSC.Annotations == nil {
+			newSC.Annotations = make(map[string]string)
+		}
+		for k, v := range oldSC.Annotations {
+			if _, exists := newSC.Annotations[k]; !exists {
+				newSC.Annotations[k] = v
+			}
+		}
 	}
 
 	return newSC, nil
