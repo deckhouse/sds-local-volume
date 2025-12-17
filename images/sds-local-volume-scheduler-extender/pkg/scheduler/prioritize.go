@@ -120,8 +120,13 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 		s.log.Trace(fmt.Sprintf("[prioritize] prioritizeed managed PVC %s/%s", pvc.Namespace, pvc.Name))
 	}
 
+	managedSCs := filterNotManagedStorageClasses(s.log, managedPVCs, scs)
+	for _, sc := range managedSCs {
+		s.log.Trace(fmt.Sprintf("[prioritize] filtered managed StorageClass %s", sc.Name))
+	}
+
 	s.log.Debug(fmt.Sprintf("[prioritize] starts to extract pvcRequests size for Pod %s/%s", inputData.Pod.Namespace, inputData.Pod.Name))
-	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, managedPVCs, scs)
+	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, managedPVCs, managedSCs)
 	if err != nil {
 		s.log.Error(err, fmt.Sprintf("[prioritize] unable to extract request size for Pod %s/%s", inputData.Pod.Namespace, inputData.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -129,7 +134,7 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 	s.log.Debug(fmt.Sprintf("[prioritize] successfully extracted the pvcRequests size for Pod %s/%s", inputData.Pod.Namespace, inputData.Pod.Name))
 
 	s.log.Debug(fmt.Sprintf("[prioritize] starts to score the nodes for Pod %s/%s", inputData.Pod.Namespace, inputData.Pod.Name))
-	result, err := scoreNodes(s.log, s.cache, &nodeNames, managedPVCs, scs, pvcRequests, s.defaultDivisor)
+	result, err := scoreNodes(s.log, s.cache, &nodeNames, managedPVCs, managedSCs, pvcRequests, s.defaultDivisor)
 	if err != nil {
 		s.log.Error(err, fmt.Sprintf("[prioritize] unable to score nodes for Pod %s/%s", inputData.Pod.Namespace, inputData.Pod.Name))
 		http.Error(w, "bad request", http.StatusBadRequest)
