@@ -1,0 +1,4 @@
+Changes:
+  - Documentation fixes
+  - Fixes in scheduler, corrected behavior when working with other provisioners
+  - Bug fixes in controller
