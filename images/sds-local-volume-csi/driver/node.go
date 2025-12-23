@@ -629,22 +629,16 @@ func (d *Driver) NodeExpandVolume(_ context.Context, request *csi.NodeExpandVolu
 
 		// Expand the file if needed
 		if volumeInfo.Size < requestedBytes {
-			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Expanding RawFile from %d to %d bytes", volumeID, volumeInfo.Size, requestedBytes))
+			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Expanding RawFile from %d to %d bytes (online resize)", volumeID, volumeInfo.Size, requestedBytes))
 
 			// Use non-sparse expansion to maintain data integrity
+			// ExpandVolume automatically refreshes the loop device via losetup -c
 			if err := d.rawfileManager.ExpandVolume(volumeID, requestedBytes, false); err != nil {
 				d.log.Error(err, fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Failed to expand RawFile volume", volumeID))
 				return nil, status.Errorf(codes.Internal, "Failed to expand RawFile volume: %v", err)
 			}
 
-			// Rescan the loop device to pick up the new size
-			rawFilePath := d.rawfileManager.GetVolumePath(volumeID)
-			if err := d.rawfileManager.RescanLoopDevice(rawFilePath); err != nil {
-				d.log.Error(err, fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Failed to rescan loop device", volumeID))
-				return nil, status.Errorf(codes.Internal, "Failed to rescan loop device: %v", err)
-			}
-
-			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] RawFile expanded successfully", volumeID))
+			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] RawFile file expanded and loop device refreshed", volumeID))
 		} else {
 			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] RawFile already at or above requested size", volumeID))
 		}
