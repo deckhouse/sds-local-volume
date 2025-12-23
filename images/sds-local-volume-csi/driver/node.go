@@ -614,13 +614,53 @@ func (d *Driver) NodeExpandVolume(_ context.Context, request *csi.NodeExpandVolu
 		return nil, status.Error(codes.InvalidArgument, "Volume Path cannot be empty")
 	}
 
+	requestedBytes := request.GetCapacityRange().GetRequiredBytes()
+
+	// Check if this is a RawFile volume by checking if the rawfile exists
+	if d.rawfileManager.VolumeExists(volumeID) {
+		d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Detected RawFile volume, expanding file to %d bytes", volumeID, requestedBytes))
+
+		// Get current volume info
+		volumeInfo, err := d.rawfileManager.GetVolumeInfo(volumeID)
+		if err != nil {
+			d.log.Error(err, fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Failed to get RawFile volume info", volumeID))
+			return nil, status.Errorf(codes.Internal, "Failed to get RawFile volume info: %v", err)
+		}
+
+		// Expand the file if needed
+		if volumeInfo.Size < requestedBytes {
+			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Expanding RawFile from %d to %d bytes", volumeID, volumeInfo.Size, requestedBytes))
+
+			// Use non-sparse expansion to maintain data integrity
+			if err := d.rawfileManager.ExpandVolume(volumeID, requestedBytes, false); err != nil {
+				d.log.Error(err, fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Failed to expand RawFile volume", volumeID))
+				return nil, status.Errorf(codes.Internal, "Failed to expand RawFile volume: %v", err)
+			}
+
+			// Rescan the loop device to pick up the new size
+			rawFilePath := d.rawfileManager.GetVolumePath(volumeID)
+			if err := d.rawfileManager.RescanLoopDevice(rawFilePath); err != nil {
+				d.log.Error(err, fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Failed to rescan loop device", volumeID))
+				return nil, status.Errorf(codes.Internal, "Failed to rescan loop device: %v", err)
+			}
+
+			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] RawFile expanded successfully", volumeID))
+		} else {
+			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] RawFile already at or above requested size", volumeID))
+		}
+	}
+
+	// Resize the filesystem (works for both LVM and RawFile)
 	err := d.storeManager.ResizeFS(volumePath)
 	if err != nil {
 		d.log.Error(err, "d.mounter.ResizeFS:")
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return &csi.NodeExpandVolumeResponse{}, nil
+	d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Volume expanded successfully", volumeID))
+	return &csi.NodeExpandVolumeResponse{
+		CapacityBytes: requestedBytes,
+	}, nil
 }
 
 func (d *Driver) NodeGetCapabilities(_ context.Context, request *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
