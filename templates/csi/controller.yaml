@@ -95,9 +95,16 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- end }}
 
 {{- define "csi_additional_node_volumes" }}
+- name: rawfile-data-dir
+  hostPath:
+    path: {{ .Values.sdsLocalVolume.rawFileDefaultDataDir | quote }}
+    type: DirectoryOrCreate
 {{- end }}
 
 {{- define "csi_additional_node_volume_mounts" }}
+- name: rawfile-data-dir
+  mountPath: {{ .Values.sdsLocalVolume.rawFileDefaultDataDir | quote }}
+  mountPropagation: Bidirectional
 {{- end }}
 
 
