@@ -5,7 +5,7 @@ description: "Быстрый старт модуля sds-local-volume."
 weight: 2
 ---
 
-Модуль поддерживает два режима работы: LVM (Thick) и LVM-thin. Каждый режим имеет свои особенности, преимущества и ограничения. См. подробнее о различиях между режимами в [FAQ](./faq.html#когда-следует-использовать-lvm-а-когда-lvm-thin).
+Модуль поддерживает три режима работы: LVM (Thick), LVM-thin и RawFile. Каждый режим имеет свои особенности, преимущества и ограничения. См. подробнее о различиях между режимами LVM в [FAQ](./faq.html#когда-следует-использовать-lvm-а-когда-lvm-thin). Информация о RawFile-томах доступна в разделе [Использование RawFile-томов](./usage.html#использование-rawfile-томов).
 
 ## Быстрый старт
 
@@ -243,3 +243,91 @@ d8 k -n d8-sds-local-volume get pod -owide
    ```
 
 После появления StorageClass с именем `local-storage-class` настройка модуля `sds-local-volume` завершена. Теперь можно создавать Persistent Volume Claim (PVC), указывая StorageClass с именем `local-storage-class`.
+
+## Быстрый старт с RawFile (без LVM)
+
+Если вы не хотите использовать LVM или у вас нет выделенных блочных устройств, можно использовать RawFile-тома. RawFile использует обычные файлы на файловой системе узла, смонтированные как loop-устройства.
+
+### Создание RawFile-хранилища
+
+1. После включения модулей (как описано выше) создайте ресурс [LocalStorageClass](./cr.html#localstorageclass) с конфигурацией RawFile:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: rawfile-storage
+   spec:
+     rawFile:
+       dataDir: /var/lib/sds-local-volume/rawfile
+       sparse: false
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+     fsType: ext4
+   EOF
+   ```
+
+1. Дождитесь перехода ресурса [LocalStorageClass](./cr.html#localstorageclass) в состояние `Created`:
+
+   ```shell
+   d8 k get lsc rawfile-storage -w
+   ```
+
+1. Проверьте, что создан соответствующий StorageClass:
+
+   ```shell
+   d8 k get sc rawfile-storage
+   ```
+
+### Создание тестового PVC и Pod
+
+1. Создайте PersistentVolumeClaim:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: v1
+   kind: PersistentVolumeClaim
+   metadata:
+     name: test-rawfile-pvc
+   spec:
+     accessModes:
+       - ReadWriteOnce
+     storageClassName: rawfile-storage
+     resources:
+       requests:
+         storage: 1Gi
+   EOF
+   ```
+
+1. Создайте Pod, использующий PVC:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: v1
+   kind: Pod
+   metadata:
+     name: test-rawfile-pod
+   spec:
+     containers:
+     - name: test
+       image: busybox
+       command: ["sleep", "3600"]
+       volumeMounts:
+       - name: data
+         mountPath: /data
+     volumes:
+     - name: data
+       persistentVolumeClaim:
+         claimName: test-rawfile-pvc
+   EOF
+   ```
+
+1. Проверьте, что Pod запущен и том смонтирован:
+
+   ```shell
+   d8 k get pod test-rawfile-pod
+   d8 k exec test-rawfile-pod -- df -h /data
+   ```
+
+Подробнее о параметрах конфигурации RawFile см. в разделе [Использование RawFile-томов](./usage.html#использование-rawfile-томов).
