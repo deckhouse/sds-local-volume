@@ -254,7 +254,6 @@ d8 k -n d8-sds-local-volume get pod -owide
      name: rawfile-storage
    spec:
      rawFile:
-       dataDir: /var/lib/sds-local-volume/rawfile
        sparse: false
      reclaimPolicy: Delete
      volumeBindingMode: WaitForFirstConsumer

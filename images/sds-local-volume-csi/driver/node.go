@@ -182,7 +182,6 @@ func (d *Driver) nodeStageRawFileVolume(request *csi.NodeStageVolumeRequest) (*c
 	volumeID := request.GetVolumeId()
 	target := request.GetStagingTargetPath()
 	volCap := request.GetVolumeCapability()
-	volumeContext := request.GetVolumeContext()
 
 	d.log.Info(fmt.Sprintf("[NodeStageVolume] Staging RawFile volume %s", volumeID))
 
@@ -231,11 +230,8 @@ func (d *Driver) nodeStageRawFileVolume(request *csi.NodeStageVolumeRequest) (*c
 		d.inFlight.Delete(volumeID)
 	}()
 
-	// Get data directory from volume context or use default
-	dataDir := internal.RawFileDefaultDir
-	if customDir, ok := volumeContext[internal.RawFileDataDirKey]; ok && customDir != "" {
-		dataDir = customDir
-	}
+	// Get data directory from environment variable (configured via module settings)
+	dataDir := internal.GetRawFileDataDir()
 
 	// Create rawfile manager with the appropriate data directory
 	rfm := rawfile.NewManager(d.log, dataDir)
@@ -370,11 +366,8 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 	// Check if this is a RawFile volume
 	volumeType := volumeContext[internal.TypeKey]
 	if volumeType == internal.RawFile {
-		// Get data directory from volume context or use default
-		dataDir := internal.RawFileDefaultDir
-		if customDir, hasCustomDir := volumeContext[internal.RawFileDataDirKey]; hasCustomDir && customDir != "" {
-			dataDir = customDir
-		}
+		// Get data directory from environment variable (configured via module settings)
+		dataDir := internal.GetRawFileDataDir()
 
 		rfm := rawfile.NewManager(d.log, dataDir)
 		volumePath := rfm.GetVolumePath(volumeID)

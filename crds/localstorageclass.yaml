@@ -161,12 +161,6 @@ spec:
                     - rule: self == oldSelf
                       message: RawFile configuration is immutable.
                   properties:
-                    dataDir:
-                      type: string
-                      description: |
-                        Directory where raw files will be stored.
-                        Default: /var/lib/sds-local-volume/rawfile
-                      default: /var/lib/sds-local-volume/rawfile
                     sparse:
                       type: boolean
                       description: |
@@ -187,10 +181,6 @@ spec:
                             type: string
                             description: |
                               Node name.
-                          dataDir:
-                            type: string
-                            description: |
-                              Data directory for this specific node (overrides global dataDir).
                 fsType:
                   type: string
                   default: ext4

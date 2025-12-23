@@ -283,12 +283,6 @@ func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 
 	// RawFile-specific diff check
 	if lsc.Spec.RawFile != nil {
-		// Check dataDir
-		currentDataDir := sc.Parameters[RawFileDataDirParamKey]
-		if lsc.Spec.RawFile.DataDir != currentDataDir {
-			return true, nil
-		}
-
 		// Check sparse
 		currentSparse := sc.Parameters[RawFileSparseParamKey]
 		expectedSparse := "false"
@@ -492,10 +486,6 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 		params = map[string]string{
 			TypeParamKey:   LocalStorageClassRawFileType,
 			FSTypeParamKey: fsType,
-		}
-
-		if lsc.Spec.RawFile.DataDir != "" {
-			params[RawFileDataDirParamKey] = lsc.Spec.RawFile.DataDir
 		}
 
 		if lsc.Spec.RawFile.Sparse {

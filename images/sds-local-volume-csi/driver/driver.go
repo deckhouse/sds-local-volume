@@ -90,7 +90,7 @@ func NewDriver(csiAddress, driverName, address string, nodeName *string, log *lo
 	st := utils.NewStore(log)
 
 	// Initialize rawfile manager with default data directory
-	rfm := rawfile.NewManager(log, internal.RawFileDefaultDir)
+	rfm := rawfile.NewManager(log, internal.GetRawFileDataDir())
 	if err := rfm.EnsureDataDir(); err != nil {
 		log.Warning(fmt.Sprintf("Failed to ensure rawfile data directory: %v", err))
 	}

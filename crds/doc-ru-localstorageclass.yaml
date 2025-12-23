@@ -66,10 +66,6 @@ spec:
                   description: |
                     Конфигурация RawFile для томов на основе локальных файлов, смонтированных как loop-устройства.
                   properties:
-                    dataDir:
-                      description: |
-                        Директория для хранения файлов томов.
-                        По умолчанию: /var/lib/sds-local-volume/rawfile
                     sparse:
                       description: |
                         Если `true`, создаются разреженные файлы (быстрее, но может вызвать фрагментацию).
@@ -83,9 +79,6 @@ spec:
                           name:
                             description: |
                               Имя узла.
-                          dataDir:
-                            description: |
-                              Директория для данных на этом узле (переопределяет глобальный dataDir).
                 fsType:
                   description: |
                     Тип файловой системы для StorageClass.
