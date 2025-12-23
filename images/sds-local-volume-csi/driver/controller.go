@@ -85,6 +85,7 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 	}
 
 	bindingMode := request.Parameters[internal.BindingModeKey]
+	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] BindingMode from parameters: '%s'", traceID, volumeID, bindingMode))
 
 	// Build volume context with parameters needed for file creation on the node
 	volumeCtx := make(map[string]string, len(request.Parameters))
@@ -97,6 +98,14 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 	// Build accessible topology based on binding mode
 	var accessibleTopology []*csi.Topology
 
+	// Log AccessibilityRequirements for debugging
+	if request.AccessibilityRequirements != nil {
+		d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] AccessibilityRequirements.Preferred: %+v", traceID, volumeID, request.AccessibilityRequirements.Preferred))
+		d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] AccessibilityRequirements.Requisite: %+v", traceID, volumeID, request.AccessibilityRequirements.Requisite))
+	} else {
+		d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] AccessibilityRequirements is nil", traceID, volumeID))
+	}
+
 	switch bindingMode {
 	case internal.BindingModeWFFC:
 		// For WaitForFirstConsumer, use the preferred node from scheduler
@@ -105,11 +114,11 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 			if len(request.AccessibilityRequirements.Preferred) != 0 {
 				// Use the preferred topology from scheduler
 				accessibleTopology = request.AccessibilityRequirements.Preferred
-				d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Using preferred topology from scheduler: %d nodes", traceID, volumeID, len(accessibleTopology)))
+				d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] WFFC mode: Using preferred topology from scheduler: %d nodes", traceID, volumeID, len(accessibleTopology)))
 			} else if len(request.AccessibilityRequirements.Requisite) != 0 {
 				// Fallback to requisite topologies
 				accessibleTopology = request.AccessibilityRequirements.Requisite
-				d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Using requisite topology: %d nodes", traceID, volumeID, len(accessibleTopology)))
+				d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] WFFC mode: Using requisite topology: %d nodes", traceID, volumeID, len(accessibleTopology)))
 			}
 		}
 		if len(accessibleTopology) == 0 {
@@ -122,10 +131,21 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 		}
 		d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Immediate mode, using current node: %s", traceID, volumeID, d.hostID))
 	default:
-		accessibleTopology = []*csi.Topology{
-			{Segments: map[string]string{internal.TopologyKey: d.hostID}},
+		// Unknown binding mode - try to use AccessibilityRequirements if available
+		d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Unknown bindingMode: '%s', trying to use AccessibilityRequirements", traceID, volumeID, bindingMode))
+		if request.AccessibilityRequirements != nil && len(request.AccessibilityRequirements.Preferred) != 0 {
+			accessibleTopology = request.AccessibilityRequirements.Preferred
+			d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Using preferred topology: %d nodes", traceID, volumeID, len(accessibleTopology)))
+		} else if request.AccessibilityRequirements != nil && len(request.AccessibilityRequirements.Requisite) != 0 {
+			accessibleTopology = request.AccessibilityRequirements.Requisite
+			d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Using requisite topology: %d nodes", traceID, volumeID, len(accessibleTopology)))
+		} else {
+			// Last resort - use current node
+			accessibleTopology = []*csi.Topology{
+				{Segments: map[string]string{internal.TopologyKey: d.hostID}},
+			}
+			d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] No topology available, falling back to current node: %s", traceID, volumeID, d.hostID))
 		}
-		d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Default mode, using current node: %s", traceID, volumeID, d.hostID))
 	}
 
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] RawFile volume metadata prepared, size: %d bytes", traceID, volumeID, sizeBytes))
