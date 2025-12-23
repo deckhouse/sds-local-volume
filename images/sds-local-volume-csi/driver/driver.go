@@ -36,6 +36,7 @@ import (
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/rawfile"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 )
 
@@ -66,11 +67,12 @@ type Driver struct {
 	httpSrv http.Server
 	log     *logger.Logger
 
-	readyMu      sync.Mutex // protects ready
-	ready        bool
-	cl           client.Client
-	storeManager utils.NodeStoreManager
-	inFlight     *internal.InFlight
+	readyMu        sync.Mutex // protects ready
+	ready          bool
+	cl             client.Client
+	storeManager   utils.NodeStoreManager
+	rawfileManager *rawfile.Manager
+	inFlight       *internal.InFlight
 
 	csi.UnimplementedControllerServer
 	csi.UnimplementedIdentityServer
@@ -87,6 +89,12 @@ func NewDriver(csiAddress, driverName, address string, nodeName *string, log *lo
 
 	st := utils.NewStore(log)
 
+	// Initialize rawfile manager with default data directory
+	rfm := rawfile.NewManager(log, internal.RawFileDefaultDir)
+	if err := rfm.EnsureDataDir(); err != nil {
+		log.Warning(fmt.Sprintf("Failed to ensure rawfile data directory: %v", err))
+	}
+
 	return &Driver{
 		name:              driverName,
 		hostID:            *nodeName,
@@ -96,6 +104,7 @@ func NewDriver(csiAddress, driverName, address string, nodeName *string, log *lo
 		waitActionTimeout: defaultWaitActionTimeout,
 		cl:                cl,
 		storeManager:      st,
+		rawfileManager:    rfm,
 		inFlight:          internal.NewInFlight(),
 	}, nil
 }

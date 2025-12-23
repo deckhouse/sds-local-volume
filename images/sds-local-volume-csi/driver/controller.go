@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
@@ -28,10 +29,12 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/rawfile"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 	"github.com/deckhouse/sds-local-volume/lib/go/common/pkg/feature"
-	"github.com/deckhouse/sds-node-configurator/api/v1alpha1"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
 const (
@@ -47,9 +50,114 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	d.log.Trace(request.String())
 	d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s] ========== CreateVolume ============", traceID))
 
-	if request.Parameters[internal.TypeKey] != internal.Lvm {
-		return nil, status.Error(codes.InvalidArgument, "Unsupported Storage Class type")
+	volumeType := request.Parameters[internal.TypeKey]
+
+	switch volumeType {
+	case internal.Lvm:
+		return d.createLVMVolume(ctx, request, traceID)
+	case internal.RawFile:
+		return d.createRawFileVolume(ctx, request, traceID)
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "Unsupported Storage Class type: %s", volumeType)
 	}
+}
+
+func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVolumeRequest, traceID string) (*csi.CreateVolumeResponse, error) {
+	if len(request.Name) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume Name cannot be empty")
+	}
+	volumeID := request.Name
+
+	if request.VolumeCapabilities == nil {
+		return nil, status.Error(codes.InvalidArgument, "Volume Capability cannot be empty")
+	}
+
+	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Creating RawFile volume", traceID, volumeID))
+
+	// Get volume size
+	sizeBytes := request.CapacityRange.GetRequiredBytes()
+	if sizeBytes == 0 {
+		sizeBytes = request.CapacityRange.GetLimitBytes()
+	}
+	if sizeBytes == 0 {
+		// Default to 1Gi if no size specified
+		sizeBytes = 1024 * 1024 * 1024
+	}
+
+	// Check if sparse mode is enabled
+	sparse := false
+	if sparseStr, ok := request.Parameters[internal.RawFileSparseKey]; ok {
+		var err error
+		sparse, err = strconv.ParseBool(sparseStr)
+		if err != nil {
+			d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Invalid sparse value: %s, defaulting to false", traceID, volumeID, sparseStr))
+		}
+	}
+
+	// Get data directory (use custom if specified, otherwise default)
+	dataDir := internal.RawFileDefaultDir
+	if customDir, ok := request.Parameters[internal.RawFileDataDirKey]; ok && customDir != "" {
+		dataDir = customDir
+	}
+
+	// Create a rawfile manager with the specified data directory
+	rfm := rawfile.NewManager(d.log, dataDir)
+	if err := rfm.EnsureDataDir(); err != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to ensure data directory: %v", err)
+	}
+
+	// Get preferred node from topology
+	var preferredNode string
+	bindingMode := request.Parameters[internal.BindingModeKey]
+
+	switch bindingMode {
+	case internal.BindingModeWFFC:
+		if len(request.AccessibilityRequirements.Preferred) != 0 {
+			t := request.AccessibilityRequirements.Preferred[0].Segments
+			preferredNode = t[internal.TopologyKey]
+		}
+	case internal.BindingModeI:
+		// For Immediate binding, use the current node
+		preferredNode = d.hostID
+	default:
+		preferredNode = d.hostID
+	}
+
+	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] preferredNode: %s, size: %d bytes, sparse: %t", traceID, volumeID, preferredNode, sizeBytes, sparse))
+
+	// Create the raw file volume
+	volumeInfo, err := rfm.CreateVolume(volumeID, sizeBytes, sparse)
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Failed to create RawFile volume", traceID, volumeID))
+		return nil, status.Errorf(codes.Internal, "Failed to create RawFile volume: %v", err)
+	}
+
+	// Build volume context
+	volumeCtx := make(map[string]string, len(request.Parameters))
+	for k, v := range request.Parameters {
+		volumeCtx[k] = v
+	}
+	volumeCtx[internal.RawFilePathKey] = volumeInfo.Path
+	volumeCtx[internal.RawFileDataDirKey] = dataDir
+
+	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] RawFile volume created successfully at %s", traceID, volumeID, volumeInfo.Path))
+
+	return &csi.CreateVolumeResponse{
+		Volume: &csi.Volume{
+			CapacityBytes: sizeBytes,
+			VolumeId:      volumeID,
+			VolumeContext: volumeCtx,
+			ContentSource: request.VolumeContentSource,
+			AccessibleTopology: []*csi.Topology{
+				{Segments: map[string]string{
+					internal.TopologyKey: preferredNode,
+				}},
+			},
+		},
+	}, nil
+}
+
+func (d *Driver) createLVMVolume(ctx context.Context, request *csi.CreateVolumeRequest, traceID string) (*csi.CreateVolumeResponse, error) {
 
 	if len(request.Name) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume Name cannot be empty")
@@ -93,12 +201,12 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	llvSize := resource.NewQuantity(request.CapacityRange.GetRequiredBytes(), resource.BinarySI)
 	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] llv size: %s", traceID, volumeID, llvSize.String()))
 
-	var selectedLVG *v1alpha1.LVMVolumeGroup
+	var selectedLVG *snc.LVMVolumeGroup
 	var preferredNode string
-	var sourceVolume *v1alpha1.LVMLogicalVolumeSource
+	var sourceVolume *snc.LVMLogicalVolumeSource
 
 	if request.VolumeContentSource != nil {
-		sourceVolume = &v1alpha1.LVMLogicalVolumeSource{}
+		sourceVolume = &snc.LVMLogicalVolumeSource{}
 		switch s := request.VolumeContentSource.Type.(type) {
 		case *csi.VolumeContentSource_Snapshot:
 			sourceVolume.Kind = sourceVolumeKindSnapshot
@@ -309,24 +417,63 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 		return nil, status.Error(codes.InvalidArgument, "Volume ID cannot be empty")
 	}
 
-	volumeCleanup := func() string {
-		localStorageClass, err := utils.GetLSCBeforeLLVDelete(ctx, d.cl, *d.log, request.VolumeId, traceID)
-		if err == nil && localStorageClass != nil && localStorageClass.Spec.LVM != nil {
-			return localStorageClass.Spec.LVM.VolumeCleanup
-		}
-		return ""
-	}()
+	volumeID := request.VolumeId
+
+	// Try to get the LocalStorageClass to determine volume type
+	localStorageClass, err := utils.GetLSCBeforeLLVDelete(ctx, d.cl, *d.log, volumeID, traceID)
+	if err != nil {
+		d.log.Warning(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] Could not get LocalStorageClass, trying both deletion methods", traceID, volumeID))
+	}
+
+	// Determine volume type and delete accordingly
+	if localStorageClass != nil && localStorageClass.Spec.RawFile != nil {
+		// This is a RawFile volume
+		return d.deleteRawFileVolume(ctx, request, traceID, localStorageClass)
+	}
+
+	// Default to LVM volume deletion (includes case when LocalStorageClass not found)
+	return d.deleteLVMVolume(ctx, request, traceID, localStorageClass)
+}
+
+func (d *Driver) deleteRawFileVolume(_ context.Context, request *csi.DeleteVolumeRequest, traceID string, lsc *slv.LocalStorageClass) (*csi.DeleteVolumeResponse, error) {
+	volumeID := request.VolumeId
+	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] Deleting RawFile volume", traceID, volumeID))
+
+	// Get data directory from LocalStorageClass
+	dataDir := internal.RawFileDefaultDir
+	if lsc != nil && lsc.Spec.RawFile != nil && lsc.Spec.RawFile.DataDir != "" {
+		dataDir = lsc.Spec.RawFile.DataDir
+	}
+
+	rfm := rawfile.NewManager(d.log, dataDir)
+	if err := rfm.DeleteVolume(volumeID); err != nil {
+		d.log.Error(err, fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] Failed to delete RawFile volume", traceID, volumeID))
+		return nil, status.Errorf(codes.Internal, "Failed to delete RawFile volume: %v", err)
+	}
+
+	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] RawFile volume deleted successfully", traceID, volumeID))
+	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] ========== END DeleteVolume ============", traceID))
+	return &csi.DeleteVolumeResponse{}, nil
+}
+
+func (d *Driver) deleteLVMVolume(ctx context.Context, request *csi.DeleteVolumeRequest, traceID string, lsc *slv.LocalStorageClass) (*csi.DeleteVolumeResponse, error) {
+	volumeID := request.VolumeId
+
+	volumeCleanup := ""
+	if lsc != nil && lsc.Spec.LVM != nil {
+		volumeCleanup = lsc.Spec.LVM.VolumeCleanup
+	}
 
 	if volumeCleanup != "" && !feature.VolumeCleanupEnabled() {
 		return nil, errors.New("volumeCleanup is not supported in your edition")
 	}
 
-	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, request.VolumeId, volumeCleanup)
+	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, d.log, traceID, volumeID, volumeCleanup)
 	if err != nil {
 		d.log.Error(err, "error DeleteLVMLogicalVolume")
 		return nil, err
 	}
-	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] Volume deleted successfully", traceID, request.VolumeId))
+	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] LVM volume deleted successfully", traceID, volumeID))
 	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] ========== END DeleteVolume ============", traceID))
 	return &csi.DeleteVolumeResponse{}, nil
 }
@@ -414,6 +561,17 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Error(codes.InvalidArgument, "Volume id cannot be empty")
 	}
 
+	// Check if this is a RawFile volume by checking for the rawfile path in volume context
+	if rawfilePath, ok := request.GetSecrets()[internal.RawFilePathKey]; ok && rawfilePath != "" {
+		return d.expandRawFileVolume(request, traceID)
+	}
+
+	// Also try to detect RawFile by checking if the rawfile manager knows about this volume
+	if d.rawfileManager.VolumeExists(volumeID) {
+		return d.expandRawFileVolume(request, traceID)
+	}
+
+	// Default to LVM volume expansion
 	llv, err := utils.GetLVMLogicalVolume(ctx, d.cl, volumeID, "")
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error getting LVMLogicalVolume", traceID, volumeID))
@@ -477,6 +635,47 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         request.CapacityRange.RequiredBytes,
+		NodeExpansionRequired: nodeExpansionRequired,
+	}, nil
+}
+
+func (d *Driver) expandRawFileVolume(request *csi.ControllerExpandVolumeRequest, traceID string) (*csi.ControllerExpandVolumeResponse, error) {
+	volumeID := request.GetVolumeId()
+	requestedBytes := request.CapacityRange.GetRequiredBytes()
+
+	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Expanding RawFile volume to %d bytes", traceID, volumeID, requestedBytes))
+
+	// Get the volume info to check current size
+	volumeInfo, err := d.rawfileManager.GetVolumeInfo(volumeID)
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Failed to get RawFile volume info", traceID, volumeID))
+		return nil, status.Errorf(codes.Internal, "Failed to get RawFile volume info: %v", err)
+	}
+
+	// Check if expansion is needed
+	if volumeInfo.Size >= requestedBytes {
+		d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Volume already at or above requested size", traceID, volumeID))
+		nodeExpansionRequired := request.GetVolumeCapability().GetBlock() == nil
+		return &csi.ControllerExpandVolumeResponse{
+			CapacityBytes:         volumeInfo.Size,
+			NodeExpansionRequired: nodeExpansionRequired,
+		}, nil
+	}
+
+	// Check if sparse mode should be used (default to false for expansion)
+	sparse := false
+
+	// Expand the volume
+	if err := d.rawfileManager.ExpandVolume(volumeID, requestedBytes, sparse); err != nil {
+		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Failed to expand RawFile volume", traceID, volumeID))
+		return nil, status.Errorf(codes.Internal, "Failed to expand RawFile volume: %v", err)
+	}
+
+	nodeExpansionRequired := request.GetVolumeCapability().GetBlock() == nil
+	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] RawFile volume expanded successfully", traceID, volumeID))
+
+	return &csi.ControllerExpandVolumeResponse{
+		CapacityBytes:         requestedBytes,
 		NodeExpansionRequired: nodeExpansionRequired,
 	}, nil
 }
