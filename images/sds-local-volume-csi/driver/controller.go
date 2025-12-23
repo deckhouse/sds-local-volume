@@ -125,38 +125,25 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 			return nil, status.Error(codes.InvalidArgument, "[CreateVolume] No node topology provided for WaitForFirstConsumer binding mode")
 		}
 	case internal.BindingModeI:
-		// For Immediate binding, select ONE node from AccessibilityRequirements
-		// The PV must be bound to a specific node immediately
-		var selectedNode string
+		// For Immediate binding with RawFile, return ALL available nodes from AccessibilityRequirements
+		// Unlike LVM, RawFile doesn't require a specific node - the file will be created on any node
+		// when NodeStageVolume is called. This allows the scheduler to pick an appropriate node.
 		if request.AccessibilityRequirements != nil {
 			if len(request.AccessibilityRequirements.Requisite) != 0 {
-				// Select the first available node from requisite
-				for _, topo := range request.AccessibilityRequirements.Requisite {
-					if node, ok := topo.Segments[internal.TopologyKey]; ok && node != "" {
-						selectedNode = node
-						break
-					}
-				}
-			}
-			if selectedNode == "" && len(request.AccessibilityRequirements.Preferred) != 0 {
-				// Fallback to preferred
-				for _, topo := range request.AccessibilityRequirements.Preferred {
-					if node, ok := topo.Segments[internal.TopologyKey]; ok && node != "" {
-						selectedNode = node
-						break
-					}
-				}
+				accessibleTopology = request.AccessibilityRequirements.Requisite
+				d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Immediate mode: Using all requisite nodes: %d nodes", traceID, volumeID, len(accessibleTopology)))
+			} else if len(request.AccessibilityRequirements.Preferred) != 0 {
+				accessibleTopology = request.AccessibilityRequirements.Preferred
+				d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Immediate mode: Using all preferred nodes: %d nodes", traceID, volumeID, len(accessibleTopology)))
 			}
 		}
 		// Fallback to current node if no topology provided
-		if selectedNode == "" {
-			selectedNode = d.hostID
-			d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Immediate mode: No topology provided, falling back to current node: %s", traceID, volumeID, selectedNode))
+		if len(accessibleTopology) == 0 {
+			accessibleTopology = []*csi.Topology{
+				{Segments: map[string]string{internal.TopologyKey: d.hostID}},
+			}
+			d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Immediate mode: No topology provided, falling back to current node: %s", traceID, volumeID, d.hostID))
 		}
-		accessibleTopology = []*csi.Topology{
-			{Segments: map[string]string{internal.TopologyKey: selectedNode}},
-		}
-		d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Immediate mode: Selected node %s", traceID, volumeID, selectedNode))
 	default:
 		// Unknown binding mode - try to use AccessibilityRequirements if available
 		d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Unknown bindingMode: '%s', trying to use AccessibilityRequirements", traceID, volumeID, bindingMode))
