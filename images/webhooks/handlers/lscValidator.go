@@ -46,6 +46,36 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 		return &kwhvalidating.ValidatorResult{}, nil
 	}
 
+	// Validate that either LVM or RawFile is specified, but not both
+	if lsc.Spec.LVM != nil && lsc.Spec.RawFile != nil {
+		errMsg := "LocalStorageClass must have either lvm or rawFile configuration, not both"
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+	}
+
+	if lsc.Spec.LVM == nil && lsc.Spec.RawFile == nil {
+		errMsg := "LocalStorageClass must have either lvm or rawFile configuration"
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+	}
+
+	// RawFile validation
+	if lsc.Spec.RawFile != nil {
+		return validateRawFile(lsc)
+	}
+
+	// LVM validation
+	return validateLVM(ctx, lsc)
+}
+
+func validateRawFile(lsc *slv.LocalStorageClass) (*kwhvalidating.ValidatorResult, error) {
+	// RawFile doesn't require additional complex validation
+	// The CRD schema handles basic validation (dataDir format, etc.)
+	klog.Infof("Validating RawFile LocalStorageClass: %s", lsc.Name)
+	return &kwhvalidating.ValidatorResult{Valid: true}, nil
+}
+
+func validateLVM(ctx context.Context, lsc *slv.LocalStorageClass) (*kwhvalidating.ValidatorResult, error) {
 	cl, err := NewKubeClient("")
 	if err != nil {
 		klog.Fatal(err)
