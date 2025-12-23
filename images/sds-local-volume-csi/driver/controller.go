@@ -446,13 +446,23 @@ func (d *Driver) deleteRawFileVolume(_ context.Context, request *csi.DeleteVolum
 	// Get data directory from environment variable (configured via module settings)
 	dataDir := internal.GetRawFileDataDir()
 
+	// Try to delete the volume locally.
+	// Note: For RawFile volumes, the file might be on a different node than where this controller is running.
+	// The actual file deletion happens in NodeUnstageVolume on the node where the file resides.
+	// This is a best-effort attempt to delete if the file happens to be on this node.
 	rfm := rawfile.NewManager(d.log, dataDir)
-	if err := rfm.DeleteVolume(volumeID); err != nil {
-		d.log.Error(err, fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] Failed to delete RawFile volume", traceID, volumeID))
-		return nil, status.Errorf(codes.Internal, "Failed to delete RawFile volume: %v", err)
+	if rfm.VolumeExists(volumeID) {
+		if err := rfm.DeleteVolume(volumeID); err != nil {
+			d.log.Warning(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] Failed to delete RawFile volume locally: %v", traceID, volumeID, err))
+			// Don't fail - the file might be on another node and will be cleaned up there
+		} else {
+			d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] RawFile volume deleted locally", traceID, volumeID))
+		}
+	} else {
+		d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] RawFile volume not found locally (may be on different node or already deleted)", traceID, volumeID))
 	}
 
-	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] RawFile volume deleted successfully", traceID, volumeID))
+	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] RawFile volume deletion completed", traceID, volumeID))
 	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] ========== END DeleteVolume ============", traceID))
 	return &csi.DeleteVolumeResponse{}, nil
 }
