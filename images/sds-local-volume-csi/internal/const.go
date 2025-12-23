@@ -46,12 +46,13 @@ const (
 	FSTypeXfs  = "xfs"
 
 	// RawFile volume type constants
-	RawFileDataDirKey         = "local.csi.storage.deckhouse.io/rawfile-data-dir"
-	RawFileDefaultDir         = "/var/lib/sds-local-volume/rawfile"
-	RawFileDefaultDataDirEnv  = "RAWFILE_DEFAULT_DATA_DIR"
-	RawFileDevicePathKey      = "rawfileDevicePath"
-	RawFilePathKey            = "rawfilePath"
-	RawFileSparseKey          = "local.csi.storage.deckhouse.io/rawfile-sparse"
+	RawFileDataDirKey        = "local.csi.storage.deckhouse.io/rawfile-data-dir"
+	RawFileDefaultDir        = "/var/lib/sds-local-volume/rawfile"
+	RawFileDefaultDataDirEnv = "RAWFILE_DEFAULT_DATA_DIR"
+	RawFileDevicePathKey     = "rawfileDevicePath"
+	RawFilePathKey           = "rawfilePath"
+	RawFileSparseKey         = "local.csi.storage.deckhouse.io/rawfile-sparse"
+	RawFileSizeKey           = "rawfileSize"
 )
 
 // GetRawFileDataDir returns the data directory for RawFile volumes.

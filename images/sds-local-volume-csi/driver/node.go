@@ -182,6 +182,7 @@ func (d *Driver) nodeStageRawFileVolume(request *csi.NodeStageVolumeRequest) (*c
 	volumeID := request.GetVolumeId()
 	target := request.GetStagingTargetPath()
 	volCap := request.GetVolumeCapability()
+	volumeContext := request.GetVolumeContext()
 
 	d.log.Info(fmt.Sprintf("[NodeStageVolume] Staging RawFile volume %s", volumeID))
 
@@ -236,16 +237,49 @@ func (d *Driver) nodeStageRawFileVolume(request *csi.NodeStageVolumeRequest) (*c
 	// Create rawfile manager with the appropriate data directory
 	rfm := rawfile.NewManager(d.log, dataDir)
 
+	// Ensure the data directory exists
+	if err := rfm.EnsureDataDir(); err != nil {
+		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Failed to ensure data directory: %v", err)
+	}
+
 	// Get the raw file path
 	volumePath := rfm.GetVolumePath(volumeID)
 
-	// Check if the raw file exists
+	// Check if the raw file exists, create if not
 	exists, err := d.storeManager.PathExists(volumePath)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error checking if rawfile exists: %v", err)
 	}
+
 	if !exists {
-		return nil, status.Errorf(codes.NotFound, "[NodeStageVolume] RawFile %s not found", volumePath)
+		d.log.Info(fmt.Sprintf("[NodeStageVolume] RawFile %s not found, creating on this node", volumePath))
+
+		// Get size from volume context
+		sizeStr, ok := volumeContext[internal.RawFileSizeKey]
+		if !ok || sizeStr == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "[NodeStageVolume] Volume size not specified in volume context")
+		}
+		sizeBytes, err := strconv.ParseInt(sizeStr, 10, 64)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "[NodeStageVolume] Invalid volume size: %s", sizeStr)
+		}
+
+		// Check if sparse mode is enabled
+		sparse := false
+		if sparseStr, hasSparse := volumeContext[internal.RawFileSparseKey]; hasSparse {
+			sparse, _ = strconv.ParseBool(sparseStr)
+		}
+
+		d.log.Info(fmt.Sprintf("[NodeStageVolume] Creating RawFile volume %s: size=%d bytes, sparse=%t", volumeID, sizeBytes, sparse))
+
+		// Create the raw file volume on this node
+		_, err = rfm.CreateVolume(volumeID, sizeBytes, sparse)
+		if err != nil {
+			d.log.Error(err, fmt.Sprintf("[NodeStageVolume] Failed to create RawFile volume %s", volumeID))
+			return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Failed to create RawFile volume: %v", err)
+		}
+
+		d.log.Info(fmt.Sprintf("[NodeStageVolume] RawFile volume %s created successfully at %s", volumeID, volumePath))
 	}
 
 	// Attach the raw file as a loop device

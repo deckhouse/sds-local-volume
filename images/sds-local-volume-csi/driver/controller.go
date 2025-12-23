@@ -84,25 +84,6 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 		sizeBytes = 1024 * 1024 * 1024
 	}
 
-	// Check if sparse mode is enabled
-	sparse := false
-	if sparseStr, ok := request.Parameters[internal.RawFileSparseKey]; ok {
-		var err error
-		sparse, err = strconv.ParseBool(sparseStr)
-		if err != nil {
-			d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Invalid sparse value: %s, defaulting to false", traceID, volumeID, sparseStr))
-		}
-	}
-
-	// Get data directory from environment variable (configured via module settings)
-	dataDir := internal.GetRawFileDataDir()
-
-	// Create a rawfile manager with the specified data directory
-	rfm := rawfile.NewManager(d.log, dataDir)
-	if err := rfm.EnsureDataDir(); err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to ensure data directory: %v", err)
-	}
-
 	// Get preferred node from topology
 	var preferredNode string
 	bindingMode := request.Parameters[internal.BindingModeKey]
@@ -120,24 +101,20 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 		preferredNode = d.hostID
 	}
 
-	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] preferredNode: %s, size: %d bytes, sparse: %t", traceID, volumeID, preferredNode, sizeBytes, sparse))
+	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] preferredNode: %s, size: %d bytes", traceID, volumeID, preferredNode, sizeBytes))
 
-	// Create the raw file volume
-	volumeInfo, err := rfm.CreateVolume(volumeID, sizeBytes, sparse)
-	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Failed to create RawFile volume", traceID, volumeID))
-		return nil, status.Errorf(codes.Internal, "Failed to create RawFile volume: %v", err)
-	}
+	// Note: The actual file creation happens in NodeStageVolume on the target node.
+	// Here we only prepare the volume metadata.
 
-	// Build volume context
+	// Build volume context with parameters needed for file creation on the node
 	volumeCtx := make(map[string]string, len(request.Parameters))
 	for k, v := range request.Parameters {
 		volumeCtx[k] = v
 	}
-	volumeCtx[internal.RawFilePathKey] = volumeInfo.Path
-	volumeCtx[internal.RawFileDataDirKey] = dataDir
+	// Store requested size in volume context for node-side creation
+	volumeCtx[internal.RawFileSizeKey] = strconv.FormatInt(sizeBytes, 10)
 
-	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] RawFile volume created successfully at %s", traceID, volumeID, volumeInfo.Path))
+	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] RawFile volume metadata prepared, file will be created on node %s", traceID, volumeID, preferredNode))
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
