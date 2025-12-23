@@ -30,8 +30,6 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/rawfile"
@@ -324,7 +322,7 @@ func (d *Driver) nodeStageRawFileVolume(request *csi.NodeStageVolumeRequest) (*c
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
-func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
+func (d *Driver) NodeUnstageVolume(_ context.Context, request *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] method called with request: %v", request))
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
@@ -352,7 +350,7 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstage
 		return nil, status.Errorf(codes.Internal, "[NodeUnstageVolume] Error unmounting volume %q mounted at %q: %v", volumeID, target, err)
 	}
 
-	// Check if this is a RawFile volume
+	// Check if this is a RawFile volume and detach the loop device
 	if d.rawfileManager.VolumeExists(volumeID) {
 		volumePath := d.rawfileManager.GetVolumePath(volumeID)
 		d.log.Info(fmt.Sprintf("[NodeUnstageVolume] Detaching loop device for RawFile volume %s", volumeID))
@@ -360,55 +358,11 @@ func (d *Driver) NodeUnstageVolume(ctx context.Context, request *csi.NodeUnstage
 			d.log.Warning(fmt.Sprintf("[NodeUnstageVolume] Failed to detach loop device for %s: %v", volumePath, err))
 			// Don't fail the unstage if loop device detachment fails
 		}
-
-		// Check if we should delete the RawFile volume (when PV has ReclaimPolicy: Delete)
-		d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] Checking if RawFile volume %s should be deleted", volumeID))
-		shouldDelete := d.shouldDeleteRawFileVolume(ctx, volumeID)
-		if shouldDelete {
-			d.log.Info(fmt.Sprintf("[NodeUnstageVolume] Deleting RawFile volume %s (ReclaimPolicy: Delete)", volumeID))
-			if err := d.rawfileManager.DeleteVolume(volumeID); err != nil {
-				d.log.Error(err, fmt.Sprintf("[NodeUnstageVolume] Failed to delete RawFile volume %s", volumeID))
-				// Don't fail unstage, the file can be cleaned up later
-			} else {
-				d.log.Info(fmt.Sprintf("[NodeUnstageVolume] RawFile volume %s deleted successfully", volumeID))
-			}
-		}
+		// Note: Volume cleanup (deletion) is handled by the cleanup goroutine in driver.go
+		// which periodically checks for orphaned volumes (volumes without corresponding PVs)
 	}
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
-}
-
-// shouldDeleteRawFileVolume checks if a RawFile volume should be deleted based on PV ReclaimPolicy
-func (d *Driver) shouldDeleteRawFileVolume(ctx context.Context, volumeID string) bool {
-	pv, err := d.getPersistentVolume(ctx, volumeID)
-	if err != nil {
-		d.log.Warning(fmt.Sprintf("[shouldDeleteRawFileVolume] Could not get PV %s: %v", volumeID, err))
-		return false
-	}
-
-	// Check if PV is being deleted
-	if pv.DeletionTimestamp == nil {
-		d.log.Debug(fmt.Sprintf("[shouldDeleteRawFileVolume] PV %s is not being deleted", volumeID))
-		return false
-	}
-
-	// Check ReclaimPolicy
-	if pv.Spec.PersistentVolumeReclaimPolicy == "Delete" {
-		d.log.Debug(fmt.Sprintf("[shouldDeleteRawFileVolume] PV %s has ReclaimPolicy: Delete and is being deleted", volumeID))
-		return true
-	}
-
-	d.log.Debug(fmt.Sprintf("[shouldDeleteRawFileVolume] PV %s has ReclaimPolicy: %s, not deleting", volumeID, pv.Spec.PersistentVolumeReclaimPolicy))
-	return false
-}
-
-// getPersistentVolume retrieves a PersistentVolume by name
-func (d *Driver) getPersistentVolume(ctx context.Context, pvName string) (*corev1.PersistentVolume, error) {
-	var pv corev1.PersistentVolume
-	if err := d.cl.Get(ctx, client.ObjectKey{Name: pvName}, &pv); err != nil {
-		return nil, err
-	}
-	return &pv, nil
 }
 
 func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {

@@ -53,6 +53,7 @@ const (
 	RawFilePathKey           = "rawfilePath"
 	RawFileSparseKey         = "local.csi.storage.deckhouse.io/rawfile-sparse"
 	RawFileSizeKey           = "rawfileSize"
+	RawFilePVFinalizer       = "storage.deckhouse.io/rawfile-pv-protection"
 )
 
 // GetRawFileDataDir returns the data directory for RawFile volumes.
