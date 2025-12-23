@@ -280,6 +280,26 @@ RawFile volumes use local files mounted as loop devices to provide storage. This
 - When you need quick provisioning without block device management
 - For lightweight storage requirements
 
+### Configuring data directory
+
+The default directory for RawFile volumes is configured in the module settings using the `rawFileDefaultDataDir` parameter. Default value: `/var/lib/sds-local-volume/rawfile`.
+
+To change the default directory:
+
+```shell
+d8 k apply -f -<<EOF
+apiVersion: deckhouse.io/v1alpha1
+kind: ModuleConfig
+metadata:
+  name: sds-local-volume
+spec:
+  enabled: true
+  version: 1
+  settings:
+    rawFileDefaultDataDir: /mnt/data/rawfile
+EOF
+```
+
 ### Creating RawFile-based LocalStorageClass
 
 1. Create a [LocalStorageClass](./cr.html#localstorageclass) resource with RawFile configuration:
@@ -292,7 +312,6 @@ RawFile volumes use local files mounted as loop devices to provide storage. This
      name: rawfile-storage-class
    spec:
      rawFile:
-       dataDir: /var/lib/sds-local-volume/rawfile
        sparse: false
      reclaimPolicy: Delete
      volumeBindingMode: WaitForFirstConsumer
@@ -302,7 +321,6 @@ RawFile volumes use local files mounted as loop devices to provide storage. This
 
    Parameters:
 
-   - `dataDir` — directory where raw files will be stored. Default: `/var/lib/sds-local-volume/rawfile`
    - `sparse` — if `true`, sparse files are created (faster but may cause fragmentation). If `false`, files are pre-allocated (slower but no fragmentation). Default: `false`
    - `fsType` — filesystem type to format volumes. Supported values: `ext4`, `xfs`. Default: `ext4`
 
@@ -362,37 +380,6 @@ RawFile volumes use local files mounted as loop devices to provide storage. This
    EOF
    ```
 
-### RawFile with node-specific configuration
-
-You can configure different data directories for specific nodes:
-
-```shell
-d8 k apply -f -<<EOF
-apiVersion: storage.deckhouse.io/v1alpha1
-kind: LocalStorageClass
-metadata:
-  name: rawfile-multi-node
-spec:
-  rawFile:
-    dataDir: /var/lib/rawfile
-    sparse: true
-    nodes:
-    - name: worker-0
-      dataDir: /mnt/fast-ssd/rawfile
-    - name: worker-1
-      dataDir: /mnt/large-hdd/rawfile
-    - name: worker-2
-  reclaimPolicy: Delete
-  volumeBindingMode: WaitForFirstConsumer
-  fsType: ext4
-EOF
-```
-
-In this example:
-- `worker-0` uses `/mnt/fast-ssd/rawfile`
-- `worker-1` uses `/mnt/large-hdd/rawfile`
-- `worker-2` uses the default `/var/lib/rawfile`
-
 ### Using sparse files for faster provisioning
 
 Sparse files are faster to create but may cause fragmentation over time:
@@ -405,7 +392,6 @@ metadata:
   name: rawfile-sparse
 spec:
   rawFile:
-    dataDir: /var/lib/sds-local-volume/rawfile
     sparse: true
   reclaimPolicy: Delete
   volumeBindingMode: WaitForFirstConsumer

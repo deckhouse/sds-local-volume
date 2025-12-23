@@ -90,6 +90,8 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- else if eq .Values.sdsLocalVolume.logLevel "TRACE" }}
   value: "4"
 {{- end }}
+- name: RAWFILE_DEFAULT_DATA_DIR
+  value: {{ .Values.sdsLocalVolume.rawFileDefaultDataDir | quote }}
 {{- end }}
 
 {{- define "csi_additional_node_volumes" }}

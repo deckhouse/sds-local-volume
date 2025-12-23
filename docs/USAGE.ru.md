@@ -280,6 +280,26 @@ RawFile-тома используют локальные файлы, смонт�
 - Когда требуется быстрое развёртывание без управления блочными устройствами
 - Для лёгких требований к хранилищу
 
+### Настройка директории данных
+
+Директория по умолчанию для RawFile-томов настраивается в параметрах модуля с помощью `rawFileDefaultDataDir`. Значение по умолчанию: `/var/lib/sds-local-volume/rawfile`.
+
+Для изменения директории по умолчанию:
+
+```shell
+d8 k apply -f -<<EOF
+apiVersion: deckhouse.io/v1alpha1
+kind: ModuleConfig
+metadata:
+  name: sds-local-volume
+spec:
+  enabled: true
+  version: 1
+  settings:
+    rawFileDefaultDataDir: /mnt/data/rawfile
+EOF
+```
+
 ### Создание LocalStorageClass на основе RawFile
 
 1. Создайте ресурс [LocalStorageClass](./cr.html#localstorageclass) с конфигурацией RawFile:
@@ -292,7 +312,6 @@ RawFile-тома используют локальные файлы, смонт�
      name: rawfile-storage-class
    spec:
      rawFile:
-       dataDir: /var/lib/sds-local-volume/rawfile
        sparse: false
      reclaimPolicy: Delete
      volumeBindingMode: WaitForFirstConsumer
@@ -302,7 +321,6 @@ RawFile-тома используют локальные файлы, смонт�
 
    Параметры:
 
-   - `dataDir` — директория для хранения raw-файлов. По умолчанию: `/var/lib/sds-local-volume/rawfile`
    - `sparse` — если `true`, создаются разреженные файлы (быстрее, но может вызвать фрагментацию). Если `false`, файлы предварительно выделяются (медленнее, но без фрагментации). По умолчанию: `false`
    - `fsType` — тип файловой системы для форматирования томов. Поддерживаемые значения: `ext4`, `xfs`. По умолчанию: `ext4`
 
@@ -362,37 +380,6 @@ RawFile-тома используют локальные файлы, смонт�
    EOF
    ```
 
-### RawFile с индивидуальной конфигурацией для узлов
-
-Можно настроить различные директории данных для конкретных узлов:
-
-```shell
-d8 k apply -f -<<EOF
-apiVersion: storage.deckhouse.io/v1alpha1
-kind: LocalStorageClass
-metadata:
-  name: rawfile-multi-node
-spec:
-  rawFile:
-    dataDir: /var/lib/rawfile
-    sparse: true
-    nodes:
-    - name: worker-0
-      dataDir: /mnt/fast-ssd/rawfile
-    - name: worker-1
-      dataDir: /mnt/large-hdd/rawfile
-    - name: worker-2
-  reclaimPolicy: Delete
-  volumeBindingMode: WaitForFirstConsumer
-  fsType: ext4
-EOF
-```
-
-В этом примере:
-- `worker-0` использует `/mnt/fast-ssd/rawfile`
-- `worker-1` использует `/mnt/large-hdd/rawfile`
-- `worker-2` использует директорию по умолчанию `/var/lib/rawfile`
-
 ### Использование разреженных файлов для быстрого развёртывания
 
 Разреженные файлы создаются быстрее, но могут вызвать фрагментацию со временем:
@@ -405,7 +392,6 @@ metadata:
   name: rawfile-sparse
 spec:
   rawFile:
-    dataDir: /var/lib/sds-local-volume/rawfile
     sparse: true
   reclaimPolicy: Delete
   volumeBindingMode: WaitForFirstConsumer

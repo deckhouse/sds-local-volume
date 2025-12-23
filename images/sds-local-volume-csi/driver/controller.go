@@ -94,11 +94,8 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 		}
 	}
 
-	// Get data directory (use custom if specified, otherwise default)
-	dataDir := internal.RawFileDefaultDir
-	if customDir, ok := request.Parameters[internal.RawFileDataDirKey]; ok && customDir != "" {
-		dataDir = customDir
-	}
+	// Get data directory from environment variable (configured via module settings)
+	dataDir := internal.GetRawFileDataDir()
 
 	// Create a rawfile manager with the specified data directory
 	rfm := rawfile.NewManager(d.log, dataDir)
@@ -435,15 +432,12 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 	return d.deleteLVMVolume(ctx, request, traceID, localStorageClass)
 }
 
-func (d *Driver) deleteRawFileVolume(_ context.Context, request *csi.DeleteVolumeRequest, traceID string, lsc *slv.LocalStorageClass) (*csi.DeleteVolumeResponse, error) {
+func (d *Driver) deleteRawFileVolume(_ context.Context, request *csi.DeleteVolumeRequest, traceID string, _ *slv.LocalStorageClass) (*csi.DeleteVolumeResponse, error) {
 	volumeID := request.VolumeId
 	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] Deleting RawFile volume", traceID, volumeID))
 
-	// Get data directory from LocalStorageClass
-	dataDir := internal.RawFileDefaultDir
-	if lsc != nil && lsc.Spec.RawFile != nil && lsc.Spec.RawFile.DataDir != "" {
-		dataDir = lsc.Spec.RawFile.DataDir
-	}
+	// Get data directory from environment variable (configured via module settings)
+	dataDir := internal.GetRawFileDataDir()
 
 	rfm := rawfile.NewManager(d.log, dataDir)
 	if err := rfm.DeleteVolume(volumeID); err != nil {

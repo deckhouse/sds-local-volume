@@ -60,8 +60,7 @@ const (
 	LVMThickContiguousParamKey   = LocalStorageClassProvisioner + "/lvm-thick-contiguous"
 	LVMVolumeCleanupParamKey     = LocalStorageClassProvisioner + "/lvm-volume-cleanup"
 
-	RawFileDataDirParamKey = LocalStorageClassProvisioner + "/rawfile-data-dir"
-	RawFileSparseParamKey  = LocalStorageClassProvisioner + "/rawfile-sparse"
+	RawFileSparseParamKey = LocalStorageClassProvisioner + "/rawfile-sparse"
 
 	FSTypeParamKey = "csi.storage.k8s.io/fstype"
 	DefaultFSType  = "ext4"

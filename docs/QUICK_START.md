@@ -260,7 +260,6 @@ If you don't want to use LVM or don't have dedicated block devices, you can use 
      name: rawfile-storage
    spec:
      rawFile:
-       dataDir: /var/lib/sds-local-volume/rawfile
        sparse: false
      reclaimPolicy: Delete
      volumeBindingMode: WaitForFirstConsumer

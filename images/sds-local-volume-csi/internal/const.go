@@ -16,6 +16,8 @@ limitations under the License.
 
 package internal
 
+import "os"
+
 const (
 	TypeKey                     = "local.csi.storage.deckhouse.io/type"
 	Lvm                         = "lvm"
@@ -44,9 +46,19 @@ const (
 	FSTypeXfs  = "xfs"
 
 	// RawFile volume type constants
-	RawFileDataDirKey    = "local.csi.storage.deckhouse.io/rawfile-data-dir"
-	RawFileDefaultDir    = "/var/lib/sds-local-volume/rawfile"
-	RawFileDevicePathKey = "rawfileDevicePath"
-	RawFilePathKey       = "rawfilePath"
-	RawFileSparseKey     = "local.csi.storage.deckhouse.io/rawfile-sparse"
+	RawFileDataDirKey         = "local.csi.storage.deckhouse.io/rawfile-data-dir"
+	RawFileDefaultDir         = "/var/lib/sds-local-volume/rawfile"
+	RawFileDefaultDataDirEnv  = "RAWFILE_DEFAULT_DATA_DIR"
+	RawFileDevicePathKey      = "rawfileDevicePath"
+	RawFilePathKey            = "rawfilePath"
+	RawFileSparseKey          = "local.csi.storage.deckhouse.io/rawfile-sparse"
 )
+
+// GetRawFileDataDir returns the data directory for RawFile volumes.
+// It first checks the environment variable, then falls back to the default.
+func GetRawFileDataDir() string {
+	if dir := os.Getenv(RawFileDefaultDataDirEnv); dir != "" {
+		return dir
+	}
+	return RawFileDefaultDir
+}

@@ -67,9 +67,6 @@ type LocalStorageClassLVMThickSpec struct {
 
 // LocalStorageClassRawFileSpec defines the configuration for RawFile (loop device) volumes
 type LocalStorageClassRawFileSpec struct {
-	// DataDir is the directory where raw files will be stored
-	// Default: /var/lib/sds-local-volume/rawfile
-	DataDir string `json:"dataDir,omitempty"`
 	// Sparse indicates whether to create sparse files (faster but may fragment)
 	// Default: false (pre-allocated files)
 	Sparse bool `json:"sparse,omitempty"`
@@ -81,6 +78,4 @@ type LocalStorageClassRawFileSpec struct {
 type LocalStorageClassRawFileNode struct {
 	// Name is the name of the node
 	Name string `json:"name"`
-	// DataDir is the data directory for this specific node (overrides global DataDir)
-	DataDir string `json:"dataDir,omitempty"`
 }
