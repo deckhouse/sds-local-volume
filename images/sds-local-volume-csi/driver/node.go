@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/rawfile"
 )
 
 const (
@@ -74,8 +75,16 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume capability cannot be empty")
 	}
 
-	context := request.GetVolumeContext()
-	vgName, ok := context[internal.VGNameKey]
+	volumeContext := request.GetVolumeContext()
+
+	// Check if this is a RawFile volume
+	volumeType := volumeContext[internal.TypeKey]
+	if volumeType == internal.RawFile {
+		return d.nodeStageRawFileVolume(request)
+	}
+
+	// LVM volume handling
+	vgName, ok := volumeContext[internal.VGNameKey]
 	if !ok {
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume group name cannot be empty")
 	}
@@ -135,8 +144,8 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		return nil, status.Errorf(codes.NotFound, "[NodeStageVolume] Device %s not found", devPath)
 	}
 
-	lvmType := context[internal.LvmTypeKey]
-	lvmThinPoolName := context[internal.ThinPoolNameKey]
+	lvmType := volumeContext[internal.LvmTypeKey]
+	lvmThinPoolName := volumeContext[internal.ThinPoolNameKey]
 
 	d.log.Trace(fmt.Sprintf("formatOptions = %s", formatOptions))
 	d.log.Trace(fmt.Sprintf("mountOptions = %s", mountOptions))
@@ -169,6 +178,120 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
+func (d *Driver) nodeStageRawFileVolume(request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+	volumeID := request.GetVolumeId()
+	target := request.GetStagingTargetPath()
+	volCap := request.GetVolumeCapability()
+	volumeContext := request.GetVolumeContext()
+
+	d.log.Info(fmt.Sprintf("[NodeStageVolume] Staging RawFile volume %s", volumeID))
+
+	if volCap.GetBlock() != nil {
+		d.log.Info("[NodeStageVolume] Block volume detected. Skipping staging for RawFile.")
+		return &csi.NodeStageVolumeResponse{}, nil
+	}
+
+	mountVolume := volCap.GetMount()
+	if mountVolume == nil {
+		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume capability mount cannot be empty")
+	}
+
+	fsType := mountVolume.GetFsType()
+	if fsType == "" {
+		fsType = defaultFsType
+	}
+
+	_, ok := ValidFSTypes[strings.ToLower(fsType)]
+	if !ok {
+		d.log.Error(fmt.Errorf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes), "Invalid fsType")
+		return nil, status.Errorf(codes.InvalidArgument, "invalid fsType")
+	}
+
+	formatOptions := []string{}
+
+	// support mounting on old linux kernels
+	needLegacySupport, err := needLegacyXFSSupport()
+	if err != nil {
+		return nil, err
+	}
+	if fsType == internal.FSTypeXfs && needLegacySupport {
+		d.log.Info("[NodeStageVolume] legacy xfs support is on")
+		formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0", "-i", "nrext64=0")
+	}
+
+	mountOptions := collectMountOptions(fsType, mountVolume.GetMountFlags(), []string{})
+
+	d.log.Debug(fmt.Sprintf("[NodeStageVolume] RawFile Volume %s operation started", volumeID))
+	ok = d.inFlight.Insert(volumeID)
+	if !ok {
+		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
+	}
+	defer func() {
+		d.log.Debug(fmt.Sprintf("[NodeStageVolume] RawFile Volume %s operation completed", volumeID))
+		d.inFlight.Delete(volumeID)
+	}()
+
+	// Get data directory from volume context or use default
+	dataDir := internal.RawFileDefaultDir
+	if customDir, ok := volumeContext[internal.RawFileDataDirKey]; ok && customDir != "" {
+		dataDir = customDir
+	}
+
+	// Create rawfile manager with the appropriate data directory
+	rfm := rawfile.NewManager(d.log, dataDir)
+
+	// Get the raw file path
+	volumePath := rfm.GetVolumePath(volumeID)
+
+	// Check if the raw file exists
+	exists, err := d.storeManager.PathExists(volumePath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error checking if rawfile exists: %v", err)
+	}
+	if !exists {
+		return nil, status.Errorf(codes.NotFound, "[NodeStageVolume] RawFile %s not found", volumePath)
+	}
+
+	// Attach the raw file as a loop device
+	devPath, err := rfm.AttachLoopDevice(volumePath)
+	if err != nil {
+		d.log.Error(err, "[NodeStageVolume] Error attaching loop device")
+		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error attaching loop device for %s: %v", volumePath, err)
+	}
+
+	d.log.Info(fmt.Sprintf("[NodeStageVolume] RawFile %s attached to %s", volumePath, devPath))
+	d.log.Trace(fmt.Sprintf("[NodeStageVolume] formatOptions = %s", formatOptions))
+	d.log.Trace(fmt.Sprintf("[NodeStageVolume] mountOptions = %s", mountOptions))
+	d.log.Trace(fmt.Sprintf("[NodeStageVolume] fsType = %s", fsType))
+
+	// Use the store manager to format and mount
+	err = d.storeManager.NodeStageVolumeFS(devPath, target, fsType, mountOptions, formatOptions, "", "")
+	if err != nil {
+		d.log.Error(err, "[NodeStageVolume] Error mounting RawFile volume")
+		// Try to detach the loop device on error
+		_ = rfm.DetachLoopDeviceByPath(devPath)
+		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error format device %q and mounting volume at %q: %v", devPath, target, err)
+	}
+
+	needResize, err := d.storeManager.NeedResize(devPath, target)
+	if err != nil {
+		d.log.Error(err, "[NodeStageVolume] Error checking if RawFile volume needs resize")
+		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error checking if the volume %q (%q) mounted at %q needs resizing: %v", volumeID, devPath, target, err)
+	}
+
+	if needResize {
+		d.log.Info(fmt.Sprintf("[NodeStageVolume] Resizing RawFile volume %q (%q) mounted at %q", volumeID, devPath, target))
+		err = d.storeManager.ResizeFS(target)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error resizing volume %q (%q) mounted at %q: %v", volumeID, devPath, target, err)
+		}
+	}
+
+	d.log.Info(fmt.Sprintf("[NodeStageVolume] RawFile Volume %q (%q) successfully staged at %s. FsType: %s", volumeID, devPath, target, fsType))
+
+	return &csi.NodeStageVolumeResponse{}, nil
+}
+
 func (d *Driver) NodeUnstageVolume(_ context.Context, request *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] method called with request: %v", request))
 	volumeID := request.GetVolumeId()
@@ -190,9 +313,21 @@ func (d *Driver) NodeUnstageVolume(_ context.Context, request *csi.NodeUnstageVo
 		d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] Volume %s operation completed", volumeID))
 		d.inFlight.Delete(volumeID)
 	}()
+
+	// Unmount the volume
 	err := d.storeManager.Unstage(target)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "[NodeUnstageVolume] Error unmounting volume %q mounted at %q: %v", volumeID, target, err)
+	}
+
+	// Check if this is a RawFile volume and detach the loop device if so
+	if d.rawfileManager.VolumeExists(volumeID) {
+		volumePath := d.rawfileManager.GetVolumePath(volumeID)
+		d.log.Info(fmt.Sprintf("[NodeUnstageVolume] Detaching loop device for RawFile volume %s", volumeID))
+		if err := d.rawfileManager.DetachLoopDevice(volumePath); err != nil {
+			d.log.Warning(fmt.Sprintf("[NodeUnstageVolume] Failed to detach loop device for %s: %v", volumePath, err))
+			// Don't fail the unstage if loop device detachment fails
+		}
 	}
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
@@ -229,12 +364,38 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 		mountOptions = append(mountOptions, "ro")
 	}
 
-	vgName, ok := request.GetVolumeContext()[internal.VGNameKey]
-	if !ok {
-		return nil, status.Error(codes.InvalidArgument, "[NodePublishVolume] Volume group name cannot be empty")
+	volumeContext := request.GetVolumeContext()
+	var devPath string
+
+	// Check if this is a RawFile volume
+	volumeType := volumeContext[internal.TypeKey]
+	if volumeType == internal.RawFile {
+		// Get data directory from volume context or use default
+		dataDir := internal.RawFileDefaultDir
+		if customDir, hasCustomDir := volumeContext[internal.RawFileDataDirKey]; hasCustomDir && customDir != "" {
+			dataDir = customDir
+		}
+
+		rfm := rawfile.NewManager(d.log, dataDir)
+		volumePath := rfm.GetVolumePath(volumeID)
+
+		// Find the loop device for this rawfile
+		var err error
+		devPath, err = rfm.FindLoopDevice(volumePath)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "[NodePublishVolume] Loop device not found for RawFile %s: %v", volumePath, err)
+		}
+		d.log.Debug(fmt.Sprintf("[NodePublishVolume] RawFile %s using loop device: %s", volumeID, devPath))
+	} else {
+		// LVM volume handling
+		vgName, hasVGName := volumeContext[internal.VGNameKey]
+		if !hasVGName {
+			return nil, status.Error(codes.InvalidArgument, "[NodePublishVolume] Volume group name cannot be empty")
+		}
+
+		devPath = fmt.Sprintf("/dev/%s/%s", vgName, request.VolumeId)
 	}
 
-	devPath := fmt.Sprintf("/dev/%s/%s", vgName, request.VolumeId)
 	d.log.Debug(fmt.Sprintf("[NodePublishVolume] Checking if device exists: %s", devPath))
 	exists, err := d.storeManager.PathExists(devPath)
 	if err != nil {
@@ -246,8 +407,7 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 
 	d.log.Debug(fmt.Sprintf("[NodePublishVolume] Volume %s operation started", volumeID))
 
-	ok = d.inFlight.Insert(volumeID)
-	if !ok {
+	if inserted := d.inFlight.Insert(volumeID); !inserted {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
 	}
 	defer func() {
@@ -275,8 +435,7 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 			fsType = defaultFsType
 		}
 
-		_, ok = ValidFSTypes[strings.ToLower(fsType)]
-		if !ok {
+		if _, validFS := ValidFSTypes[strings.ToLower(fsType)]; !validFS {
 			d.log.Error(fmt.Errorf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes), "Invalid fsType")
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid fsType")
 		}

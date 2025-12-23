@@ -19,6 +19,7 @@ package internal
 const (
 	TypeKey                     = "local.csi.storage.deckhouse.io/type"
 	Lvm                         = "lvm"
+	RawFile                     = "rawfile"
 	LvmTypeKey                  = "local.csi.storage.deckhouse.io/lvm-type"
 	BindingModeKey              = "local.csi.storage.deckhouse.io/volume-binding-mode"
 	LVMVolumeGroupKey           = "local.csi.storage.deckhouse.io/lvm-volume-groups"
@@ -41,4 +42,11 @@ const (
 	// supported filesystem types
 	FSTypeExt4 = "ext4"
 	FSTypeXfs  = "xfs"
+
+	// RawFile volume type constants
+	RawFileDataDirKey    = "local.csi.storage.deckhouse.io/rawfile-data-dir"
+	RawFileDefaultDir    = "/var/lib/sds-local-volume/rawfile"
+	RawFileDevicePathKey = "rawfileDevicePath"
+	RawFilePathKey       = "rawfilePath"
+	RawFileSparseKey     = "local.csi.storage.deckhouse.io/rawfile-sparse"
 )
