@@ -46,7 +46,8 @@ const (
 	LVMThinType  = "Thin"
 	LVMThickType = "Thick"
 
-	LocalStorageClassLvmType = "lvm"
+	LocalStorageClassLvmType     = "lvm"
+	LocalStorageClassRawFileType = "rawfile"
 
 	StorageClassKind       = "StorageClass"
 	StorageClassAPIVersion = "storage.k8s.io/v1"
@@ -58,6 +59,8 @@ const (
 	LVMVolumeGroupsParamKey      = LocalStorageClassProvisioner + "/lvm-volume-groups"
 	LVMThickContiguousParamKey   = LocalStorageClassProvisioner + "/lvm-thick-contiguous"
 	LVMVolumeCleanupParamKey     = LocalStorageClassProvisioner + "/lvm-volume-cleanup"
+
+	RawFileSparseParamKey = LocalStorageClassProvisioner + "/rawfile-sparse"
 
 	FSTypeParamKey = "csi.storage.k8s.io/fstype"
 	DefaultFSType  = "ext4"

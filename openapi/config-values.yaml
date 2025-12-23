@@ -15,6 +15,13 @@ properties:
     type: boolean
     default: false
     description: Allow thin LVM volumes usage
+  rawFileDefaultDataDir:
+    type: string
+    default: /var/lib/sds-local-volume/rawfile
+    description: |
+      Default directory for storing RawFile volumes data.
+
+      This directory will be used when `dataDir` is not specified in LocalStorageClass.
   dataNodes:
     type: object
     description: Settings for local volumes csi on nodes with data

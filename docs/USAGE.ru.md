@@ -269,6 +269,147 @@ d8 k annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kube
 На самом узле будет присутствовать метка `storage.deckhouse.io/sds-local-volume-need-manual-eviction`.
 {{< /alert >}}
 
+## Использование RawFile-томов
+
+RawFile-тома используют локальные файлы, смонтированные как loop-устройства, для предоставления хранилища. Этот подход не требует настройки LVM и полезен, когда нужно простое файловое хранилище на узлах.
+
+### Когда использовать RawFile
+
+- Когда LVM недоступен или не требуется
+- Для окружений разработки и тестирования
+- Когда требуется быстрое развёртывание без управления блочными устройствами
+- Для лёгких требований к хранилищу
+
+### Настройка директории данных
+
+Директория по умолчанию для RawFile-томов настраивается в параметрах модуля с помощью `rawFileDefaultDataDir`. Значение по умолчанию: `/var/lib/sds-local-volume/rawfile`.
+
+Для изменения директории по умолчанию:
+
+```shell
+d8 k apply -f -<<EOF
+apiVersion: deckhouse.io/v1alpha1
+kind: ModuleConfig
+metadata:
+  name: sds-local-volume
+spec:
+  enabled: true
+  version: 1
+  settings:
+    rawFileDefaultDataDir: /mnt/data/rawfile
+EOF
+```
+
+### Создание LocalStorageClass на основе RawFile
+
+1. Создайте ресурс [LocalStorageClass](./cr.html#localstorageclass) с конфигурацией RawFile:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: rawfile-storage-class
+   spec:
+     rawFile:
+       sparse: false
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+     fsType: ext4
+   EOF
+   ```
+
+   Параметры:
+
+   - `sparse` — если `true`, создаются разреженные файлы (быстрее, но может вызвать фрагментацию). Если `false`, файлы предварительно выделяются (медленнее, но без фрагментации). По умолчанию: `false`
+   - `fsType` — тип файловой системы для форматирования томов. Поддерживаемые значения: `ext4`, `xfs`. По умолчанию: `ext4`
+
+1. Дождитесь перехода ресурса [LocalStorageClass](cr.html#localstorageclass) в состояние `Created`:
+
+   ```shell
+   d8 k get lsc rawfile-storage-class -w
+   ```
+
+1. Проверьте, что создан соответствующий StorageClass:
+
+   ```shell
+   d8 k get sc rawfile-storage-class
+   ```
+
+### Создание PersistentVolumeClaim с RawFile-хранилищем
+
+1. Создайте PVC с использованием RawFile StorageClass:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: v1
+   kind: PersistentVolumeClaim
+   metadata:
+     name: my-rawfile-pvc
+     namespace: default
+   spec:
+     accessModes:
+       - ReadWriteOnce
+     storageClassName: rawfile-storage-class
+     resources:
+       requests:
+         storage: 10Gi
+   EOF
+   ```
+
+1. Создайте Pod, использующий PVC:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: v1
+   kind: Pod
+   metadata:
+     name: test-rawfile-pod
+     namespace: default
+   spec:
+     containers:
+     - name: test
+       image: nginx:alpine
+       volumeMounts:
+       - name: data
+         mountPath: /data
+     volumes:
+     - name: data
+       persistentVolumeClaim:
+         claimName: my-rawfile-pvc
+   EOF
+   ```
+
+### Использование разреженных файлов для быстрого развёртывания
+
+Разреженные файлы создаются быстрее, но могут вызвать фрагментацию со временем:
+
+```shell
+d8 k apply -f -<<EOF
+apiVersion: storage.deckhouse.io/v1alpha1
+kind: LocalStorageClass
+metadata:
+  name: rawfile-sparse
+spec:
+  rawFile:
+    sparse: true
+  reclaimPolicy: Delete
+  volumeBindingMode: WaitForFirstConsumer
+  fsType: ext4
+EOF
+```
+
+{{< alert level="info" >}}
+Разреженные файлы выглядят как файлы полного запрошенного размера, но занимают место на диске только по мере записи данных. Это полезно для тестирования или когда допустимо перевыделение ресурсов.
+{{< /alert >}}
+
+### Ограничения RawFile-томов
+
+- RawFile-тома привязаны к узлу и не могут быть мигрированы между узлами
+- Производительность может быть ниже, чем у LVM или прямого доступа к блочному устройству из-за слоя loop-устройства
+- Снимки не поддерживаются для RawFile-томов
+- Параметр `volumeCleanup` не применим к RawFile-томам
+
 ## Создание thin-хранилища
 
 1. Получите список доступных ресурсов [BlockDevice](/modules/sds-node-configurator/cr.html#blockdevice) в кластере:

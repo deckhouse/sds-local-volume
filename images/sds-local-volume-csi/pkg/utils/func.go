@@ -607,3 +607,12 @@ func IsContiguous(request *csi.CreateVolumeRequest, lvmType string) bool {
 
 	return false
 }
+
+func GetPersistentVolume(ctx context.Context, kc client.Client, pvName string) (*corev1.PersistentVolume, error) {
+	var pv corev1.PersistentVolume
+	err := kc.Get(ctx, client.ObjectKey{Name: pvName}, &pv)
+	if err != nil {
+		return nil, err
+	}
+	return &pv, nil
+}

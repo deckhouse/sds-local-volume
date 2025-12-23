@@ -32,10 +32,12 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/rawfile"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 )
 
@@ -66,11 +68,12 @@ type Driver struct {
 	httpSrv http.Server
 	log     *logger.Logger
 
-	readyMu      sync.Mutex // protects ready
-	ready        bool
-	cl           client.Client
-	storeManager utils.NodeStoreManager
-	inFlight     *internal.InFlight
+	readyMu        sync.Mutex // protects ready
+	ready          bool
+	cl             client.Client
+	storeManager   utils.NodeStoreManager
+	rawfileManager *rawfile.Manager
+	inFlight       *internal.InFlight
 
 	csi.UnimplementedControllerServer
 	csi.UnimplementedIdentityServer
@@ -87,6 +90,12 @@ func NewDriver(csiAddress, driverName, address string, nodeName *string, log *lo
 
 	st := utils.NewStore(log)
 
+	// Initialize rawfile manager with default data directory
+	rfm := rawfile.NewManager(log, internal.GetRawFileDataDir())
+	if err := rfm.EnsureDataDir(); err != nil {
+		log.Warning(fmt.Sprintf("Failed to ensure rawfile data directory: %v", err))
+	}
+
 	return &Driver{
 		name:              driverName,
 		hostID:            *nodeName,
@@ -96,6 +105,7 @@ func NewDriver(csiAddress, driverName, address string, nodeName *string, log *lo
 		waitActionTimeout: defaultWaitActionTimeout,
 		cl:                cl,
 		storeManager:      st,
+		rawfileManager:    rfm,
 		inFlight:          internal.NewInFlight(),
 	}, nil
 }
@@ -187,6 +197,163 @@ func (d *Driver) Run(ctx context.Context) error {
 		}
 		return err
 	})
+	// Start RawFile cleanup goroutine
+	eg.Go(func() error {
+		d.runRawFileCleanup(ctx)
+		return nil
+	})
 
 	return eg.Wait()
+}
+
+// runRawFileCleanup periodically checks for RawFile volumes that need cleanup
+func (d *Driver) runRawFileCleanup(ctx context.Context) {
+	// Initial delay before first cleanup
+	initialDelay := 30 * time.Second
+	cleanupInterval := 1 * time.Minute
+
+	d.log.Info(fmt.Sprintf("[RawFileCleanup] Starting cleanup goroutine, initial delay: %v, interval: %v", initialDelay, cleanupInterval))
+
+	// Wait for initial delay
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(initialDelay):
+	}
+
+	// Run first cleanup immediately after delay
+	d.processRawFilePVs(ctx)
+
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			d.log.Info("[RawFileCleanup] Stopping cleanup goroutine")
+			return
+		case <-ticker.C:
+			d.processRawFilePVs(ctx)
+		}
+	}
+}
+
+// processRawFilePVs handles finalizer management and cleanup for RawFile PVs
+func (d *Driver) processRawFilePVs(ctx context.Context) {
+	d.log.Debug("[RawFileCleanup] Starting RawFile PV processing")
+
+	// List all local volumes
+	volumes, err := d.rawfileManager.ListVolumes()
+	if err != nil {
+		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to list volumes: %v", err))
+		return
+	}
+
+	d.log.Debug(fmt.Sprintf("[RawFileCleanup] Found %d local volumes", len(volumes)))
+
+	// Process each volume
+	for _, volumeID := range volumes {
+		pv, err := d.getPV(ctx, volumeID)
+		if err != nil {
+			// PV not found - skip, don't delete files without proper PV tracking
+			d.log.Debug(fmt.Sprintf("[RawFileCleanup] PV %s not found, skipping", volumeID))
+			continue
+		}
+
+		// Check if this is a RawFile volume (check VolumeAttributes)
+		if pv.Spec.CSI == nil || pv.Spec.CSI.VolumeAttributes == nil {
+			continue
+		}
+		volumeType := pv.Spec.CSI.VolumeAttributes[internal.TypeKey]
+		if volumeType != internal.RawFile {
+			continue
+		}
+
+		// Only add finalizer for PVs with Delete reclaim policy
+		// For Retain policy, we don't manage file deletion
+		if pv.Spec.PersistentVolumeReclaimPolicy != corev1.PersistentVolumeReclaimDelete {
+			d.log.Debug(fmt.Sprintf("[RawFileCleanup] PV %s has ReclaimPolicy %s, skipping finalizer", volumeID, pv.Spec.PersistentVolumeReclaimPolicy))
+			continue
+		}
+
+		// Ensure our finalizer is present on the PV (only for Delete policy)
+		if !d.hasFinalizer(pv) {
+			d.log.Info(fmt.Sprintf("[RawFileCleanup] Adding finalizer to PV %s (ReclaimPolicy: Delete)", volumeID))
+			if err := d.addFinalizer(ctx, pv); err != nil {
+				d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to add finalizer to PV %s: %v", volumeID, err))
+				continue
+			}
+		}
+
+		// Check if PV is being deleted (has DeletionTimestamp) and has our finalizer
+		if pv.DeletionTimestamp != nil && d.hasFinalizer(pv) {
+			d.log.Info(fmt.Sprintf("[RawFileCleanup] PV %s is being deleted, cleaning up volume", volumeID))
+
+			// Detach loop device if attached
+			volumePath := d.rawfileManager.GetVolumePath(volumeID)
+			if err := d.rawfileManager.DetachLoopDevice(volumePath); err != nil {
+				d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to detach loop device for %s: %v", volumeID, err))
+			}
+
+			// Delete the volume file
+			if err := d.rawfileManager.DeleteVolume(volumeID); err != nil {
+				d.log.Error(err, fmt.Sprintf("[RawFileCleanup] Failed to delete volume %s", volumeID))
+				continue // Don't remove finalizer if deletion failed
+			}
+
+			d.log.Info(fmt.Sprintf("[RawFileCleanup] Successfully deleted volume %s, removing finalizer", volumeID))
+
+			// Remove finalizer from PV
+			if err := d.removeFinalizer(ctx, pv); err != nil {
+				d.log.Error(err, fmt.Sprintf("[RawFileCleanup] Failed to remove finalizer from PV %s", volumeID))
+			}
+		}
+	}
+
+	d.log.Debug("[RawFileCleanup] Processing completed")
+}
+
+// hasFinalizer checks if the PV has our RawFile finalizer
+func (d *Driver) hasFinalizer(pv *corev1.PersistentVolume) bool {
+	for _, f := range pv.Finalizers {
+		if f == internal.RawFilePVFinalizer {
+			return true
+		}
+	}
+	return false
+}
+
+// addFinalizer adds our RawFile finalizer to the PV
+func (d *Driver) addFinalizer(ctx context.Context, pv *corev1.PersistentVolume) error {
+	pv.Finalizers = append(pv.Finalizers, internal.RawFilePVFinalizer)
+	return d.cl.Update(ctx, pv)
+}
+
+// removeFinalizer removes our RawFile finalizer from the PV
+func (d *Driver) removeFinalizer(ctx context.Context, pv *corev1.PersistentVolume) error {
+	// Re-fetch PV to get latest version
+	freshPV, err := d.getPV(ctx, pv.Name)
+	if err != nil {
+		return fmt.Errorf("failed to get fresh PV: %w", err)
+	}
+
+	// Remove our finalizer
+	var newFinalizers []string
+	for _, f := range freshPV.Finalizers {
+		if f != internal.RawFilePVFinalizer {
+			newFinalizers = append(newFinalizers, f)
+		}
+	}
+	freshPV.Finalizers = newFinalizers
+
+	return d.cl.Update(ctx, freshPV)
+}
+
+// getPV retrieves a PersistentVolume by name
+func (d *Driver) getPV(ctx context.Context, pvName string) (*corev1.PersistentVolume, error) {
+	var pv corev1.PersistentVolume
+	if err := d.cl.Get(ctx, client.ObjectKey{Name: pvName}, &pv); err != nil {
+		return nil, err
+	}
+	return &pv, nil
 }
