@@ -562,13 +562,22 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Error(codes.InvalidArgument, "Volume id cannot be empty")
 	}
 
-	// Check if this is a RawFile volume by checking for the rawfile path in volume context
-	if rawfilePath, ok := request.GetSecrets()[internal.RawFilePathKey]; ok && rawfilePath != "" {
-		return d.expandRawFileVolume(request, traceID)
+	// Get PersistentVolume to determine volume type
+	pv, err := utils.GetPersistentVolume(ctx, d.cl, volumeID)
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error getting PersistentVolume", traceID, volumeID))
+		return nil, status.Errorf(codes.Internal, "error getting PersistentVolume: %s", err.Error())
 	}
 
-	// Also try to detect RawFile by checking if the rawfile manager knows about this volume
-	if d.rawfileManager.VolumeExists(volumeID) {
+	// Check volume type from PV's VolumeAttributes
+	volumeType := ""
+	if pv.Spec.CSI != nil && pv.Spec.CSI.VolumeAttributes != nil {
+		volumeType = pv.Spec.CSI.VolumeAttributes[internal.TypeKey]
+	}
+	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Volume type: %s", traceID, volumeID, volumeType))
+
+	// Route to appropriate expand function based on volume type
+	if volumeType == internal.RawFile {
 		return d.expandRawFileVolume(request, traceID)
 	}
 
@@ -644,36 +653,14 @@ func (d *Driver) expandRawFileVolume(request *csi.ControllerExpandVolumeRequest,
 	volumeID := request.GetVolumeId()
 	requestedBytes := request.CapacityRange.GetRequiredBytes()
 
-	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Expanding RawFile volume to %d bytes", traceID, volumeID, requestedBytes))
+	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] RawFile volume expansion requested to %d bytes", traceID, volumeID, requestedBytes))
 
-	// Get the volume info to check current size
-	volumeInfo, err := d.rawfileManager.GetVolumeInfo(volumeID)
-	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Failed to get RawFile volume info", traceID, volumeID))
-		return nil, status.Errorf(codes.Internal, "Failed to get RawFile volume info: %v", err)
-	}
-
-	// Check if expansion is needed
-	if volumeInfo.Size >= requestedBytes {
-		d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Volume already at or above requested size", traceID, volumeID))
-		nodeExpansionRequired := request.GetVolumeCapability().GetBlock() == nil
-		return &csi.ControllerExpandVolumeResponse{
-			CapacityBytes:         volumeInfo.Size,
-			NodeExpansionRequired: nodeExpansionRequired,
-		}, nil
-	}
-
-	// Check if sparse mode should be used (default to false for expansion)
-	sparse := false
-
-	// Expand the volume
-	if err := d.rawfileManager.ExpandVolume(volumeID, requestedBytes, sparse); err != nil {
-		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Failed to expand RawFile volume", traceID, volumeID))
-		return nil, status.Errorf(codes.Internal, "Failed to expand RawFile volume: %v", err)
-	}
-
+	// For RawFile volumes, the actual file expansion must happen on the node where the file is located.
+	// The controller cannot expand the file directly because it runs on a different node.
+	// We return NodeExpansionRequired: true so that NodeExpandVolume will handle the actual expansion.
 	nodeExpansionRequired := request.GetVolumeCapability().GetBlock() == nil
-	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] RawFile volume expanded successfully", traceID, volumeID))
+
+	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] RawFile volume expansion will be handled by NodeExpandVolume, NodeExpansionRequired: %t", traceID, volumeID, nodeExpansionRequired))
 
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         requestedBytes,

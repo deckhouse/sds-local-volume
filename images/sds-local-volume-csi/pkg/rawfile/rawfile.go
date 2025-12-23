@@ -402,6 +402,22 @@ func (m *Manager) RefreshLoopDevice(devicePath string) error {
 	return nil
 }
 
+// RescanLoopDevice finds and refreshes the loop device associated with a backing file
+func (m *Manager) RescanLoopDevice(filePath string) error {
+	m.log.Info(fmt.Sprintf("[RawFile] Rescanning loop device for %s", filePath))
+
+	devicePath, err := m.FindLoopDevice(filePath)
+	if err != nil {
+		if errors.Is(err, ErrLoopDeviceNotFound) {
+			m.log.Info(fmt.Sprintf("[RawFile] No loop device found for %s, nothing to rescan", filePath))
+			return nil
+		}
+		return fmt.Errorf("failed to find loop device: %w", err)
+	}
+
+	return m.RefreshLoopDevice(devicePath)
+}
+
 // VolumeExists checks if a volume with the given ID exists
 func (m *Manager) VolumeExists(volumeID string) bool {
 	volumePath := m.GetVolumePath(volumeID)
