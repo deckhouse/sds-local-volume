@@ -90,9 +90,16 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 
 	switch bindingMode {
 	case internal.BindingModeWFFC:
-		if len(request.AccessibilityRequirements.Preferred) != 0 {
-			t := request.AccessibilityRequirements.Preferred[0].Segments
-			preferredNode = t[internal.TopologyKey]
+		// For WaitForFirstConsumer, get node from topology requirements
+		if request.AccessibilityRequirements != nil {
+			if len(request.AccessibilityRequirements.Preferred) != 0 {
+				preferredNode = request.AccessibilityRequirements.Preferred[0].Segments[internal.TopologyKey]
+			} else if len(request.AccessibilityRequirements.Requisite) != 0 {
+				preferredNode = request.AccessibilityRequirements.Requisite[0].Segments[internal.TopologyKey]
+			}
+		}
+		if preferredNode == "" {
+			return nil, status.Error(codes.InvalidArgument, "[CreateVolume] No node topology provided for WaitForFirstConsumer binding mode")
 		}
 	case internal.BindingModeI:
 		// For Immediate binding, use the current node
