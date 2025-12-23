@@ -84,34 +84,7 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 		sizeBytes = 1024 * 1024 * 1024
 	}
 
-	// Get preferred node from topology
-	var preferredNode string
 	bindingMode := request.Parameters[internal.BindingModeKey]
-
-	switch bindingMode {
-	case internal.BindingModeWFFC:
-		// For WaitForFirstConsumer, get node from topology requirements
-		if request.AccessibilityRequirements != nil {
-			if len(request.AccessibilityRequirements.Preferred) != 0 {
-				preferredNode = request.AccessibilityRequirements.Preferred[0].Segments[internal.TopologyKey]
-			} else if len(request.AccessibilityRequirements.Requisite) != 0 {
-				preferredNode = request.AccessibilityRequirements.Requisite[0].Segments[internal.TopologyKey]
-			}
-		}
-		if preferredNode == "" {
-			return nil, status.Error(codes.InvalidArgument, "[CreateVolume] No node topology provided for WaitForFirstConsumer binding mode")
-		}
-	case internal.BindingModeI:
-		// For Immediate binding, use the current node
-		preferredNode = d.hostID
-	default:
-		preferredNode = d.hostID
-	}
-
-	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] preferredNode: %s, size: %d bytes", traceID, volumeID, preferredNode, sizeBytes))
-
-	// Note: The actual file creation happens in NodeStageVolume on the target node.
-	// Here we only prepare the volume metadata.
 
 	// Build volume context with parameters needed for file creation on the node
 	volumeCtx := make(map[string]string, len(request.Parameters))
@@ -121,19 +94,49 @@ func (d *Driver) createRawFileVolume(ctx context.Context, request *csi.CreateVol
 	// Store requested size in volume context for node-side creation
 	volumeCtx[internal.RawFileSizeKey] = strconv.FormatInt(sizeBytes, 10)
 
-	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] RawFile volume metadata prepared, file will be created on node %s", traceID, volumeID, preferredNode))
+	// Build accessible topology based on binding mode
+	var accessibleTopology []*csi.Topology
+
+	switch bindingMode {
+	case internal.BindingModeWFFC:
+		// For WaitForFirstConsumer, use the preferred node from scheduler
+		// The scheduler has already selected the node where the pod will run
+		if request.AccessibilityRequirements != nil {
+			if len(request.AccessibilityRequirements.Preferred) != 0 {
+				// Use the preferred topology from scheduler
+				accessibleTopology = request.AccessibilityRequirements.Preferred
+				d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Using preferred topology from scheduler: %d nodes", traceID, volumeID, len(accessibleTopology)))
+			} else if len(request.AccessibilityRequirements.Requisite) != 0 {
+				// Fallback to requisite topologies
+				accessibleTopology = request.AccessibilityRequirements.Requisite
+				d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Using requisite topology: %d nodes", traceID, volumeID, len(accessibleTopology)))
+			}
+		}
+		if len(accessibleTopology) == 0 {
+			return nil, status.Error(codes.InvalidArgument, "[CreateVolume] No node topology provided for WaitForFirstConsumer binding mode")
+		}
+	case internal.BindingModeI:
+		// For Immediate binding, use the current node
+		accessibleTopology = []*csi.Topology{
+			{Segments: map[string]string{internal.TopologyKey: d.hostID}},
+		}
+		d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Immediate mode, using current node: %s", traceID, volumeID, d.hostID))
+	default:
+		accessibleTopology = []*csi.Topology{
+			{Segments: map[string]string{internal.TopologyKey: d.hostID}},
+		}
+		d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Default mode, using current node: %s", traceID, volumeID, d.hostID))
+	}
+
+	d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] RawFile volume metadata prepared, size: %d bytes", traceID, volumeID, sizeBytes))
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			CapacityBytes: sizeBytes,
-			VolumeId:      volumeID,
-			VolumeContext: volumeCtx,
-			ContentSource: request.VolumeContentSource,
-			AccessibleTopology: []*csi.Topology{
-				{Segments: map[string]string{
-					internal.TopologyKey: preferredNode,
-				}},
-			},
+			CapacityBytes:      sizeBytes,
+			VolumeId:           volumeID,
+			VolumeContext:      volumeCtx,
+			ContentSource:      request.VolumeContentSource,
+			AccessibleTopology: accessibleTopology,
 		},
 	}, nil
 }
