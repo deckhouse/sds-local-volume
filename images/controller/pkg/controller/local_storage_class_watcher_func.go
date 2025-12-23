@@ -484,8 +484,9 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 
 	case lsc.Spec.RawFile != nil:
 		params = map[string]string{
-			TypeParamKey:   LocalStorageClassRawFileType,
-			FSTypeParamKey: fsType,
+			TypeParamKey:                 LocalStorageClassRawFileType,
+			LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
+			FSTypeParamKey:               fsType,
 		}
 
 		if lsc.Spec.RawFile.Sparse {
