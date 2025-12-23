@@ -162,47 +162,44 @@ func (m *Manager) fallocate(path string, sizeBytes int64) error {
 	cmd := exec.Command("fallocate", "-l", strconv.FormatInt(sizeBytes, 10), path)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Fallback to dd if fallocate fails (e.g., on some filesystems)
-		m.log.Warning(fmt.Sprintf("[RawFile] fallocate failed, falling back to dd: %s", string(output)))
-		return m.ddAllocate(path, sizeBytes)
+		// Fallback to Go-based allocation if fallocate fails (e.g., on some filesystems like NFS)
+		m.log.Warning(fmt.Sprintf("[RawFile] fallocate failed, falling back to Go-based allocation: %s", string(output)))
+		return m.goAllocate(path, sizeBytes)
 	}
 
 	return nil
 }
 
-// ddAllocate creates a file using dd as a fallback when fallocate is not supported
-func (m *Manager) ddAllocate(path string, sizeBytes int64) error {
-	// Calculate block size and count for efficient allocation
-	blockSize := int64(1024 * 1024) // 1MB blocks
-	count := sizeBytes / blockSize
-	remainder := sizeBytes % blockSize
+// goAllocate creates a pre-allocated file using pure Go as a fallback
+// when fallocate is not supported by the filesystem
+func (m *Manager) goAllocate(path string, sizeBytes int64) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, DefaultFileMode)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
 
-	if count > 0 {
-		cmd := exec.Command("dd",
-			"if=/dev/zero",
-			fmt.Sprintf("of=%s", path),
-			fmt.Sprintf("bs=%d", blockSize),
-			fmt.Sprintf("count=%d", count),
-			"conv=fsync",
-		)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("dd failed: %s: %w", string(output), err)
+	// Write zeros in chunks to avoid memory issues
+	const chunkSize = 4 * 1024 * 1024 // 4MB chunks
+	zeroChunk := make([]byte, chunkSize)
+	
+	remaining := sizeBytes
+	for remaining > 0 {
+		writeSize := int64(chunkSize)
+		if remaining < writeSize {
+			writeSize = remaining
 		}
+		
+		n, err := file.Write(zeroChunk[:writeSize])
+		if err != nil {
+			return fmt.Errorf("failed to write zeros: %w", err)
+		}
+		remaining -= int64(n)
 	}
 
-	if remainder > 0 {
-		cmd := exec.Command("dd",
-			"if=/dev/zero",
-			fmt.Sprintf("of=%s", path),
-			fmt.Sprintf("bs=%d", remainder),
-			"count=1",
-			"conv=fsync,notrunc",
-			fmt.Sprintf("seek=%d", count*blockSize),
-			"oflag=seek_bytes",
-		)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("dd (remainder) failed: %s: %w", string(output), err)
-		}
+	// Sync to disk
+	if err := file.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
 	}
 
 	return nil
