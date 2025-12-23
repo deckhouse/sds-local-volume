@@ -19,8 +19,13 @@ package consts
 const (
 	SdsLocalVolumeProvisioner = "local.csi.storage.deckhouse.io"
 
+	TypeParamKey            = "local.csi.storage.deckhouse.io/type"
 	LvmTypeParamKey         = "local.csi.storage.deckhouse.io/lvm-type"
 	LVMVolumeGroupsParamKey = "local.csi.storage.deckhouse.io/lvm-volume-groups"
+
+	// Storage class types
+	TypeLVM     = "lvm"
+	TypeRawFile = "rawfile"
 
 	Thick = "Thick"
 	Thin  = "Thin"
