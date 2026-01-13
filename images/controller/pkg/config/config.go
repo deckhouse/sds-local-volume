@@ -21,7 +21,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 )
 
 const (
@@ -30,7 +30,7 @@ const (
 	ConfigSecretName                     = "d8-sds-local-volume-controller-config"
 	ControllerNamespaceEnv               = "CONTROLLER_NAMESPACE"
 	HardcodedControllerNS                = "d8-sds-local-volume"
-	ControllerName                       = "sds-local-volume-controller"
+	ControllerName                       = "d8-controller"
 	DefaultHealthProbeBindAddressEnvName = "HEALTH_PROBE_BIND_ADDRESS"
 	DefaultHealthProbeBindAddress        = ":8081"
 )

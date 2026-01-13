@@ -33,10 +33,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/config"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/controller"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/kubutils"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/controller"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/kubutils"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
