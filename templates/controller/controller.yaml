@@ -1,0 +1,40 @@
+{{- /* Webhook TLS Certs Secret */ -}}
+{{- $secretConfig := dict
+  "valuesKey" "sdsLocalVolume"
+  "webhookCertPath" "internal.customWebhookCert"
+}}
+{{ include "helm_lib_module_webhook_certs_secret" (list . $secretConfig) }}
+
+{{- /* Controller Deployment */ -}}
+{{- $config := dict
+  "valuesKey" "sdsLocalVolume"
+  "webhookEnabled" true
+  "webhookCertPath" "internal.customWebhookCert"
+  "onMasterNode" true
+  "podSecurityContext" "deckhouse"
+}}
+{{ include "helm_lib_module_controller_manifests" (list . $config) }}
+
+{{- /* Webhook Service */ -}}
+{{ include "helm_lib_module_webhook_service" (list . dict) }}
+
+{{- /* ValidatingWebhookConfiguration for LocalStorageClasses */ -}}
+{{- $lscWebhookConfig := dict
+  "name" "lsc-validation"
+  "webhookName" "lsc-validation"
+  "valuesKey" "sdsLocalVolume"
+  "path" "/lsc-validate"
+  "failurePolicy" "Fail"
+  "rules" (list (dict "apiGroups" (list "storage.deckhouse.io") "apiVersions" (list "v1alpha1") "operations" (list "CREATE" "UPDATE") "resources" (list "localstorageclasses") "scope" "Cluster"))
+}}
+{{ include "helm_lib_module_validating_webhook_configuration" (list . $lscWebhookConfig) }}
+
+{{- /* ValidatingWebhookConfiguration for StorageClasses */ -}}
+{{- $scWebhookConfig := dict
+  "name" "sc-validation"
+  "webhookName" "sc-validation"
+  "valuesKey" "sdsLocalVolume"
+  "path" "/sc-validate"
+  "rules" (list (dict "apiGroups" (list "storage.k8s.io") "apiVersions" (list "v1") "operations" (list "*") "resources" (list "storageclasses") "scope" "Cluster"))
+}}
+{{ include "helm_lib_module_validating_webhook_configuration" (list . $scWebhookConfig) }}

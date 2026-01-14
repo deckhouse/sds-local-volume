@@ -24,7 +24,7 @@ spec:
     kind: Deployment
     name: sds-local-volume-scheduler-extender
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: "Initial"
   resourcePolicy:
     containerPolicies:
     - containerName: sds-local-volume-scheduler-extender

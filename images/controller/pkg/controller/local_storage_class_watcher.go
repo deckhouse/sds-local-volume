@@ -36,8 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/config"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 )
 
 const (

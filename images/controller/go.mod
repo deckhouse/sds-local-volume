@@ -1,4 +1,4 @@
-module github.com/deckhouse/sds-local-volume/images/sds-local-volume-controller
+module github.com/deckhouse/sds-local-volume/images/controller
 
 go 1.24.10
 
