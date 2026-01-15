@@ -175,6 +175,9 @@ spec:
                             Expressions for the LVMVolumeGroup selector.
                           items:
                             type: object
+                            required:
+                              - key
+                              - operator
                             properties:
                               key:
                                 type: string

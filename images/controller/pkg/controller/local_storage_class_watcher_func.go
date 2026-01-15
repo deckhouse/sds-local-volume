@@ -999,9 +999,9 @@ func resolveLVMVolumeGroups(
 			return nil, fmt.Errorf("unable to parse lvmVolumeGroupSelector: %w", err)
 		}
 
-		// Don't match anything if selector is empty
+		// Don't allow empty selector as it would match all LVGs
 		if selector.Empty() {
-			return nil, fmt.Errorf("lvmVolumeGroupSelector is empty, which would match all LVGs")
+			return nil, fmt.Errorf("empty lvmVolumeGroupSelector would match all LVGs; specify matchLabels or matchExpressions to select specific LVGs")
 		}
 
 		for _, lvg := range lvgList.Items {

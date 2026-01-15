@@ -425,6 +425,142 @@ The node itself will have the `storage.deckhouse.io/sds-local-volume-need-manual
 
 You can now create PVCs, specifying the StorageClass named `local-storage-class`.
 
+## Creating storage with LVMVolumeGroupSet and selector
+
+When managing a large number of nodes, you can use [LVMVolumeGroupSet](/modules/sds-node-configurator/cr.html#lvmvolumegroupset) to automatically create [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources on nodes matching a selector. Then, use `lvmVolumeGroupSelector` in [LocalStorageClass](cr.html#localstorageclass) to automatically select all LVGs created by the set.
+
+This approach is useful when:
+- You have many nodes with similar storage configurations
+- Nodes are added/removed dynamically
+- You want to avoid manually listing each LVMVolumeGroup name
+
+### Example: Creating Thick storage with LVMVolumeGroupSet
+
+1. Create an [LVMVolumeGroupSet](/modules/sds-node-configurator/cr.html#lvmvolumegroupset) that creates LVMVolumeGroups on all worker nodes:
+
+   ```shell
+   d8 k apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroupSet
+   metadata:
+     name: my-vg-set
+   spec:
+     nodeSelector:
+       matchLabels:
+         node-role.kubernetes.io/worker: ""
+     strategy: PerNode
+     lvmVolumeGroupTemplate:
+       metadata:
+         labels:
+           storage.deckhouse.io/lvg-group: my-storage
+       type: Local
+       actualVGNameOnTheNode: data-vg
+       blockDeviceSelector:
+         matchLabels:
+           storage.deckhouse.io/enabled: "true"
+   EOF
+   ```
+
+1. Wait for [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources to be created:
+
+   ```shell
+   d8 k get lvg -l storage.deckhouse.io/lvg-group=my-storage
+   ```
+
+1. Create a [LocalStorageClass](cr.html#localstorageclass) using `lvmVolumeGroupSelector`:
+
+   ```shell
+   d8 k apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: my-thick-storage
+   spec:
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+     lvm:
+       type: Thick
+       lvmVolumeGroupSelector:
+         matchLabels:
+           storage.deckhouse.io/lvg-group: my-storage
+   EOF
+   ```
+
+   The LocalStorageClass will automatically include all LVMVolumeGroups with the label `storage.deckhouse.io/lvg-group: my-storage`. When new nodes are added and LVMVolumeGroupSet creates new LVGs with this label, the StorageClass will automatically be updated to include them.
+
+### Example: Creating Thin storage with LVMVolumeGroupSet
+
+For Thin type storage with selector, you must specify `thinPoolName` — the thin pool name that all selected LVMVolumeGroups must have:
+
+1. Create an [LVMVolumeGroupSet](/modules/sds-node-configurator/cr.html#lvmvolumegroupset) with thin pools:
+
+   ```shell
+   d8 k apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LVMVolumeGroupSet
+   metadata:
+     name: my-thin-vg-set
+   spec:
+     nodeSelector:
+       matchLabels:
+         node-role.kubernetes.io/worker: ""
+     strategy: PerNode
+     lvmVolumeGroupTemplate:
+       metadata:
+         labels:
+           storage.deckhouse.io/lvg-group: my-thin-storage
+       type: Local
+       actualVGNameOnTheNode: thin-vg
+       blockDeviceSelector:
+         matchLabels:
+           storage.deckhouse.io/enabled: "true"
+       thinPools:
+         - name: thin-pool
+           size: 90%
+   EOF
+   ```
+
+1. Create a [LocalStorageClass](cr.html#localstorageclass) for Thin storage:
+
+   ```shell
+   d8 k apply -f - <<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: my-thin-storage
+   spec:
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+     lvm:
+       type: Thin
+       thinPoolName: thin-pool
+       lvmVolumeGroupSelector:
+         matchLabels:
+           storage.deckhouse.io/lvg-group: my-thin-storage
+   EOF
+   ```
+
+### Combining selector with explicit LVMVolumeGroups
+
+You can use both `lvmVolumeGroupSelector` and `lvmVolumeGroups` together. The resulting set of LVMVolumeGroups will be a union of both:
+
+```yaml
+apiVersion: storage.deckhouse.io/v1alpha1
+kind: LocalStorageClass
+metadata:
+  name: combined-storage
+spec:
+  reclaimPolicy: Delete
+  volumeBindingMode: WaitForFirstConsumer
+  lvm:
+    type: Thick
+    lvmVolumeGroups:
+      - name: special-vg-on-node-1
+    lvmVolumeGroupSelector:
+      matchLabels:
+        storage.deckhouse.io/lvg-group: standard-storage
+```
+
 ## Checking dependent LVMVolumeGroup resources on a node
 
 Follow these steps:
