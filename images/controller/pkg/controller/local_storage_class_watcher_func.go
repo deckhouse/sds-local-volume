@@ -637,8 +637,8 @@ func validateLocalStorageClass(
 }
 
 func validateLocalStorageClassWithResolvedLVGs(
-	ctx context.Context,
-	cl client.Client,
+	_ context.Context,
+	_ client.Client,
 	scList *v1.StorageClassList,
 	lsc *slv.LocalStorageClass,
 	lvgList *snc.LVMVolumeGroupList,
