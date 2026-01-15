@@ -803,9 +803,184 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 		Expect(shouldRequeue).To(BeFalse())
 	})
 
+	It("Create_thick_sc_with_selector", func(ctx SpecContext) {
+		selectorLVG1 := "selector-thick-vg1"
+		selectorLVG2 := "selector-thick-vg2"
+		lscName := nameForLocalStorageClass + "-selector-thick"
+
+		// Create LVGs with labels
+		lvg1 := generateLVMVolumeGroupWithLabels(selectorLVG1, []string{}, map[string]string{"storage-group": "test-selector"})
+		lvg2 := generateLVMVolumeGroupWithLabels(selectorLVG2, []string{}, map[string]string{"storage-group": "test-selector"})
+		Expect(cl.Create(ctx, lvg1)).To(Succeed())
+		Expect(cl.Create(ctx, lvg2)).To(Succeed())
+
+		// Create LSC with selector instead of explicit LVG names
+		lscTemplate := generateLocalStorageClassWithSelector(lscName, reclaimPolicyDelete, volumeBindingModeWFFC, controller.LVMThickType,
+			&metav1.LabelSelector{
+				MatchLabels: map[string]string{"storage-group": "test-selector"},
+			}, "")
+		Expect(cl.Create(ctx, lscTemplate)).To(Succeed())
+
+		lsc := &slv.LocalStorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		scList := &v1.StorageClassList{}
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+
+		sc := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, sc)).To(Succeed())
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.TypeParamKey, controller.LocalStorageClassLvmType))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMTypeParamKey, controller.LVMThickType))
+		Expect(sc.Parameters).To(HaveKey(controller.LVMVolumeGroupsParamKey))
+		// The resolved LVGs should contain both selected LVGs (sorted alphabetically)
+		Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(ContainSubstring(selectorLVG1))
+		Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(ContainSubstring(selectorLVG2))
+
+		// Cleanup
+		Expect(cl.Delete(ctx, lsc)).To(Succeed())
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+	})
+
+	It("Create_thin_sc_with_selector_and_thinPoolName", func(ctx SpecContext) {
+		selectorThinLVG1 := "selector-thin-vg1"
+		selectorThinLVG2 := "selector-thin-vg2"
+		lscName := nameForLocalStorageClass + "-selector-thin"
+
+		// Create LVGs with labels and thin pools
+		lvg1 := generateLVMVolumeGroupWithLabels(selectorThinLVG1, []string{"shared-pool"}, map[string]string{"storage-group": "test-thin-selector"})
+		lvg2 := generateLVMVolumeGroupWithLabels(selectorThinLVG2, []string{"shared-pool"}, map[string]string{"storage-group": "test-thin-selector"})
+		Expect(cl.Create(ctx, lvg1)).To(Succeed())
+		Expect(cl.Create(ctx, lvg2)).To(Succeed())
+
+		// Create LSC with selector and thinPoolName
+		lscTemplate := generateLocalStorageClassWithSelector(lscName, reclaimPolicyDelete, volumeBindingModeWFFC, controller.LVMThinType,
+			&metav1.LabelSelector{
+				MatchLabels: map[string]string{"storage-group": "test-thin-selector"},
+			}, "shared-pool")
+		Expect(cl.Create(ctx, lscTemplate)).To(Succeed())
+
+		lsc := &slv.LocalStorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		scList := &v1.StorageClassList{}
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+
+		sc := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, sc)).To(Succeed())
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.TypeParamKey, controller.LocalStorageClassLvmType))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.LVMTypeParamKey, controller.LVMThinType))
+		Expect(sc.Parameters).To(HaveKey(controller.LVMVolumeGroupsParamKey))
+		// The resolved LVGs should contain thin pool configuration
+		Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(ContainSubstring(selectorThinLVG1))
+		Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(ContainSubstring(selectorThinLVG2))
+		Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(ContainSubstring("shared-pool"))
+
+		// Cleanup
+		Expect(cl.Delete(ctx, lsc)).To(Succeed())
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+	})
+
+	It("Fail_thin_sc_with_selector_without_thinPoolName", func(ctx SpecContext) {
+		lscName := nameForLocalStorageClass + "-selector-thin-fail"
+
+		// Create LSC with selector but no thinPoolName (should fail for Thin type)
+		lscTemplate := generateLocalStorageClassWithSelector(lscName, reclaimPolicyDelete, volumeBindingModeWFFC, controller.LVMThinType,
+			&metav1.LabelSelector{
+				MatchLabels: map[string]string{"storage-group": "test-thin-selector"},
+			}, "") // No thinPoolName
+		Expect(cl.Create(ctx, lscTemplate)).To(Succeed())
+
+		lsc := &slv.LocalStorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		scList := &v1.StorageClassList{}
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).To(HaveOccurred())
+		Expect(shouldRequeue).To(BeTrue())
+
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		Expect(lsc.Status.Phase).To(Equal(controller.FailedStatusPhase))
+		Expect(lsc.Status.Reason).To(ContainSubstring("thinPoolName"))
+
+		// Cleanup
+		Expect(cl.Delete(ctx, lsc)).To(Succeed())
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+	})
+
+	It("Create_sc_with_selector_and_explicit_lvgs_union", func(ctx SpecContext) {
+		selectorLVG := "union-selector-vg"
+		explicitLVG := "union-explicit-vg"
+		lscName := nameForLocalStorageClass + "-union"
+
+		// Create LVGs
+		lvgSel := generateLVMVolumeGroupWithLabels(selectorLVG, []string{}, map[string]string{"storage-group": "test-union"})
+		lvgExp := generateLVMVolumeGroupWithLabels(explicitLVG, []string{}, map[string]string{}) // No matching labels
+		Expect(cl.Create(ctx, lvgSel)).To(Succeed())
+		Expect(cl.Create(ctx, lvgExp)).To(Succeed())
+
+		// Create LSC with both selector and explicit LVGs
+		lscTemplate := &slv.LocalStorageClass{
+			ObjectMeta: metav1.ObjectMeta{Name: lscName},
+			Spec: slv.LocalStorageClassSpec{
+				ReclaimPolicy:     reclaimPolicyDelete,
+				VolumeBindingMode: volumeBindingModeWFFC,
+				LVM: &slv.LocalStorageClassLVMSpec{
+					Type:            controller.LVMThickType,
+					LVMVolumeGroups: []slv.LocalStorageClassLVG{{Name: explicitLVG}},
+					LVMVolumeGroupSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"storage-group": "test-union"},
+					},
+				},
+			},
+		}
+		Expect(cl.Create(ctx, lscTemplate)).To(Succeed())
+
+		lsc := &slv.LocalStorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		scList := &v1.StorageClassList{}
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+
+		sc := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, sc)).To(Succeed())
+		// Both LVGs should be in the StorageClass (union)
+		Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(ContainSubstring(selectorLVG))
+		Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(ContainSubstring(explicitLVG))
+
+		// Cleanup
+		Expect(cl.Delete(ctx, lsc)).To(Succeed())
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+	})
+
 })
 
 func generateLVMVolumeGroup(name string, thinPoolNames []string) *snc.LVMVolumeGroup {
+	return generateLVMVolumeGroupWithLabels(name, thinPoolNames, nil)
+}
+
+func generateLVMVolumeGroupWithLabels(name string, thinPoolNames []string, labels map[string]string) *snc.LVMVolumeGroup {
 	lvmType := controller.LVMThickType
 
 	if len(thinPoolNames) > 0 {
@@ -828,7 +1003,8 @@ func generateLVMVolumeGroup(name string, thinPoolNames []string) *snc.LVMVolumeG
 
 	return &snc.LVMVolumeGroup{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:   name,
+			Labels: labels,
 		},
 		Spec: snc.LVMVolumeGroupSpec{
 			ActualVGNameOnTheNode: "vg1",
@@ -853,6 +1029,24 @@ func generateLocalStorageClass(lscName, reclaimPolicy, volumeBindingMode, lvmTyp
 			LVM: &slv.LocalStorageClassLVMSpec{
 				Type:            lvmType,
 				LVMVolumeGroups: lvgs,
+			},
+		},
+	}
+}
+
+//nolint:unparam
+func generateLocalStorageClassWithSelector(lscName, reclaimPolicy, volumeBindingMode, lvmType string, selector *metav1.LabelSelector, thinPoolName string) *slv.LocalStorageClass {
+	return &slv.LocalStorageClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: lscName,
+		},
+		Spec: slv.LocalStorageClassSpec{
+			ReclaimPolicy:     reclaimPolicy,
+			VolumeBindingMode: volumeBindingMode,
+			LVM: &slv.LocalStorageClassLVMSpec{
+				Type:                   lvmType,
+				LVMVolumeGroupSelector: selector,
+				ThinPoolName:           thinPoolName,
 			},
 		},
 	}

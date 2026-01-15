@@ -69,7 +69,6 @@ spec:
                     LVM configuration.
                   required:
                     - type
-                    - lvmVolumeGroups
                   x-kubernetes-validations:
                     - rule: |
                         (self.type == "Thin" && !has(self.thick)) || self.type != "Thin"
@@ -80,6 +79,12 @@ spec:
                     - rule: |
                         (!has(oldSelf.thick) || has(self.thick) || !has(oldSelf.thick.contiguous))
                       message: "Field 'thick' cannot be removed if 'thick.contiguous' is specified."
+                    - rule: |
+                        has(self.lvmVolumeGroups) || has(self.lvmVolumeGroupSelector)
+                      message: "Either lvmVolumeGroups or lvmVolumeGroupSelector must be specified."
+                    - rule: |
+                        !(self.type == "Thin" && has(self.lvmVolumeGroupSelector) && !has(self.thinPoolName))
+                      message: "Field thinPoolName is required when using lvmVolumeGroupSelector with Thin type."
                   properties:
                     type:
                       type: string
@@ -128,6 +133,7 @@ spec:
                       type: array
                       description: |
                         List of LVMVolumeGroup resources where PersistentVolumes will be created.
+                        Can be used together with lvmVolumeGroupSelector (union of both).
                       items:
                         type: object
                         required:
@@ -150,6 +156,52 @@ spec:
                                   Thin pool name.
                                 minLength: 1
                                 pattern: ^.*$
+                    lvmVolumeGroupSelector:
+                      type: object
+                      description: |
+                        Selector to match LVMVolumeGroup resources by labels.
+                        Selected LVGs are combined with explicitly listed lvmVolumeGroups.
+                        This is useful when using LVMVolumeGroupSet, which creates LVGs with auto-generated names.
+                      properties:
+                        matchLabels:
+                          type: object
+                          description: |
+                            Labels for the LVMVolumeGroup selector.
+                          additionalProperties:
+                            type: string
+                        matchExpressions:
+                          type: array
+                          description: |
+                            Expressions for the LVMVolumeGroup selector.
+                          items:
+                            type: object
+                            properties:
+                              key:
+                                type: string
+                                description: |
+                                  Label key to check.
+                              operator:
+                                type: string
+                                description: |
+                                  Operator for comparing values.
+                                enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                              values:
+                                type: array
+                                description: |
+                                  An array of values to compare. Required if the operator is `In` or `NotIn`.
+                                items:
+                                  type: string
+                    thinPoolName:
+                      type: string
+                      description: |
+                        Thin pool name used for all LVMVolumeGroups selected by lvmVolumeGroupSelector.
+                        Required when using lvmVolumeGroupSelector with Thin type.
+                        All selected LVGs must have a thin pool with this name.
+                      minLength: 1
                 fsType:
                   type: string
                   default: ext4

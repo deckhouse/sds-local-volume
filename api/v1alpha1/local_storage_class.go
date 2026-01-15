@@ -40,10 +40,12 @@ type LocalStorageClassSpec struct {
 }
 
 type LocalStorageClassLVMSpec struct {
-	Type            string                         `json:"type"`
-	Thick           *LocalStorageClassLVMThickSpec `json:"thick,omitempty"`
-	VolumeCleanup   string                         `json:"volumeCleanup,omitempty"`
-	LVMVolumeGroups []LocalStorageClassLVG         `json:"lvmVolumeGroups"`
+	Type                   string                         `json:"type"`
+	Thick                  *LocalStorageClassLVMThickSpec `json:"thick,omitempty"`
+	VolumeCleanup          string                         `json:"volumeCleanup,omitempty"`
+	LVMVolumeGroups        []LocalStorageClassLVG         `json:"lvmVolumeGroups,omitempty"`
+	LVMVolumeGroupSelector *metav1.LabelSelector          `json:"lvmVolumeGroupSelector,omitempty"`
+	ThinPoolName           string                         `json:"thinPoolName,omitempty"`
 }
 
 type LocalStorageClassStatus struct {

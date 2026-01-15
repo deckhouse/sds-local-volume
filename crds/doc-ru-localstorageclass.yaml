@@ -50,6 +50,7 @@ spec:
                     lvmVolumeGroups:
                       description: |
                         Список ресурсов LVMVolumeGroup, на которых создаются PersistentVolume.
+                        Может использоваться совместно с lvmVolumeGroupSelector (объединение результатов).
                       items:
                         properties:
                           name:
@@ -62,6 +63,34 @@ spec:
                               poolName:
                                 description: |
                                   Имя thin pool.
+                    lvmVolumeGroupSelector:
+                      description: |
+                        Селектор для выбора ресурсов LVMVolumeGroup по меткам.
+                        Выбранные LVG объединяются с явно указанными в lvmVolumeGroups.
+                        Полезно при использовании LVMVolumeGroupSet, который создаёт LVG с автоматически генерируемыми именами.
+                      properties:
+                        matchLabels:
+                          description: |
+                            Метки для селектора LVMVolumeGroup.
+                        matchExpressions:
+                          description: |
+                            Выражения для селектора LVMVolumeGroup.
+                          items:
+                            properties:
+                              key:
+                                description: |
+                                  Ключ метки для проверки.
+                              operator:
+                                description: |
+                                  Оператор для сравнения значений.
+                              values:
+                                description: |
+                                  Массив значений для сравнения. Обязателен, если оператор `In` или `NotIn`.
+                    thinPoolName:
+                      description: |
+                        Имя thin pool для всех LVMVolumeGroup, выбранных через lvmVolumeGroupSelector.
+                        Обязательно при использовании lvmVolumeGroupSelector с типом Thin.
+                        Все выбранные LVG должны иметь thin pool с этим именем.
                 fsType:
                   description: |
                     Тип файловой системы для StorageClass.

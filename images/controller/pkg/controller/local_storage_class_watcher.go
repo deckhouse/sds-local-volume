@@ -25,6 +25,8 @@ import (
 
 	v1 "k8s.io/api/storage/v1"
 	errors2 "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +40,7 @@ import (
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
 const (
@@ -161,7 +164,69 @@ func RunLocalStorageClassWatcherController(
 		return nil, err
 	}
 
+	// Watch LVMVolumeGroup changes to trigger LSC reconciliation when LVGs matching selectors change
+	err = c.Watch(source.Kind(mgr.GetCache(), &snc.LVMVolumeGroup{}, handler.TypedFuncs[*snc.LVMVolumeGroup, reconcile.Request]{
+		CreateFunc: func(ctx context.Context, e event.TypedCreateEvent[*snc.LVMVolumeGroup], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			log.Info(fmt.Sprintf("[LVGCreateFunc] get event for LVMVolumeGroup %q. Checking for affected LocalStorageClasses", e.Object.GetName()))
+			enqueueLSCsWithMatchingSelectors(ctx, cl, log, e.Object, q)
+		},
+		UpdateFunc: func(ctx context.Context, e event.TypedUpdateEvent[*snc.LVMVolumeGroup], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			log.Info(fmt.Sprintf("[LVGUpdateFunc] get event for LVMVolumeGroup %q. Checking for affected LocalStorageClasses", e.ObjectNew.GetName()))
+			// Check for label or status changes that might affect LSC
+			if !reflect.DeepEqual(e.ObjectOld.Labels, e.ObjectNew.Labels) ||
+				!reflect.DeepEqual(e.ObjectOld.Status.ThinPools, e.ObjectNew.Status.ThinPools) ||
+				!reflect.DeepEqual(e.ObjectOld.Status.Nodes, e.ObjectNew.Status.Nodes) {
+				enqueueLSCsWithMatchingSelectors(ctx, cl, log, e.ObjectNew, q)
+			}
+		},
+		DeleteFunc: func(ctx context.Context, e event.TypedDeleteEvent[*snc.LVMVolumeGroup], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			log.Info(fmt.Sprintf("[LVGDeleteFunc] get event for LVMVolumeGroup %q. Checking for affected LocalStorageClasses", e.Object.GetName()))
+			enqueueLSCsWithMatchingSelectors(ctx, cl, log, e.Object, q)
+		},
+	},
+	),
+	)
+	if err != nil {
+		log.Error(err, "[RunLocalStorageClassWatcherController] unable to watch LVMVolumeGroup events")
+		return nil, err
+	}
+
 	return c, nil
+}
+
+// enqueueLSCsWithMatchingSelectors finds all LocalStorageClasses that have selectors
+// that might match the given LVMVolumeGroup and enqueues them for reconciliation
+func enqueueLSCsWithMatchingSelectors(
+	ctx context.Context,
+	cl client.Client,
+	log logger.Logger,
+	lvg *snc.LVMVolumeGroup,
+	q workqueue.TypedRateLimitingInterface[reconcile.Request],
+) {
+	lscList := &slv.LocalStorageClassList{}
+	err := cl.List(ctx, lscList)
+	if err != nil {
+		log.Error(err, "[enqueueLSCsWithMatchingSelectors] unable to list LocalStorageClasses")
+		return
+	}
+
+	for _, lsc := range lscList.Items {
+		if lsc.Spec.LVM == nil || lsc.Spec.LVM.LVMVolumeGroupSelector == nil {
+			continue
+		}
+
+		selector, err := metav1.LabelSelectorAsSelector(lsc.Spec.LVM.LVMVolumeGroupSelector)
+		if err != nil {
+			log.Warning(fmt.Sprintf("[enqueueLSCsWithMatchingSelectors] unable to parse selector for LocalStorageClass %s: %v", lsc.Name, err))
+			continue
+		}
+
+		if selector.Matches(labels.Set(lvg.Labels)) {
+			log.Info(fmt.Sprintf("[enqueueLSCsWithMatchingSelectors] LVMVolumeGroup %s matches selector of LocalStorageClass %s. Adding to queue", lvg.Name, lsc.Name))
+			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: lsc.Namespace, Name: lsc.Name}}
+			q.Add(request)
+		}
+	}
 }
 
 func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger, scList *v1.StorageClassList, lsc *slv.LocalStorageClass) (bool, error) {
