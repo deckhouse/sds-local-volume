@@ -5,7 +5,7 @@ metadata:
   {{- include "helm_lib_module_labels" (list . (dict "app" "sds-local-volume-scheduler-extender")) | nindent 2 }}
 webhooks:
 - weight: 5
-  failurePolicy: Ignore
+  failurePolicy: Fail
   clientConfig:
     service:
       name: {{ .Chart.Name }}-scheduler-extender
@@ -13,4 +13,4 @@ webhooks:
       port: 8099
       path: /scheduler
     caBundle: {{ .Values.sdsLocalVolume.internal.customSchedulerExtenderCert.ca | b64enc }}
-  timeoutSeconds: 5
+  timeoutSeconds: 10
