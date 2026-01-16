@@ -39,3 +39,4 @@ images/sds-local-volume-scheduler-extender/Makefile
 images/controller/Makefile
 
 base_images.yml
+e2e/test_exports
