@@ -22,24 +22,19 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/deckhouse/storage-e2e/pkg/config"
-	"github.com/deckhouse/storage-e2e/pkg/logger"
+	"github.com/deckhouse/storage-e2e/pkg/testkit"
 )
 
 var _ = BeforeSuite(func() {
-	// Validate environment first to set defaults (including LogLevel)
-	err := config.ValidateEnvironment()
-	Expect(err).NotTo(HaveOccurred(), "Failed to validate environment")
-
-	// Initialize logger with configured log level (from LOG_LEVEL env var or default)
-	err = logger.Initialize()
-	Expect(err).NotTo(HaveOccurred(), "Failed to initialize logger")
+	// Initialize test framework (validates environment and initializes logger)
+	err := testkit.InitializeTestFramework()
+	Expect(err).NotTo(HaveOccurred(), "Failed to initialize test framework")
 })
 
 var _ = AfterSuite(func() {
-	// Close logger and any open log files
-	if err := logger.Close(); err != nil {
-		GinkgoWriter.Printf("Warning: Failed to close logger: %v\n", err)
+	// Cleanup test framework resources
+	if err := testkit.CleanupTestFramework(); err != nil {
+		GinkgoWriter.Printf("Warning: Failed to cleanup test framework: %v\n", err)
 	}
 })
 

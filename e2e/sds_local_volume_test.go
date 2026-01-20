@@ -27,7 +27,6 @@ import (
 
 	"github.com/deckhouse/sds-local-volume/e2e/helpers"
 	"github.com/deckhouse/storage-e2e/pkg/cluster"
-	"github.com/deckhouse/storage-e2e/pkg/config"
 	"github.com/deckhouse/storage-e2e/pkg/kubernetes"
 	"github.com/deckhouse/storage-e2e/pkg/testkit"
 )
@@ -39,18 +38,18 @@ var _ = Describe("Sds Local Volume", Ordered, func() {
 
 	BeforeAll(func() {
 		By("Outputting environment variables", func() {
-			testkit.OutputEnvironmentVariables()
+			cluster.OutputEnvironmentVariables()
 		})
 	})
 
 	AfterAll(func() {
-		testkit.CleanupTestClusterResources(testClusterResources)
+		cluster.CleanupTestClusterResources(testClusterResources)
 	})
 
 	// ---=== TEST CLUSTER IS CREATED OR CONNECTED HERE ===--- //
 
 	It("should create or connect to test cluster and wait for it to become ready", func() {
-		testClusterResources = testkit.CreateOrConnectToTestCluster()
+		testClusterResources = cluster.CreateOrConnectToTestCluster()
 	})
 
 	////////////////////////////////////
@@ -58,7 +57,7 @@ var _ = Describe("Sds Local Volume", Ordered, func() {
 	////////////////////////////////////
 
 	// Storage class names for sds-local-volume with random suffix
-	randomSuffix := testkit.GenerateRandomSuffix(6)
+	randomSuffix := cluster.GenerateRandomSuffix(6)
 	storageClassNameThick := "lsc-thick-" + randomSuffix
 	storageClassNameThin := "lsc-thin-" + randomSuffix
 
@@ -89,73 +88,32 @@ var _ = Describe("Sds Local Volume", Ordered, func() {
 			// Define modules to enable
 			// sds-local-volume depends on sds-node-configurator
 			// snapshot-controller is enabled before sds-node-configurator
-			modulesToEnable := []*config.ModuleConfig{
+			modules := []kubernetes.ModuleSpec{
 				{
 					Name:               "snapshot-controller",
 					Version:            1,
 					Enabled:            true,
-					Settings:           map[string]interface{}{},
-					Dependencies:       []string{},
-					ModulePullOverride: "main", // imageTag: "mr30", "main", "pr123", etc.
+					ModulePullOverride: "main",
 				},
 				{
-					Name:     "sds-node-configurator",
-					Version:  1,
-					Enabled:  true,
-					Settings: map[string]interface{}{
-						// Enable thin provisioning support if needed
-						// "enableThinProvisioning": true,
-					},
+					Name:               "sds-node-configurator",
+					Version:            1,
+					Enabled:            true,
 					Dependencies:       []string{"snapshot-controller"},
-					ModulePullOverride: "main", // imageTag: "mr30", "main", "pr123", etc.
+					ModulePullOverride: "main",
 				},
 				{
-					Name:     "sds-local-volume",
-					Version:  1,
-					Enabled:  true,
-					Settings: map[string]interface{}{
-						// Enable thin provisioning support if needed
-						// "enableThinProvisioning": true,
-					},
-					Dependencies:       []string{"sds-node-configurator"}, // Explicit dependencies
-					ModulePullOverride: "main",                            // imageTag: "mr30", "main", "pr123", etc.
+					Name:               "sds-local-volume",
+					Version:            1,
+					Enabled:            true,
+					Dependencies:       []string{"sds-node-configurator"},
+					ModulePullOverride: "main",
 				},
 			}
 
-			// Get registry repo - from ClusterDefinition if available (new cluster mode),
-			// otherwise use default value (existing cluster mode where ClusterDefinition is nil)
-			registryRepo := "dev-registry.deckhouse.io/sys/deckhouse-oss" // Default for existing clusters
-			if testClusterResources.ClusterDefinition != nil {
-				registryRepo = testClusterResources.ClusterDefinition.DKPParameters.RegistryRepo
-			}
-
-			// Create cluster definition with modules to enable
-			clusterDef := &config.ClusterDefinition{
-				DKPParameters: config.DKPParameters{
-					Modules:      modulesToEnable,
-					RegistryRepo: registryRepo,
-				},
-			}
-
-			// Enable and configure modules
-			// This will handle dependencies automatically through topological sort
-			err := kubernetes.EnableAndConfigureModules(
-				ctx,
-				testClusterResources.Kubeconfig,
-				clusterDef,
-				testClusterResources.SSHClient,
-			)
+			// Enable modules and wait for them to become ready
+			err := kubernetes.EnableModulesAndWait(ctx, testClusterResources.Kubeconfig, testClusterResources.SSHClient, testClusterResources.ClusterDefinition, modules, 10*time.Minute)
 			Expect(err).NotTo(HaveOccurred(), "Failed to enable modules")
-
-			// Wait for modules to become ready
-			timeout := 10 * time.Minute
-			err = kubernetes.WaitForModulesReady(
-				ctx,
-				testClusterResources.Kubeconfig,
-				clusterDef,
-				timeout,
-			)
-			Expect(err).NotTo(HaveOccurred(), "Failed waiting for modules to be ready")
 
 			GinkgoWriter.Printf("    ✅ Modules enabled successfully\n")
 		})
@@ -172,7 +130,7 @@ var _ = Describe("Sds Local Volume", Ordered, func() {
 			podReadyTimeout := 10 * time.Minute
 			for _, ns := range namespacesToWait {
 				GinkgoWriter.Printf("      ▶️ Waiting for pods in namespace %s...\n", ns)
-				err := testkit.WaitForAllPodsReadyInNamespace(ctx, testClusterResources.Kubeconfig, ns, podReadyTimeout)
+				err := kubernetes.WaitForAllPodsReadyInNamespace(ctx, testClusterResources.Kubeconfig, ns, podReadyTimeout)
 				Expect(err).NotTo(HaveOccurred(), "Failed waiting for pods in namespace %s to be ready", ns)
 				GinkgoWriter.Printf("      ✅ All pods in namespace %s are ready\n", ns)
 			}
