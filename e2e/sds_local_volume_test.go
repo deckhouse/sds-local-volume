@@ -74,10 +74,9 @@ var _ = Describe("Sds Local Volume", Ordered, func() {
 		By("Waiting for Deckhouse webhook to be ready", func() {
 			GinkgoWriter.Printf("    ▶️ Waiting for Deckhouse webhook to be ready...\n")
 			webhookTimeout := 5 * time.Minute
-			err := kubernetes.WaitForDeckhouseWebhookReady(
+			err := cluster.WaitForWebhookHandler(
 				ctx,
 				testClusterResources.Kubeconfig,
-				testClusterResources.SSHClient,
 				webhookTimeout,
 			)
 			Expect(err).NotTo(HaveOccurred(), "Deckhouse webhook is not ready")
