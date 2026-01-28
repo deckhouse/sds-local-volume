@@ -21,22 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/deckhouse/storage-e2e/pkg/testkit"
 )
-
-var _ = BeforeSuite(func() {
-	// Initialize test framework (validates environment and initializes logger)
-	err := testkit.InitializeTestFramework()
-	Expect(err).NotTo(HaveOccurred(), "Failed to initialize test framework")
-})
-
-var _ = AfterSuite(func() {
-	// Cleanup test framework resources
-	if err := testkit.CleanupTestFramework(); err != nil {
-		GinkgoWriter.Printf("Warning: Failed to cleanup test framework: %v\n", err)
-	}
-})
 
 func TestSdsLocalVolume(t *testing.T) {
 	RegisterFailHandler(Fail)
