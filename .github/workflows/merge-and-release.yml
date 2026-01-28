@@ -26,3 +26,4 @@ jobs:
           changelog_path: 'CHANGELOG'
           base_branch: 'main'
           release_label: 'release'
+          github_token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}

@@ -2,12 +2,12 @@ name: Build and push for prod
 
 env:
   MODULES_REGISTRY: ${{ vars.PROD_REGISTRY }}
-  CI_COMMIT_REF_NAME: ${{ github.event.inputs.tag || github.ref_name }}
+  CI_COMMIT_REF_NAME: ${{ github.ref_name }}
   MODULES_MODULE_NAME: ${{ vars.MODULE_NAME }}
   MODULE_SOURCE_NAME: ${{ vars.PROD_MODULE_SOURCE_NAME }}
   MODULES_REGISTRY_LOGIN: ${{ vars.PROD_MODULES_REGISTRY_LOGIN }}
   MODULES_REGISTRY_PASSWORD: ${{ secrets.PROD_MODULES_REGISTRY_PASSWORD }}
-  MODULES_MODULE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  MODULES_MODULE_TAG: ${{ github.ref_name }}
   GOPROXY: ${{ secrets.GOPROXY }}
   SOURCE_REPO: ${{ secrets.SOURCE_REPO }}
   SOURCE_REPO_SSH_KEY: ${{ secrets.SOURCE_REPO_SSH_KEY }}
@@ -17,12 +17,6 @@ on:
   push:
     tags:
       - "**"
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to build (defaults to github.ref_name)'
-        required: false
-        type: string
 
 jobs:
   prod_ce_setup_build:
