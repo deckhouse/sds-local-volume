@@ -1,3 +1,3 @@
 Changes:
   - Fix controller panic when processing LVG without Node in status
-  - Reworking manifests, combining controller and webhook into one Pod
+  - Reworked manifests, combined controller and webhook into one Pod
