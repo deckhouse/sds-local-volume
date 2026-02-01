@@ -10,7 +10,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Translate changelog and create PR
-        uses: deckhouse/modules-actions/translate-changelog@storage-add-changelog-work
+        uses: deckhouse/modules-actions/translate-changelog@v9
         with:
-          changelog_path: 'CHANGELOG'
-          python_version: '3.11'
+          changelog_path: "CHANGELOG"
+          python_version: "3.11"

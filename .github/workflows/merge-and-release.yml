@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,11 +20,11 @@ jobs:
           persist-credentials: false
 
       - name: Merge PR and create release
-        uses: deckhouse/modules-actions/merge-and-release@storage-add-changelog-work
+        uses: deckhouse/modules-actions/merge-and-release@v9
         with:
           pr_number: ${{ github.event.pull_request.number }}
           pr_title: ${{ github.event.pull_request.title }}
-          changelog_path: 'CHANGELOG'
-          base_branch: 'main'
-          release_label: 'release'
+          changelog_path: "CHANGELOG"
+          base_branch: "main"
+          release_label: "release"
           github_token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
