@@ -1,0 +1,3 @@
+Изменения:
+  - Обновление module-sdk для фикса CVE
+  - Убрана настройка enableThinProvisioning, предполагаем, что thin provisioning всегда включен
