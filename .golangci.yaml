@@ -30,6 +30,10 @@ linters:
         text: don't use an underscore in package name
       - path: (.+)\.go$
         text: 'exported: .*'
+      - path: (.+)\.go$
+        text: avoid package names that conflict
+      - path: (.+)\.go$
+        text: avoid meaningless package names
     paths:
       - third_party$
       - builtin$
