@@ -1,11 +1,9 @@
 name: "sds-local-volume"
 stage: "General Availability"
-weight: 920
 descriptions:
   en: "Manages local block storage based on LVM."
   ru: "Управляет локальным блочным хранилищем на базе LVM."
 requirements:
-  bootstrapped: true
   deckhouse: ">= 1.71"
   modules:
     sds-node-configurator: ">= 0.5.14"
