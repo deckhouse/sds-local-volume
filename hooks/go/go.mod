@@ -1,6 +1,6 @@
 module github.com/deckhouse/sds-local-volume/hooks/go
 
-go 1.24.10
+go 1.25.7
 
 require (
 	github.com/deckhouse/module-sdk v0.7.0
