@@ -55,17 +55,17 @@ func RunLocalCSINodeWatcherController(
 
 	c, err := controller.New(LocalCSINodeWatcherCtrl, mgr, controller.Options{
 		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
-			log.Info(fmt.Sprintf("[RunLocalCSINodeWatcherController] Reconciler func starts a reconciliation for the request: %s", request.NamespacedName.String()))
+			log.Info(fmt.Sprintf("[RunLocalCSINodeWatcherController] Reconciler func starts a reconciliation for the request: %s", request.String()))
 			if request.Name == cfg.ConfigSecretName {
 				log.Debug(fmt.Sprintf("[RunLocalCSINodeWatcherController] request name %s matches the target config secret name %s. Start to reconcile", request.Name, cfg.ConfigSecretName))
 
-				log.Debug(fmt.Sprintf("[RunLocalCSINodeWatcherController] tries to get a secret by the request %s", request.NamespacedName.String()))
+				log.Debug(fmt.Sprintf("[RunLocalCSINodeWatcherController] tries to get a secret by the request %s", request.String()))
 				secret, err := getSecret(ctx, cl, request.Namespace, request.Name)
 				if err != nil {
-					log.Error(err, fmt.Sprintf("[RunLocalCSINodeWatcherController] unable to get a secret by the request %s", request.NamespacedName.String()))
+					log.Error(err, fmt.Sprintf("[RunLocalCSINodeWatcherController] unable to get a secret by the request %s", request.String()))
 					return reconcile.Result{}, err
 				}
-				log.Debug(fmt.Sprintf("[RunLocalCSINodeWatcherController] successfully got a secret by the request %s", request.NamespacedName.String()))
+				log.Debug(fmt.Sprintf("[RunLocalCSINodeWatcherController] successfully got a secret by the request %s", request.String()))
 
 				log.Debug(fmt.Sprintf("[RunLocalCSINodeWatcherController] tries to reconcile local CSI nodes for the secret %s/%s", secret.Namespace, secret.Name))
 				err = reconcileLocalCSINodes(ctx, cl, log, secret)

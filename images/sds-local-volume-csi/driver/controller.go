@@ -429,10 +429,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 	requestCapacity := resource.NewQuantity(request.CapacityRange.GetRequiredBytes(), resource.BinarySI)
 	d.log.Trace(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] requestCapacity: %s", traceID, volumeID, requestCapacity.String()))
 
-	nodeExpansionRequired := true
-	if request.GetVolumeCapability().GetBlock() != nil {
-		nodeExpansionRequired = false
-	}
+	nodeExpansionRequired := request.GetVolumeCapability().GetBlock() == nil
 	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] NodeExpansionRequired: %t", traceID, volumeID, nodeExpansionRequired))
 
 	if llv.Status.ActualSize.Value() > requestCapacity.Value()+resizeDelta.Value() || utils.AreSizesEqualWithinDelta(*requestCapacity, llv.Status.ActualSize, resizeDelta) {
