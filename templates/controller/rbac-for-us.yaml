@@ -10,7 +10,6 @@
     (dict "apiGroups" (list "") "resources" (list "events") "verbs" (list "create" "list"))
     (dict "apiGroups" (list "storage.deckhouse.io") "resources" (list "localstorageclasses" "lvmvolumegroups") "verbs" (list "get" "list" "create" "delete" "watch" "update"))
     (dict "apiGroups" (list "storage.k8s.io") "resources" (list "storageclasses") "verbs" (list "create" "delete" "list" "get" "watch" "update"))
-    (dict "apiGroups" (list "deckhouse.io") "resources" (list "moduleconfigs") "verbs" (list "get" "watch" "update" "list" "patch"))
     (dict "apiGroups" (list "") "resources" (list "pods" "persistentvolumeclaims" "persistentvolumes") "verbs" (list "get"))
   )
 }}
