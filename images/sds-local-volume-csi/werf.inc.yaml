@@ -154,6 +154,8 @@ import:
     to: /
     before: install
     includePaths:
+      - sbin/blkid
+      - sbin/blockdev
       - bin/mount
       - bin/umount
       - sbin/swapon
@@ -205,24 +207,6 @@ import:
     add: /{{ $.ImageName }}
     to: /{{ $.ImageName }}
     before: install
-  - image: tools/util-linux
-    add: /
-    to: /
-    before: setup
-    includePaths:
-      - sbin/blkid
-      - sbin/blockdev
-      - bin/mount
-      - bin/umount
-      - sbin/swapon
-      - sbin/swapoff
-  - image: libs/glibc
-    add: /
-    to: /
-    before: setup    
-    includePaths:
-      - lib64/libnss_files.so.2
-      - lib64/libnss_dns.so.2
 
 imageSpec:
   config:
