@@ -84,6 +84,11 @@ import:
       - usr/sbin/e2undo
       - usr/sbin/e2scrub_all
       - usr/sbin/badblocks
+      - usr/lib/e2initrd_helper
+      - usr/sbin/e4crypt
+      - usr/sbin/e4defrag
+      - usr/sbin/filefrag
+      - usr/sbin/mklost+found
   - image: tools/curl
     add: /
     to: /
@@ -200,119 +205,6 @@ import:
     add: /{{ $.ImageName }}
     to: /{{ $.ImageName }}
     before: install
-  - image: tools/e2fsprogs
-    add: /
-    to: /
-    before: install
-    includePaths:
-      - usr/sbin/badblocks
-      - usr/sbin/debugfs
-      - usr/sbin/dumpe2fs
-      - usr/sbin/e2freefrag
-      - usr/sbin/e2fsck
-      - usr/sbin/e2image
-      - usr/lib/e2initrd_helper
-      - usr/sbin/e2label
-      - usr/sbin/e2mmpstatus
-      - usr/sbin/e2scrub
-      - usr/sbin/e2scrub_all
-      - usr/sbin/e2undo
-      - usr/sbin/e4crypt
-      - usr/sbin/e4defrag
-      - usr/sbin/filefrag
-      - usr/sbin/fsck.ext2
-      - usr/sbin/fsck.ext3
-      - usr/sbin/fsck.ext4
-      - usr/sbin/logsave
-      - usr/sbin/mke2fs
-      - usr/sbin/mkfs.ext2
-      - usr/sbin/mkfs.ext3
-      - usr/sbin/mkfs.ext4
-      - usr/sbin/mklost+found
-      - usr/sbin/resize2fs
-      - usr/sbin/tune2fs
-      - usr/bin/chattr
-      - usr/bin/lsattr
-  - image: tools/xfsprogs
-    add: /
-    to: /
-    before: install
-    includePaths:
-      - usr/sbin/mkfs.xfs
-      - usr/sbin/xfs_admin
-      - usr/sbin/xfs_bmap
-      - usr/sbin/xfs_copy
-      - usr/sbin/xfs_db
-      - usr/sbin/xfs_estimate
-      - usr/sbin/xfs_freeze
-      - usr/sbin/xfs_fsr
-      - usr/sbin/xfs_growfs
-      - usr/sbin/xfs_info
-      - usr/sbin/xfs_io
-      - usr/sbin/xfs_logprint
-      - usr/sbin/xfs_mdrestore
-      - usr/sbin/xfs_metadump
-      - usr/sbin/xfs_mkfile
-      - usr/sbin/xfs_ncheck
-      - usr/sbin/xfs_property
-      - usr/sbin/xfs_quota
-      - usr/sbin/xfs_repair
-      - usr/sbin/xfs_rtcp
-      - usr/sbin/xfs_spaceman
-  - image: tools/lvm2
-    add: /
-    to: /
-    before: install
-    includePaths:
-      - usr/sbin/fsadm
-      - usr/sbin/lvchange
-      - usr/sbin/lvconvert
-      - usr/sbin/lvcreate
-      - usr/sbin/lvdisplay
-      - usr/sbin/lvextend
-      - usr/sbin/lvm
-      - usr/sbin/lvm_import_vdo
-      - usr/sbin/lvmconfig
-      - usr/sbin/lvmdevices
-      - usr/sbin/lvmdiskscan
-      - usr/sbin/lvmdump
-      - usr/sbin/lvmsadc
-      - usr/sbin/lvmsar
-      - usr/sbin/lvreduce
-      - usr/sbin/lvremove
-      - usr/sbin/lvrename
-      - usr/sbin/lvresize
-      - usr/sbin/lvs
-      - usr/sbin/lvscan
-      - usr/sbin/pvchange
-      - usr/sbin/pvck
-      - usr/sbin/pvcreate
-      - usr/sbin/pvdisplay
-      - usr/sbin/pvmove
-      - usr/sbin/pvremove
-      - usr/sbin/pvresize
-      - usr/sbin/pvs
-      - usr/sbin/pvscan
-      - usr/sbin/vgcfgbackup
-      - usr/sbin/vgcfgrestore
-      - usr/sbin/vgchange
-      - usr/sbin/vgck
-      - usr/sbin/vgconvert
-      - usr/sbin/vgcreate
-      - usr/sbin/vgdisplay
-      - usr/sbin/vgexport
-      - usr/sbin/vgextend
-      - usr/sbin/vgimport
-      - usr/sbin/vgimportclone
-      - usr/sbin/vgimportdevices
-      - usr/sbin/vgmerge
-      - usr/sbin/vgmknodes
-      - usr/sbin/vgreduce
-      - usr/sbin/vgremove
-      - usr/sbin/vgrename
-      - usr/sbin/vgs
-      - usr/sbin/vgscan
-      - usr/sbin/vgsplit
   - image: tools/util-linux
     add: /
     to: /
