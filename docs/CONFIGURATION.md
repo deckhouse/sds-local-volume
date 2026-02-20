@@ -23,9 +23,6 @@ All commands must be run on a machine with access to the Kubernetes API and admi
      name: sds-local-volume
    spec:
      enabled: true
-     version: 1
-     settings:
-       enableThinProvisioning: true # if you plan to use LVM-thin volumes
    EOF
    ```
 

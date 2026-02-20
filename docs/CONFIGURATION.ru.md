@@ -23,9 +23,6 @@ weight: 3
      name: sds-local-volume
    spec:
      enabled: true
-     version: 1
-     settings:
-       enableThinProvisioning: true # если планируете использовать LVM-thin тома
    EOF
    ```
 
