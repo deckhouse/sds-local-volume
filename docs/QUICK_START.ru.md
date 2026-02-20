@@ -29,9 +29,6 @@ weight: 2
      name: sds-node-configurator
    spec:
      enabled: true
-     version: 1
-     settings:
-       enableThinProvisioning: true # Если планируете использовать LVM-thin тома
    EOF
    ```
 
@@ -51,9 +48,6 @@ weight: 2
      name: sds-local-volume
    spec:
      enabled: true
-     version: 1
-     settings:
-       enableThinProvisioning: true # если планируете использовать LVM-thin тома
    EOF
    ```
 
