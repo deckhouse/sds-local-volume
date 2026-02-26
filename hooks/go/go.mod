@@ -4,7 +4,12 @@ go 1.25.7
 
 require (
 	github.com/deckhouse/module-sdk v0.7.0
+	github.com/deckhouse/sds-common-lib v0.0.0-20250428090414-0c2938b30fa7
+	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.2.0
+	k8s.io/api v0.32.10
+	k8s.io/apiextensions-apiserver v0.32.10
 	k8s.io/apimachinery v0.32.10
+	k8s.io/client-go v0.32.10
 	sigs.k8s.io/controller-runtime v0.20.4
 )
 
@@ -84,9 +89,6 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.32.10 // indirect
-	k8s.io/apiextensions-apiserver v0.32.10 // indirect
-	k8s.io/client-go v0.32.10 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241212222426-2c72e554b1e7 // indirect
 	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
