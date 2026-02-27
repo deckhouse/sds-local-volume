@@ -27,3 +27,16 @@ const (
 var AllowedProvisioners = []string{
 	"local.csi.storage.deckhouse.io",
 }
+
+var WebhookConfigurationsToDelete = []string{}
+
+var CRGVKsForFinalizerRemoval = []CRGVK{
+	{Group: "storage.deckhouse.io", Version: "v1alpha1", Kind: "LocalStorageClass", Namespaced: false},
+}
+
+type CRGVK struct {
+	Group      string
+	Version    string
+	Kind       string
+	Namespaced bool
+}
