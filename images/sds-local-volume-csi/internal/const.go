@@ -35,6 +35,9 @@ const (
 	BindingModeWFFC             = "WaitForFirstConsumer"
 	BindingModeI                = "Immediate"
 	ResizeDelta                 = "32Mi"
+	// LVMExtentAlignment is the typical LVM extent size (4 MiB). Actual LV size may be rounded up to this boundary,
+	// so snapshot Status.Size can be larger than the requested PVC size when the latter is not a multiple of 4 MiB.
+	LVMExtentAlignment = "4Mi"
 
 	FSTypeKey = "csi.storage.k8s.io/fstype"
 

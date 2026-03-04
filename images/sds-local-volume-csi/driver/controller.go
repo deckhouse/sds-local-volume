@@ -119,8 +119,23 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			// check size
 			if llvSize.Value() == 0 {
 				*llvSize = sourceVol.Status.Size
-			} else if llvSize.Value() < sourceVol.Status.Size.Value() {
-				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
+			} else {
+				sourceSize := sourceVol.Status.Size.Value()
+				requestedSize := llvSize.Value()
+				if requestedSize < sourceSize {
+					// Snapshot Status.Size is the actual LVM size, which is rounded up to 4 MiB extent boundary.
+					// Allow restore when requested size is within one extent of source (e.g. 201 MiB vs 204 MiB).
+					alignment, err := resource.ParseQuantity(internal.LVMExtentAlignment)
+					if err != nil {
+						d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error ParseQuantity for LVMExtentAlignment", traceID, volumeID))
+						return nil, err
+					}
+					if requestedSize < sourceSize-alignment.Value() {
+						return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
+					}
+					// Use source size so that WaitForStatusUpdate sees actual LVM size.
+					*llvSize = sourceVol.Status.Size
+				}
 			}
 
 			selectedLVG, err = utils.SelectLVGByActualNameOnTheNode(storageClassLVGs, sourceVol.Status.NodeName, sourceVol.Status.ActualVGNameOnTheNode)
