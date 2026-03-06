@@ -35,7 +35,10 @@ spec:
               required:
                 - reclaimPolicy
                 - volumeBindingMode
-                - lvm
+              x-kubernetes-validations:
+                - rule: |
+                    (has(self.lvm) && !has(self.rawFile)) || (!has(self.lvm) && has(self.rawFile))
+                  message: "Exactly one of 'lvm' or 'rawFile' must be specified."
               properties:
                 reclaimPolicy:
                   type: string
@@ -150,6 +153,34 @@ spec:
                                   Thin pool name.
                                 minLength: 1
                                 pattern: ^.*$
+                rawFile:
+                  type: object
+                  description: |
+                    RawFile configuration for volumes backed by local files mounted as loop devices.
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: RawFile configuration is immutable.
+                  properties:
+                    sparse:
+                      type: boolean
+                      description: |
+                        If `true`, sparse files will be created (faster but may cause fragmentation).
+                        If `false`, files will be pre-allocated (slower but no fragmentation).
+                      default: false
+                    nodes:
+                      type: array
+                      description: |
+                        List of nodes where RawFile volumes can be created.
+                        If empty, all nodes are eligible.
+                      items:
+                        type: object
+                        required:
+                          - name
+                        properties:
+                          name:
+                            type: string
+                            description: |
+                              Node name.
                 fsType:
                   type: string
                   default: ext4

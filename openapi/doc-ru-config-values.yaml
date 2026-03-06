@@ -2,6 +2,11 @@ type: object
 properties:
   logLevel:
     description: Уровень логирования модуля.
+  rawFileDefaultDataDir:
+    description: |
+      Директория по умолчанию для хранения данных RawFile-томов.
+
+      Эта директория используется, когда `dataDir` не указан в LocalStorageClass.
   dataNodes:
     description: Настройки локальных томов csi на узлах с данными
     properties:

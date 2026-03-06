@@ -237,34 +237,60 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 }
 
 func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
-	currentLVGs, err := getLVGFromSCParams(sc)
-	if err != nil {
-		return false, err
-	}
+	scType := sc.Parameters[TypeParamKey]
 
-	if lsc.Spec.LVM.VolumeCleanup != sc.Parameters[LVMVolumeCleanupParamKey] {
+	// Check if type changed
+	switch {
+	case lsc.Spec.LVM != nil && scType != LocalStorageClassLvmType:
+		return true, nil
+	case lsc.Spec.RawFile != nil && scType != LocalStorageClassRawFileType:
 		return true, nil
 	}
 
-	if len(currentLVGs) != len(lsc.Spec.LVM.LVMVolumeGroups) {
-		return true, nil
-	}
+	// LVM-specific diff check
+	if lsc.Spec.LVM != nil {
+		currentLVGs, err := getLVGFromSCParams(sc)
+		if err != nil {
+			return false, err
+		}
 
-	for i := range currentLVGs {
-		if currentLVGs[i].Name != lsc.Spec.LVM.LVMVolumeGroups[i].Name {
+		if lsc.Spec.LVM.VolumeCleanup != sc.Parameters[LVMVolumeCleanupParamKey] {
 			return true, nil
 		}
-		if lsc.Spec.LVM.Type == LVMThinType {
-			if currentLVGs[i].Thin == nil && lsc.Spec.LVM.LVMVolumeGroups[i].Thin != nil {
+
+		if len(currentLVGs) != len(lsc.Spec.LVM.LVMVolumeGroups) {
+			return true, nil
+		}
+
+		for i := range currentLVGs {
+			if currentLVGs[i].Name != lsc.Spec.LVM.LVMVolumeGroups[i].Name {
 				return true, nil
 			}
-			if currentLVGs[i].Thin == nil && lsc.Spec.LVM.LVMVolumeGroups[i].Thin == nil {
-				err := fmt.Errorf("LocalStorageClass type=%q: unable to identify the Thin pool differences for the LocalStorageClass %q. The current LVMVolumeGroup %q does not have a Thin pool configured in either the StorageClass or the LocalStorageClass", lsc.Spec.LVM.Type, lsc.Name, currentLVGs[i].Name)
-				return false, err
+			if lsc.Spec.LVM.Type == LVMThinType {
+				if currentLVGs[i].Thin == nil && lsc.Spec.LVM.LVMVolumeGroups[i].Thin != nil {
+					return true, nil
+				}
+				if currentLVGs[i].Thin == nil && lsc.Spec.LVM.LVMVolumeGroups[i].Thin == nil {
+					err := fmt.Errorf("LocalStorageClass type=%q: unable to identify the Thin pool differences for the LocalStorageClass %q. The current LVMVolumeGroup %q does not have a Thin pool configured in either the StorageClass or the LocalStorageClass", lsc.Spec.LVM.Type, lsc.Name, currentLVGs[i].Name)
+					return false, err
+				}
+				if currentLVGs[i].Thin.PoolName != lsc.Spec.LVM.LVMVolumeGroups[i].Thin.PoolName {
+					return true, nil
+				}
 			}
-			if currentLVGs[i].Thin.PoolName != lsc.Spec.LVM.LVMVolumeGroups[i].Thin.PoolName {
-				return true, nil
-			}
+		}
+	}
+
+	// RawFile-specific diff check
+	if lsc.Spec.RawFile != nil {
+		// Check sparse
+		currentSparse := sc.Parameters[RawFileSparseParamKey]
+		expectedSparse := "false"
+		if lsc.Spec.RawFile.Sparse {
+			expectedSparse = "true"
+		}
+		if currentSparse != expectedSparse {
+			return true, nil
 		}
 	}
 
@@ -424,37 +450,59 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 	volumeBindingMode := v1.VolumeBindingMode(lsc.Spec.VolumeBindingMode)
 	AllowVolumeExpansion := AllowVolumeExpansionDefaultValue
 
-	if lsc.Spec.LVM == nil {
-		//TODO: add support for other LSC types
-		return nil, fmt.Errorf("unable to identify the LocalStorageClass type")
-	}
-
-	lvgsParam, err := yaml.Marshal(lsc.Spec.LVM.LVMVolumeGroups)
-	if err != nil {
-		return nil, err
-	}
-
 	fsType := lsc.Spec.FSType
 	if fsType == "" {
 		fsType = DefaultFSType
 	}
 
-	params := map[string]string{
-		TypeParamKey:                 LocalStorageClassLvmType,
-		LVMTypeParamKey:              lsc.Spec.LVM.Type,
-		LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
-		LVMVolumeGroupsParamKey:      string(lvgsParam),
-		FSTypeParamKey:               fsType,
-	}
+	var params map[string]string
 
-	if lsc.Spec.LVM.Thick != nil && lsc.Spec.LVM.Thick.Contiguous != nil {
-		if *lsc.Spec.LVM.Thick.Contiguous {
-			params[LVMThickContiguousParamKey] = "true"
+	switch {
+	case lsc.Spec.LVM != nil:
+		lvgsParam, err := yaml.Marshal(lsc.Spec.LVM.LVMVolumeGroups)
+		if err != nil {
+			return nil, err
 		}
+
+		params = map[string]string{
+			TypeParamKey:                 LocalStorageClassLvmType,
+			LVMTypeParamKey:              lsc.Spec.LVM.Type,
+			LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
+			LVMVolumeGroupsParamKey:      string(lvgsParam),
+			FSTypeParamKey:               fsType,
+		}
+
+		if lsc.Spec.LVM.Thick != nil && lsc.Spec.LVM.Thick.Contiguous != nil {
+			if *lsc.Spec.LVM.Thick.Contiguous {
+				params[LVMThickContiguousParamKey] = "true"
+			}
+		}
+
+		if lsc.Spec.LVM.VolumeCleanup != "" {
+			params[LVMVolumeCleanupParamKey] = lsc.Spec.LVM.VolumeCleanup
+		}
+
+	case lsc.Spec.RawFile != nil:
+		params = map[string]string{
+			TypeParamKey:                 LocalStorageClassRawFileType,
+			LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
+			FSTypeParamKey:               fsType,
+		}
+
+		if lsc.Spec.RawFile.Sparse {
+			params[RawFileSparseParamKey] = "true"
+		} else {
+			params[RawFileSparseParamKey] = "false"
+		}
+
+	default:
+		return nil, fmt.Errorf("unable to identify the LocalStorageClass type: either lvm or rawFile must be specified")
 	}
 
-	if lsc.Spec.LVM.VolumeCleanup != "" {
-		params[LVMVolumeCleanupParamKey] = lsc.Spec.LVM.VolumeCleanup
+	annotations := make(map[string]string)
+	// Volume snapshots are only supported for LVM
+	if lsc.Spec.LVM != nil {
+		annotations[internal.SLVStorageClassVolumeSnapshotClassAnnotationKey] = internal.SLVStorageClassVolumeSnapshotClassAnnotationValue
 	}
 
 	sc := &v1.StorageClass{
@@ -463,12 +511,10 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 			APIVersion: StorageClassAPIVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      lsc.Name,
-			Namespace: lsc.Namespace,
-			Annotations: map[string]string{
-				internal.SLVStorageClassVolumeSnapshotClassAnnotationKey: internal.SLVStorageClassVolumeSnapshotClassAnnotationValue,
-			},
-			Finalizers: []string{LocalStorageClassFinalizerName},
+			Name:        lsc.Name,
+			Namespace:   lsc.Namespace,
+			Annotations: annotations,
+			Finalizers:  []string{LocalStorageClassFinalizerName},
 		},
 		Provisioner:          LocalStorageClassProvisioner,
 		Parameters:           params,
@@ -532,15 +578,16 @@ func validateLocalStorageClass(
 		failedMsgBuilder.WriteString(fmt.Sprintf("There already is a storage class with the same name: %s but it is not managed by the LocalStorageClass controller\n", unmanagedScName))
 	}
 
-	lvgList := &snc.LVMVolumeGroupList{}
-	err := cl.List(ctx, lvgList)
-	if err != nil {
-		valid = false
-		failedMsgBuilder.WriteString(fmt.Sprintf("Unable to validate selected LVMVolumeGroups, err: %s\n", err.Error()))
-		return valid, failedMsgBuilder.String()
-	}
+	switch {
+	case lsc.Spec.LVM != nil:
+		lvgList := &snc.LVMVolumeGroupList{}
+		err := cl.List(ctx, lvgList)
+		if err != nil {
+			valid = false
+			failedMsgBuilder.WriteString(fmt.Sprintf("Unable to validate selected LVMVolumeGroups, err: %s\n", err.Error()))
+			return valid, failedMsgBuilder.String()
+		}
 
-	if lsc.Spec.LVM != nil {
 		LVGsFromTheSameNode := findLVMVolumeGroupsOnTheSameNode(lvgList, lsc)
 		if len(LVGsFromTheSameNode) != 0 {
 			valid = false
@@ -566,10 +613,14 @@ func validateLocalStorageClass(
 				failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use thin pools though device type is Thick, LVG names: %s\n", strings.Join(LVGsWithTps, ",")))
 			}
 		}
-	} else {
-		// TODO: add support for other types
+
+	case lsc.Spec.RawFile != nil:
+		// RawFile validation is minimal - the CRD schema handles most validation
+		// No additional validation required here
+
+	default:
 		valid = false
-		failedMsgBuilder.WriteString(fmt.Sprintf("Unable to identify a type of LocalStorageClass %s", lsc.Name))
+		failedMsgBuilder.WriteString(fmt.Sprintf("Unable to identify a type of LocalStorageClass %s: either lvm or rawFile must be specified", lsc.Name))
 	}
 
 	return valid, failedMsgBuilder.String()

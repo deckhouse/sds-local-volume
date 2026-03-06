@@ -191,6 +191,12 @@ func filterNotManagedPVC(log logger.Logger, pvcs map[string]*corev1.PersistentVo
 			continue
 		}
 
+		// Skip RawFile StorageClasses - they don't need LVM-based scheduling
+		if sc.Parameters[consts.TypeParamKey] == consts.TypeRawFile {
+			log.Debug(fmt.Sprintf("[filterNotManagedPVC] filter out PVC %s/%s due to Storage class %s is RawFile type (no LVM scheduling needed)", pvc.Name, pvc.Namespace, sc.Name))
+			continue
+		}
+
 		filteredPVCs[pvc.Name] = pvc
 	}
 
@@ -207,6 +213,12 @@ func filterNotManagedStorageClasses(log logger.Logger, managedPVCs map[string]*c
 		}
 		if sc.Provisioner != consts.SdsLocalVolumeProvisioner {
 			log.Debug(fmt.Sprintf("[filterNotManagedStorageClasses] filter out StorageClass %s due to it is not managed by sds-local-volume-provisioner", sc.Name))
+			continue
+		}
+
+		// Skip RawFile StorageClasses - they don't need LVM-based scheduling
+		if sc.Parameters[consts.TypeParamKey] == consts.TypeRawFile {
+			log.Debug(fmt.Sprintf("[filterNotManagedStorageClasses] filter out StorageClass %s due to it is RawFile type (no LVM scheduling needed)", sc.Name))
 			continue
 		}
 

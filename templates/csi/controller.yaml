@@ -90,12 +90,21 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- else if eq .Values.sdsLocalVolume.logLevel "TRACE" }}
   value: "4"
 {{- end }}
+- name: RAWFILE_DEFAULT_DATA_DIR
+  value: {{ .Values.sdsLocalVolume.rawFileDefaultDataDir | quote }}
 {{- end }}
 
 {{- define "csi_additional_node_volumes" }}
+- name: rawfile-data-dir
+  hostPath:
+    path: {{ .Values.sdsLocalVolume.rawFileDefaultDataDir | quote }}
+    type: DirectoryOrCreate
 {{- end }}
 
 {{- define "csi_additional_node_volume_mounts" }}
+- name: rawfile-data-dir
+  mountPath: {{ .Values.sdsLocalVolume.rawFileDefaultDataDir | quote }}
+  mountPropagation: Bidirectional
 {{- end }}
 
 
