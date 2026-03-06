@@ -182,14 +182,14 @@ func (m *Manager) goAllocate(path string, sizeBytes int64) error {
 	// Write zeros in chunks to avoid memory issues
 	const chunkSize = 4 * 1024 * 1024 // 4MB chunks
 	zeroChunk := make([]byte, chunkSize)
-	
+
 	remaining := sizeBytes
 	for remaining > 0 {
 		writeSize := int64(chunkSize)
 		if remaining < writeSize {
 			writeSize = remaining
 		}
-		
+
 		n, err := file.Write(zeroChunk[:writeSize])
 		if err != nil {
 			return fmt.Errorf("failed to write zeros: %w", err)

@@ -12,10 +12,6 @@ properties:
       - TRACE
     description: Module log level
     default: DEBUG
-  enableThinProvisioning:
-    type: boolean
-    default: false
-    description: Allow thin LVM volumes usage
   rawFileDefaultDataDir:
     type: string
     default: /var/lib/sds-local-volume/rawfile
