@@ -32,6 +32,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/rawfile"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 )
 
 const (
@@ -58,7 +60,7 @@ var (
 	}
 )
 
-func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+func (d *Driver) NodeStageVolume(ctx context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume id cannot be empty")
@@ -74,8 +76,16 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume capability cannot be empty")
 	}
 
-	context := request.GetVolumeContext()
-	vgName, ok := context[internal.VGNameKey]
+	volumeContext := request.GetVolumeContext()
+
+	// Check if this is a RawFile volume
+	volumeType := volumeContext[internal.TypeKey]
+	if volumeType == internal.RawFile {
+		return d.nodeStageRawFileVolume(ctx, request)
+	}
+
+	// LVM volume handling
+	vgName, ok := volumeContext[internal.VGNameKey]
 	if !ok {
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume group name cannot be empty")
 	}
@@ -135,8 +145,8 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		return nil, status.Errorf(codes.NotFound, "[NodeStageVolume] Device %s not found", devPath)
 	}
 
-	lvmType := context[internal.LvmTypeKey]
-	lvmThinPoolName := context[internal.ThinPoolNameKey]
+	lvmType := volumeContext[internal.LvmTypeKey]
+	lvmThinPoolName := volumeContext[internal.ThinPoolNameKey]
 
 	d.log.Trace(fmt.Sprintf("formatOptions = %s", formatOptions))
 	d.log.Trace(fmt.Sprintf("mountOptions = %s", mountOptions))
@@ -169,6 +179,150 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
+func (d *Driver) nodeStageRawFileVolume(ctx context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+	volumeID := request.GetVolumeId()
+	if err := rawfile.ValidateVolumeID(volumeID); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "[NodeStageVolume] invalid volume ID: %v", err)
+	}
+	target := request.GetStagingTargetPath()
+	volCap := request.GetVolumeCapability()
+	volumeContext := request.GetVolumeContext()
+
+	d.log.Info(fmt.Sprintf("[NodeStageVolume] Staging RawFile volume %s", volumeID))
+
+	if volCap.GetBlock() != nil {
+		d.log.Info("[NodeStageVolume] Block volume detected. Skipping staging for RawFile.")
+		return &csi.NodeStageVolumeResponse{}, nil
+	}
+
+	mountVolume := volCap.GetMount()
+	if mountVolume == nil {
+		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume capability mount cannot be empty")
+	}
+
+	fsType := mountVolume.GetFsType()
+	if fsType == "" {
+		fsType = defaultFsType
+	}
+
+	_, ok := ValidFSTypes[strings.ToLower(fsType)]
+	if !ok {
+		d.log.Error(fmt.Errorf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes), "Invalid fsType")
+		return nil, status.Errorf(codes.InvalidArgument, "invalid fsType")
+	}
+
+	formatOptions := []string{}
+
+	needLegacySupport, err := needLegacyXFSSupport()
+	if err != nil {
+		return nil, err
+	}
+	if fsType == internal.FSTypeXfs && needLegacySupport {
+		d.log.Info("[NodeStageVolume] legacy xfs support is on")
+		formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0", "-i", "nrext64=0")
+	}
+
+	mountOptions := collectMountOptions(fsType, mountVolume.GetMountFlags(), []string{})
+
+	d.log.Debug(fmt.Sprintf("[NodeStageVolume] RawFile Volume %s operation started", volumeID))
+	ok = d.inFlight.Insert(volumeID)
+	if !ok {
+		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
+	}
+	defer func() {
+		d.log.Debug(fmt.Sprintf("[NodeStageVolume] RawFile Volume %s operation completed", volumeID))
+		d.inFlight.Delete(volumeID)
+	}()
+
+	if err := d.rawfileManager.EnsureDataDir(); err != nil {
+		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Failed to ensure data directory: %v", err)
+	}
+
+	volumePath := d.rawfileManager.GetVolumePath(volumeID)
+
+	exists, err := d.storeManager.PathExists(volumePath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error checking if rawfile exists: %v", err)
+	}
+
+	if !exists {
+		d.log.Info(fmt.Sprintf("[NodeStageVolume] RawFile %s not found, creating on this node", volumePath))
+
+		sizeStr, hasSizeStr := volumeContext[internal.RawFileSizeKey]
+		if !hasSizeStr || sizeStr == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "[NodeStageVolume] Volume size not specified in volume context")
+		}
+		sizeBytes, err := strconv.ParseInt(sizeStr, 10, 64)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "[NodeStageVolume] Invalid volume size: %s", sizeStr)
+		}
+
+		sparse := false
+		if sparseStr, hasSparse := volumeContext[internal.RawFileSparseKey]; hasSparse {
+			var parseErr error
+			sparse, parseErr = strconv.ParseBool(sparseStr)
+			if parseErr != nil {
+				d.log.Warning(fmt.Sprintf("[NodeStageVolume] Invalid sparse value %q, defaulting to false: %v", sparseStr, parseErr))
+				sparse = false
+			}
+		}
+
+		d.log.Info(fmt.Sprintf("[NodeStageVolume] Creating RawFile volume %s: size=%d bytes, sparse=%t", volumeID, sizeBytes, sparse))
+
+		_, err = d.rawfileManager.CreateVolume(volumeID, sizeBytes, sparse)
+		if err != nil {
+			d.log.Error(err, fmt.Sprintf("[NodeStageVolume] Failed to create RawFile volume %s", volumeID))
+			return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Failed to create RawFile volume: %v", err)
+		}
+
+		d.log.Debug(fmt.Sprintf("[NodeStageVolume] RawFile volume %s created successfully at %s", volumeID, volumePath))
+	}
+
+	// Add finalizer to the PV to protect against premature deletion.
+	// This must happen early so the cleanup goroutine can track the PV.
+	if err := d.addFinalizer(ctx, volumeID); err != nil {
+		d.log.Warning(fmt.Sprintf("[NodeStageVolume] Failed to add finalizer to PV %s: %v", volumeID, err))
+	}
+
+	devPath, err := d.rawfileManager.AttachLoopDevice(volumePath)
+	if err != nil {
+		d.log.Error(err, "[NodeStageVolume] Error attaching loop device")
+		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error attaching loop device for %s: %v", volumePath, err)
+	}
+
+	d.log.Debug(fmt.Sprintf("[NodeStageVolume] RawFile %s attached to %s", volumePath, devPath))
+	d.log.Trace(fmt.Sprintf("[NodeStageVolume] formatOptions = %s", formatOptions))
+	d.log.Trace(fmt.Sprintf("[NodeStageVolume] mountOptions = %s", mountOptions))
+	d.log.Trace(fmt.Sprintf("[NodeStageVolume] fsType = %s", fsType))
+
+	err = d.storeManager.NodeStageVolumeFS(devPath, target, fsType, mountOptions, formatOptions, "", "")
+	if err != nil {
+		d.log.Error(err, "[NodeStageVolume] Error mounting RawFile volume")
+		_ = d.rawfileManager.DetachLoopDeviceByPath(devPath)
+		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error format device %q and mounting volume at %q: %v", devPath, target, err)
+	}
+
+	needResize, err := d.storeManager.NeedResize(devPath, target)
+	if err != nil {
+		d.log.Error(err, "[NodeStageVolume] Error checking if RawFile volume needs resize")
+		_ = d.rawfileManager.DetachLoopDeviceByPath(devPath)
+		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error checking if the volume %q (%q) mounted at %q needs resizing: %v", volumeID, devPath, target, err)
+	}
+
+	if needResize {
+		d.log.Info(fmt.Sprintf("[NodeStageVolume] Resizing RawFile volume %q (%q) mounted at %q", volumeID, devPath, target))
+		err = d.storeManager.ResizeFS(target)
+		if err != nil {
+			_ = d.rawfileManager.DetachLoopDeviceByPath(devPath)
+			return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error resizing volume %q (%q) mounted at %q: %v", volumeID, devPath, target, err)
+		}
+	}
+
+	d.log.Info(fmt.Sprintf("[NodeStageVolume] RawFile Volume %q (%q) successfully staged at %s. FsType: %s", volumeID, devPath, target, fsType))
+
+	return &csi.NodeStageVolumeResponse{}, nil
+}
+
 func (d *Driver) NodeUnstageVolume(_ context.Context, request *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] method called with request: %v", request))
 	volumeID := request.GetVolumeId()
@@ -190,9 +344,23 @@ func (d *Driver) NodeUnstageVolume(_ context.Context, request *csi.NodeUnstageVo
 		d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] Volume %s operation completed", volumeID))
 		d.inFlight.Delete(volumeID)
 	}()
+
+	// Unmount the volume
 	err := d.storeManager.Unstage(target)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "[NodeUnstageVolume] Error unmounting volume %q mounted at %q: %v", volumeID, target, err)
+	}
+
+	// Check if this is a RawFile volume and detach the loop device
+	if d.rawfileManager.VolumeExists(volumeID) {
+		volumePath := d.rawfileManager.GetVolumePath(volumeID)
+		d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] Detaching loop device for RawFile volume %s", volumeID))
+		if err := d.rawfileManager.DetachLoopDevice(volumePath); err != nil {
+			d.log.Warning(fmt.Sprintf("[NodeUnstageVolume] Failed to detach loop device for %s: %v", volumePath, err))
+			// Don't fail the unstage if loop device detachment fails
+		}
+		// Note: Volume cleanup (deletion) is handled by the cleanup goroutine in driver.go
+		// which periodically checks for orphaned volumes (volumes without corresponding PVs)
 	}
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
@@ -229,12 +397,30 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 		mountOptions = append(mountOptions, "ro")
 	}
 
-	vgName, ok := request.GetVolumeContext()[internal.VGNameKey]
-	if !ok {
-		return nil, status.Error(codes.InvalidArgument, "[NodePublishVolume] Volume group name cannot be empty")
+	volumeContext := request.GetVolumeContext()
+	var devPath string
+
+	// Check if this is a RawFile volume
+	volumeType := volumeContext[internal.TypeKey]
+	if volumeType == internal.RawFile {
+		volumePath := d.rawfileManager.GetVolumePath(volumeID)
+
+		var err error
+		devPath, err = d.rawfileManager.FindLoopDevice(volumePath)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "[NodePublishVolume] Loop device not found for RawFile %s: %v", volumePath, err)
+		}
+		d.log.Debug(fmt.Sprintf("[NodePublishVolume] RawFile %s using loop device: %s", volumeID, devPath))
+	} else {
+		// LVM volume handling
+		vgName, hasVGName := volumeContext[internal.VGNameKey]
+		if !hasVGName {
+			return nil, status.Error(codes.InvalidArgument, "[NodePublishVolume] Volume group name cannot be empty")
+		}
+
+		devPath = fmt.Sprintf("/dev/%s/%s", vgName, request.VolumeId)
 	}
 
-	devPath := fmt.Sprintf("/dev/%s/%s", vgName, request.VolumeId)
 	d.log.Debug(fmt.Sprintf("[NodePublishVolume] Checking if device exists: %s", devPath))
 	exists, err := d.storeManager.PathExists(devPath)
 	if err != nil {
@@ -246,8 +432,7 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 
 	d.log.Debug(fmt.Sprintf("[NodePublishVolume] Volume %s operation started", volumeID))
 
-	ok = d.inFlight.Insert(volumeID)
-	if !ok {
+	if inserted := d.inFlight.Insert(volumeID); !inserted {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
 	}
 	defer func() {
@@ -275,9 +460,8 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 			fsType = defaultFsType
 		}
 
-		_, ok = ValidFSTypes[strings.ToLower(fsType)]
-		if !ok {
-			d.log.Error(fmt.Errorf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes), "Invalid fsType")
+		if _, validFS := ValidFSTypes[strings.ToLower(fsType)]; !validFS {
+			d.log.Error(fmt.Errorf("[NodePublishVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes), "Invalid fsType")
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid fsType")
 		}
 
@@ -412,7 +596,7 @@ func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeSta
 	}, nil
 }
 
-func (d *Driver) NodeExpandVolume(_ context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+func (d *Driver) NodeExpandVolume(ctx context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	d.log.Info("Call method NodeExpandVolume")
 
 	d.log.Trace("========== NodeExpandVolume ============")
@@ -428,13 +612,51 @@ func (d *Driver) NodeExpandVolume(_ context.Context, request *csi.NodeExpandVolu
 		return nil, status.Error(codes.InvalidArgument, "Volume Path cannot be empty")
 	}
 
-	err := d.storeManager.ResizeFS(volumePath)
+	requestedBytes := request.GetCapacityRange().GetRequiredBytes()
+
+	// Determine volume type from PV attributes (reliable across nodes)
+	isRawFile := false
+	pv, err := utils.GetPersistentVolume(ctx, d.cl, volumeID)
+	if err != nil {
+		d.log.Warning(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Could not get PV to check type, falling back to file check: %v", volumeID, err))
+		isRawFile = d.rawfileManager.VolumeExists(volumeID)
+	} else if pv.Spec.CSI != nil && pv.Spec.CSI.VolumeAttributes != nil {
+		isRawFile = pv.Spec.CSI.VolumeAttributes[internal.TypeKey] == internal.RawFile
+	}
+
+	if isRawFile {
+		d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Detected RawFile volume, expanding file to %d bytes", volumeID, requestedBytes))
+
+		volumeInfo, err := d.rawfileManager.GetVolumeInfo(volumeID)
+		if err != nil {
+			d.log.Error(err, fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Failed to get RawFile volume info", volumeID))
+			return nil, status.Errorf(codes.Internal, "Failed to get RawFile volume info: %v", err)
+		}
+
+		if volumeInfo.Size < requestedBytes {
+			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Expanding RawFile from %d to %d bytes (online resize)", volumeID, volumeInfo.Size, requestedBytes))
+
+			if err := d.rawfileManager.ExpandVolume(volumeID, requestedBytes, false); err != nil {
+				d.log.Error(err, fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Failed to expand RawFile volume", volumeID))
+				return nil, status.Errorf(codes.Internal, "Failed to expand RawFile volume: %v", err)
+			}
+
+			d.log.Debug(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] RawFile file expanded and loop device refreshed", volumeID))
+		} else {
+			d.log.Debug(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] RawFile already at or above requested size", volumeID))
+		}
+	}
+
+	err = d.storeManager.ResizeFS(volumePath)
 	if err != nil {
 		d.log.Error(err, "d.mounter.ResizeFS:")
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return &csi.NodeExpandVolumeResponse{}, nil
+	d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Volume expanded successfully", volumeID))
+	return &csi.NodeExpandVolumeResponse{
+		CapacityBytes: requestedBytes,
+	}, nil
 }
 
 func (d *Driver) NodeGetCapabilities(_ context.Context, request *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {

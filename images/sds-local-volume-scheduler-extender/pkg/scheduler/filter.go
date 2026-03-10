@@ -132,7 +132,16 @@ func (s *scheduler) filter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(managedPVCs) == 0 {
-		s.log.Warning(fmt.Sprintf("[filter] Pod %s/%s uses PVCs which are not managed by the module. Unable to filter and score the nodes", inputData.Pod.Namespace, inputData.Pod.Name))
+		s.log.Debug(fmt.Sprintf("[filter] Pod %s/%s has no LVM-managed PVCs (all may be RawFile). Returning all nodes as eligible", inputData.Pod.Namespace, inputData.Pod.Name))
+		filteredNodes := &ExtenderFilterResult{
+			NodeNames: &nodeNames,
+		}
+		w.Header().Set("content-type", "application/json")
+		err = json.NewEncoder(w).Encode(filteredNodes)
+		if err != nil {
+			s.log.Error(err, "[filter] unable to encode a response")
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -191,6 +200,12 @@ func filterNotManagedPVC(log logger.Logger, pvcs map[string]*corev1.PersistentVo
 			continue
 		}
 
+		// Skip RawFile StorageClasses - they don't need LVM-based scheduling
+		if sc.Parameters[consts.TypeParamKey] == consts.TypeRawFile {
+			log.Debug(fmt.Sprintf("[filterNotManagedPVC] filter out PVC %s/%s due to Storage class %s is RawFile type (no LVM scheduling needed)", pvc.Name, pvc.Namespace, sc.Name))
+			continue
+		}
+
 		filteredPVCs[pvc.Name] = pvc
 	}
 
@@ -207,6 +222,12 @@ func filterNotManagedStorageClasses(log logger.Logger, managedPVCs map[string]*c
 		}
 		if sc.Provisioner != consts.SdsLocalVolumeProvisioner {
 			log.Debug(fmt.Sprintf("[filterNotManagedStorageClasses] filter out StorageClass %s due to it is not managed by sds-local-volume-provisioner", sc.Name))
+			continue
+		}
+
+		// Skip RawFile StorageClasses - they don't need LVM-based scheduling
+		if sc.Parameters[consts.TypeParamKey] == consts.TypeRawFile {
+			log.Debug(fmt.Sprintf("[filterNotManagedStorageClasses] filter out StorageClass %s due to it is RawFile type (no LVM scheduling needed)", sc.Name))
 			continue
 		}
 
