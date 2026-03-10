@@ -12,6 +12,13 @@ properties:
       - TRACE
     description: Module log level
     default: DEBUG
+  rawFileDefaultDataDir:
+    type: string
+    default: /var/lib/sds-local-volume/rawfile
+    pattern: '^/[^\s]+$'
+    minLength: 2
+    description: |
+      Default absolute directory path for storing RawFile volumes data.
   dataNodes:
     type: object
     description: Settings for local volumes csi on nodes with data

@@ -764,6 +764,100 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 		Expect(shouldRequeue).To(BeFalse())
 	})
 
+	It("Create_rawfile_sc", func(ctx SpecContext) {
+		lscName := nameForLocalStorageClass + "-rawfile"
+
+		lscTemplate := &slv.LocalStorageClass{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: lscName,
+			},
+			Spec: slv.LocalStorageClassSpec{
+				ReclaimPolicy:     reclaimPolicyDelete,
+				VolumeBindingMode: volumeBindingModeWFFC,
+				RawFile: &slv.LocalStorageClassRawFileSpec{
+					Sparse: true,
+				},
+				FSType: "ext4",
+			},
+		}
+
+		Expect(cl.Create(ctx, lscTemplate)).To(Succeed())
+
+		lsc := &slv.LocalStorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+
+		scList := &v1.StorageClassList{}
+		Expect(cl.List(ctx, scList)).To(Succeed())
+
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+
+		sc := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, sc)).To(Succeed())
+
+		Expect(sc.Provisioner).To(Equal(controller.LocalStorageClassProvisioner))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.TypeParamKey, controller.LocalStorageClassRawFileType))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.RawFileSparseParamKey, "true"))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.FSTypeParamKey, "ext4"))
+		Expect(sc.Parameters).NotTo(HaveKey(controller.RawFileNodesParamKey))
+		Expect(sc.Parameters).NotTo(HaveKey(controller.LVMTypeParamKey))
+		Expect(sc.Parameters).NotTo(HaveKey(controller.LVMVolumeGroupsParamKey))
+		Expect(sc.Annotations).NotTo(HaveKey("storageclass.storage.deckhouse.io/volume-snapshot-class"))
+
+		Expect(cl.Delete(ctx, lsc)).To(Succeed())
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+	})
+
+	It("Create_rawfile_sc_with_nodes", func(ctx SpecContext) {
+		lscName := nameForLocalStorageClass + "-rawfile-nodes"
+
+		lscTemplate := &slv.LocalStorageClass{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: lscName,
+			},
+			Spec: slv.LocalStorageClassSpec{
+				ReclaimPolicy:     reclaimPolicyDelete,
+				VolumeBindingMode: volumeBindingModeWFFC,
+				RawFile: &slv.LocalStorageClassRawFileSpec{
+					Sparse: false,
+					Nodes: []slv.LocalStorageClassRawFileNode{
+						{Name: "node-1"},
+						{Name: "node-2"},
+					},
+				},
+			},
+		}
+
+		Expect(cl.Create(ctx, lscTemplate)).To(Succeed())
+
+		lsc := &slv.LocalStorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+
+		scList := &v1.StorageClassList{}
+		Expect(cl.List(ctx, scList)).To(Succeed())
+
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+
+		sc := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, sc)).To(Succeed())
+
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.TypeParamKey, controller.LocalStorageClassRawFileType))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.RawFileSparseParamKey, "false"))
+		Expect(sc.Parameters).To(HaveKeyWithValue(controller.RawFileNodesParamKey, "node-1,node-2"))
+
+		Expect(cl.Delete(ctx, lsc)).To(Succeed())
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+	})
+
 	It("Create_thick_sc_with_contiguous_true", func(ctx SpecContext) {
 		contigLVG1 := "contig2-vg1"
 		contigLVG2 := "contig2-vg2"

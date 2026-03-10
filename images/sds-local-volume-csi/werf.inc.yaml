@@ -183,6 +183,8 @@ import:
       - bin/umount
       - sbin/swapon
       - sbin/swapoff
+      - sbin/losetup
+      - usr/bin/fallocate
   - image: libs/glibc
     add: /
     to: /
