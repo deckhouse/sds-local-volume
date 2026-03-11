@@ -63,32 +63,46 @@ func ValidateVolumeID(volumeID string) error {
 
 // volumeLock provides per-volume locking to avoid blocking unrelated volumes
 // during long-running operations like file allocation.
+// Entries are reference-counted and removed when no goroutine holds or waits
+// for the lock, preventing unbounded map growth over create/delete cycles.
 type volumeLock struct {
+	mu    sync.Mutex
+	locks map[string]*lockEntry
+}
+
+type lockEntry struct {
 	mu      sync.Mutex
-	locks   map[string]*sync.Mutex
+	waiters int // number of goroutines holding or waiting for this lock
 }
 
 func newVolumeLock() *volumeLock {
-	return &volumeLock{locks: make(map[string]*sync.Mutex)}
+	return &volumeLock{locks: make(map[string]*lockEntry)}
 }
 
 func (vl *volumeLock) Lock(volumeID string) {
 	vl.mu.Lock()
-	l, ok := vl.locks[volumeID]
+	e, ok := vl.locks[volumeID]
 	if !ok {
-		l = &sync.Mutex{}
-		vl.locks[volumeID] = l
+		e = &lockEntry{}
+		vl.locks[volumeID] = e
 	}
+	e.waiters++
 	vl.mu.Unlock()
-	l.Lock()
+	e.mu.Lock()
 }
 
 func (vl *volumeLock) Unlock(volumeID string) {
 	vl.mu.Lock()
-	l, ok := vl.locks[volumeID]
+	e, ok := vl.locks[volumeID]
+	if ok {
+		e.waiters--
+		if e.waiters == 0 {
+			delete(vl.locks, volumeID)
+		}
+	}
 	vl.mu.Unlock()
 	if ok {
-		l.Unlock()
+		e.mu.Unlock()
 	}
 }
 

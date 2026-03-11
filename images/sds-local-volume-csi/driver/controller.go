@@ -487,13 +487,7 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 	pv, pvErr := utils.GetPersistentVolume(ctx, d.cl, volumeID)
 	if pvErr == nil && pv.Spec.CSI != nil && pv.Spec.CSI.VolumeAttributes != nil &&
 		pv.Spec.CSI.VolumeAttributes[internal.TypeKey] == internal.RawFile {
-		return d.deleteRawFileVolume(ctx, request, traceID, nil)
-	}
-
-	// Also check via rawfileManager in case PV is already gone
-	if pvErr != nil && d.rawfileManager.VolumeExists(volumeID) {
-		d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] PV not found but RawFile volume exists locally, deleting as RawFile", traceID, volumeID))
-		return d.deleteRawFileVolume(ctx, request, traceID, nil)
+		return d.deleteRawFileVolume(ctx, nil, traceID, volumeID)
 	}
 
 	// Verify LLV exists before attempting LVM deletion to avoid errors
@@ -512,19 +506,13 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 	return d.deleteLVMVolume(ctx, request, traceID, localStorageClass)
 }
 
-func (d *Driver) deleteRawFileVolume(_ context.Context, request *csi.DeleteVolumeRequest, traceID string, _ *slv.LocalStorageClass) (*csi.DeleteVolumeResponse, error) {
-	volumeID := request.VolumeId
-	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] Deleting RawFile volume", traceID, volumeID))
-
-	if d.rawfileManager.VolumeExists(volumeID) {
-		if err := d.rawfileManager.DeleteVolume(volumeID); err != nil {
-			return nil, status.Errorf(codes.Internal, "[DeleteVolume] failed to delete RawFile volume %s locally: %v", volumeID, err)
-		}
-		d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] RawFile volume deleted locally", traceID, volumeID))
-	} else {
-		d.log.Debug(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] RawFile volume not found locally (may be on different node or already deleted)", traceID, volumeID))
-	}
-
+func (d *Driver) deleteRawFileVolume(_ context.Context, _ *csi.DeleteVolumeRequest, traceID string, volumeID string) (*csi.DeleteVolumeResponse, error) {
+	// RawFile volume files live on specific nodes. The controller cannot
+	// reliably delete them because it may run on a different node.
+	// Actual file cleanup is handled by the cleanup goroutine running on
+	// each CSI node pod, which watches for PVs with DeletionTimestamp and
+	// the rawfile-pv-protection finalizer.
+	d.log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s][volumeID:%s] RawFile volume deletion acknowledged; file cleanup will be handled by the node-side cleanup goroutine", traceID, volumeID))
 	d.log.Debug(fmt.Sprintf("[DeleteVolume][traceID:%s] ========== END DeleteVolume ============", traceID))
 	return &csi.DeleteVolumeResponse{}, nil
 }
