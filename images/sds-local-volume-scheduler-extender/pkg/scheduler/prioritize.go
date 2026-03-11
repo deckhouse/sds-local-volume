@@ -125,6 +125,21 @@ func (s *scheduler) prioritize(w http.ResponseWriter, r *http.Request) {
 		s.log.Trace(fmt.Sprintf("[prioritize] filtered managed StorageClass %s", sc.Name))
 	}
 
+	// If no managed PVCs left after filtering (e.g., all are RawFile volumes), return equal scores for all nodes
+	if len(managedPVCs) == 0 {
+		s.log.Debug(fmt.Sprintf("[prioritize] No managed PVCs for Pod %s/%s after filtering, returning equal scores", inputData.Pod.Namespace, inputData.Pod.Name))
+		priorities := make([]HostPriority, 0, len(nodeNames))
+		for _, nodeName := range nodeNames {
+			priorities = append(priorities, HostPriority{Host: nodeName, Score: 50})
+		}
+		w.Header().Set("content-type", "application/json")
+		if err := json.NewEncoder(w).Encode(priorities); err != nil {
+			s.log.Error(err, fmt.Sprintf("[prioritize] unable to encode response for Pod %s/%s", inputData.Pod.Namespace, inputData.Pod.Name))
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}
+		return
+	}
+
 	s.log.Debug(fmt.Sprintf("[prioritize] starts to extract pvcRequests size for Pod %s/%s", inputData.Pod.Namespace, inputData.Pod.Name))
 	pvcRequests, err := extractRequestedSize(s.ctx, s.client, s.log, managedPVCs, managedSCs)
 	if err != nil {
@@ -235,7 +250,11 @@ func scoreNodes(
 				totalFreeSpaceLeft += getFreeSpaceLeftPercent(freeSpace.Value(), pvcReq.RequestedSize, lvg.Status.VGSize.Value())
 			}
 
-			averageFreeSpace := totalFreeSpaceLeft / int64(len(pvcs))
+			// Avoid division by zero if no PVCs to process
+			var averageFreeSpace int64
+			if len(pvcs) > 0 {
+				averageFreeSpace = totalFreeSpaceLeft / int64(len(pvcs))
+			}
 			log.Trace(fmt.Sprintf("[scoreNodes] average free space left for the node: %s", nodeName))
 			score := getNodeScore(averageFreeSpace, divisor)
 			log.Trace(fmt.Sprintf("[scoreNodes] node %s has score %d with average free space left (after all PVC bounded), percent %d", nodeName, score, averageFreeSpace))

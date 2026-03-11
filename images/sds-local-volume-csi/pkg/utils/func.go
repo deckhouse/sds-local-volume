@@ -140,7 +140,7 @@ func removeLLVSFinalizerIfExist(ctx context.Context, kc client.Client, log *logg
 		}
 	}
 
-	return false, fmt.Errorf("after %d attempts of removing finalizer %s from LVMLogicalVolumeSnapshot %s, last error: %w", KubernetesAPIRequestLimit, finalizer, llvs.Name, nil)
+	return false, fmt.Errorf("after %d attempts of removing finalizer %s from LVMLogicalVolumeSnapshot %s: all attempts ended with conflict", KubernetesAPIRequestLimit, finalizer, llvs.Name)
 }
 
 func WaitForLLVSStatusUpdate(
@@ -592,7 +592,7 @@ func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logge
 		}
 	}
 
-	return false, fmt.Errorf("after %d attempts of removing finalizer %s from LVMLogicalVolume %s, last error: %w", KubernetesAPIRequestLimit, finalizer, llv.Name, nil)
+	return false, fmt.Errorf("after %d attempts of removing finalizer %s from LVMLogicalVolume %s: all attempts ended with conflict", KubernetesAPIRequestLimit, finalizer, llv.Name)
 }
 
 func IsContiguous(request *csi.CreateVolumeRequest, lvmType string) bool {
@@ -606,4 +606,13 @@ func IsContiguous(request *csi.CreateVolumeRequest, lvmType string) bool {
 	}
 
 	return false
+}
+
+func GetPersistentVolume(ctx context.Context, kc client.Client, pvName string) (*corev1.PersistentVolume, error) {
+	var pv corev1.PersistentVolume
+	err := kc.Get(ctx, client.ObjectKey{Name: pvName}, &pv)
+	if err != nil {
+		return nil, err
+	}
+	return &pv, nil
 }
