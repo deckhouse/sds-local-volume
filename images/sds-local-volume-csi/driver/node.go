@@ -30,6 +30,7 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/rawfile"
@@ -278,10 +279,15 @@ func (d *Driver) nodeStageRawFileVolume(ctx context.Context, request *csi.NodeSt
 		d.log.Debug(fmt.Sprintf("[NodeStageVolume] RawFile volume %s created successfully at %s", volumeID, volumePath))
 	}
 
-	// Add finalizer to the PV to protect against premature deletion.
-	// This must happen early so the cleanup goroutine can track the PV.
-	if err := d.addFinalizer(ctx, volumeID); err != nil {
-		d.log.Warning(fmt.Sprintf("[NodeStageVolume] Failed to add finalizer to PV %s: %v", volumeID, err))
+	// Add finalizer only for PVs with Delete reclaim policy.
+	// For Retain policy, the file should persist after PVC deletion.
+	pv, pvErr := utils.GetPersistentVolume(ctx, d.cl, volumeID)
+	if pvErr != nil {
+		d.log.Warning(fmt.Sprintf("[NodeStageVolume] Failed to get PV %s to check ReclaimPolicy: %v", volumeID, pvErr))
+	} else if pv.Spec.PersistentVolumeReclaimPolicy == corev1.PersistentVolumeReclaimDelete {
+		if err := d.addFinalizer(ctx, volumeID); err != nil {
+			d.log.Warning(fmt.Sprintf("[NodeStageVolume] Failed to add finalizer to PV %s: %v", volumeID, err))
+		}
 	}
 
 	devPath, err := d.rawfileManager.AttachLoopDevice(volumePath)
@@ -634,9 +640,16 @@ func (d *Driver) NodeExpandVolume(ctx context.Context, request *csi.NodeExpandVo
 		}
 
 		if volumeInfo.Size < requestedBytes {
-			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Expanding RawFile from %d to %d bytes (online resize)", volumeID, volumeInfo.Size, requestedBytes))
+			sparse := false
+			if pv != nil && pv.Spec.CSI != nil && pv.Spec.CSI.VolumeAttributes != nil {
+				if sparseStr, ok := pv.Spec.CSI.VolumeAttributes[internal.RawFileSparseKey]; ok {
+					sparse, _ = strconv.ParseBool(sparseStr)
+				}
+			}
 
-			if err := d.rawfileManager.ExpandVolume(volumeID, requestedBytes, false); err != nil {
+			d.log.Info(fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Expanding RawFile from %d to %d bytes (online resize, sparse=%t)", volumeID, volumeInfo.Size, requestedBytes, sparse))
+
+			if err := d.rawfileManager.ExpandVolume(volumeID, requestedBytes, sparse); err != nil {
 				d.log.Error(err, fmt.Sprintf("[NodeExpandVolume][volumeID:%s] Failed to expand RawFile volume", volumeID))
 				return nil, status.Errorf(codes.Internal, "Failed to expand RawFile volume: %v", err)
 			}
