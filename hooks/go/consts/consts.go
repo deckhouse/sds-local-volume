@@ -21,7 +21,6 @@ const (
 	ModuleNamespace  string = "d8-sds-local-volume"
 	ModulePluralName string = "sds-local-volume"
 	WebhookCertCn    string = "webhooks"
-	SchedulerCertCn  string = "scheduler-extender"
 )
 
 var AllowedProvisioners = []string{
