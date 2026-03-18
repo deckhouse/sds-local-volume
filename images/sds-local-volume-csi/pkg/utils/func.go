@@ -19,7 +19,7 @@ package utils
 import (
 	"context"
 	"fmt"
-	"math"
+
 	"slices"
 	"time"
 
@@ -296,10 +296,15 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 	return err
 }
 
-func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, namespace string, llvSize, delta resource.Quantity) (int, error) {
+func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, namespace string, llvSize, extentSize resource.Quantity) (int, error) {
 	var attemptCounter int
-	sizeEquals := false
 	log.Info(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Waiting for LVM Logical Volume status update", traceID, lvmLogicalVolumeName))
+
+	alignedSize, err := AlignSizeToExtent(llvSize, extentSize)
+	if err != nil {
+		return 0, fmt.Errorf("unable to align size: %w", err)
+	}
+
 	for {
 		attemptCounter++
 		select {
@@ -316,12 +321,11 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 		}
 
 		if attemptCounter%10 == 0 {
-			log.Info(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt: %d,LVM Logical Volume: %+v; delta=%s; sizeEquals=%t", traceID, lvmLogicalVolumeName, attemptCounter, llv, delta.String(), sizeEquals))
+			log.Info(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt: %d, LVM Logical Volume: %+v; alignedSize=%s", traceID, lvmLogicalVolumeName, attemptCounter, llv, alignedSize.String()))
 		}
 
 		if llv.Status != nil {
 			log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume status: %+v, full LVMLogicalVolume resource: %+v", traceID, lvmLogicalVolumeName, attemptCounter, llv.Status, llv))
-			sizeEquals = AreSizesEqualWithinDelta(llvSize, llv.Status.ActualSize, delta)
 
 			if llv.DeletionTimestamp != nil {
 				return attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: LVMLogicalVolume is being deleted", lvmLogicalVolumeName)
@@ -332,7 +336,7 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 			}
 
 			if llv.Status.Phase == LLVStatusCreated {
-				if sizeEquals {
+				if llv.Status.ActualSize.Value() >= alignedSize.Value() {
 					return attemptCounter, nil
 				}
 				log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume created but size does not match the requested size yet. Waiting...", traceID, lvmLogicalVolumeName, attemptCounter))
@@ -354,11 +358,14 @@ func GetLVMLogicalVolume(ctx context.Context, kc client.Client, lvmLogicalVolume
 	return &llv, err
 }
 
-func AreSizesEqualWithinDelta(leftSize, rightSize, allowedDelta resource.Quantity) bool {
-	leftSizeFloat := float64(leftSize.Value())
-	rightSizeFloat := float64(rightSize.Value())
-
-	return math.Abs(leftSizeFloat-rightSizeFloat) < float64(allowedDelta.Value())
+func AlignSizeToExtent(size, extentSize resource.Quantity) (resource.Quantity, error) {
+	sizeBytes := size.Value()
+	extentBytes := extentSize.Value()
+	if extentBytes <= 0 {
+		return resource.Quantity{}, fmt.Errorf("extent size must be positive, got %d", extentBytes)
+	}
+	aligned := ((sizeBytes + extentBytes - 1) / extentBytes) * extentBytes
+	return *resource.NewQuantity(aligned, resource.BinarySI), nil
 }
 
 func GetNodeWithMaxFreeSpace(lvgs []snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
