@@ -182,8 +182,16 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 			if llvSize.Value() == 0 {
 				*llvSize = sourceSizeQty
-			} else if llvSize.Value() < sourceSizeQty.Value() {
-				return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
+			} else {
+				alignedLlvSize, alignErr := utils.AlignSizeToExtent(*llvSize, selectedLVG.Status.ExtentSize)
+				if alignErr != nil {
+					d.log.Error(alignErr, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error aligning size to extent", traceID, volumeID))
+					return nil, status.Errorf(codes.Internal, "error aligning size to extent: %s", alignErr.Error())
+				}
+				*llvSize = alignedLlvSize
+				if llvSize.Value() < sourceSizeQty.Value() {
+					return nil, status.Error(codes.OutOfRange, "requested size is smaller than the size of the source")
+				}
 			}
 
 			preferredNode = selectedLVG.Spec.Local.NodeName
@@ -466,10 +474,16 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 	}
 	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] finish resize LVMLogicalVolume, attempt counter = %d ", traceID, volumeID, attemptCounter))
 
+	updatedLLV, err := utils.GetLVMLogicalVolume(ctx, d.cl, llv.Name, llv.Namespace)
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error re-fetching LVMLogicalVolume after resize", traceID, volumeID))
+		return nil, status.Errorf(codes.Internal, "error re-fetching LVMLogicalVolume after resize: %v", err)
+	}
+
 	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Volume expanded successfully", traceID, volumeID))
 
 	return &csi.ControllerExpandVolumeResponse{
-		CapacityBytes:         llv.Status.ActualSize.Value(),
+		CapacityBytes:         updatedLLV.Status.ActualSize.Value(),
 		NodeExpansionRequired: nodeExpansionRequired,
 	}, nil
 }
