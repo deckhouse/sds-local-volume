@@ -137,7 +137,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			if llvSize.Value() == 0 {
 				*llvSize = sourceVol.Status.Size
 			} else {
-				alignedLlvSize, alignErr := utils.AlignSizeToExtent(*llvSize, selectedLVG.Status.ExtentSize)
+				alignedLlvSize, alignErr := utils.AlignSizeToExtent(*llvSize, utils.SafeExtentSize(selectedLVG.Status.ExtentSize))
 				if alignErr != nil {
 					d.log.Error(alignErr, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error aligning size to extent", traceID, volumeID))
 					return nil, status.Errorf(codes.Internal, "error aligning size to extent: %s", alignErr.Error())
@@ -183,7 +183,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			if llvSize.Value() == 0 {
 				*llvSize = sourceSizeQty
 			} else {
-				alignedLlvSize, alignErr := utils.AlignSizeToExtent(*llvSize, selectedLVG.Status.ExtentSize)
+				alignedLlvSize, alignErr := utils.AlignSizeToExtent(*llvSize, utils.SafeExtentSize(selectedLVG.Status.ExtentSize))
 				if alignErr != nil {
 					d.log.Error(alignErr, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error aligning size to extent", traceID, volumeID))
 					return nil, status.Errorf(codes.Internal, "error aligning size to extent: %s", alignErr.Error())
@@ -262,7 +262,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] start wait CreateLVMLogicalVolume", traceID, volumeID))
 
-	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, d.log, traceID, request.Name, "", *llvSize, selectedLVG.Status.ExtentSize)
+	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, d.log, traceID, request.Name, "", *llvSize, utils.SafeExtentSize(selectedLVG.Status.ExtentSize))
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error WaitForStatusUpdate. Delete LVMLogicalVolume %s", traceID, volumeID, request.Name))
 
@@ -433,7 +433,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 	requestCapacity := resource.NewQuantity(request.CapacityRange.GetRequiredBytes(), resource.BinarySI)
 	d.log.Trace(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] requestCapacity: %s", traceID, volumeID, requestCapacity.String()))
 
-	alignedRequestCapacity, err := utils.AlignSizeToExtent(*requestCapacity, lvg.Status.ExtentSize)
+	alignedRequestCapacity, err := utils.AlignSizeToExtent(*requestCapacity, utils.SafeExtentSize(lvg.Status.ExtentSize))
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error aligning size to extent", traceID, volumeID))
 		return nil, status.Errorf(codes.Internal, "error aligning size to extent: %s", err.Error())
@@ -467,7 +467,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Errorf(codes.Internal, "error updating LVMLogicalVolume: %v", err)
 	}
 
-	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, d.log, traceID, llv.Name, llv.Namespace, *requestCapacity, lvg.Status.ExtentSize)
+	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, d.log, traceID, llv.Name, llv.Namespace, *requestCapacity, utils.SafeExtentSize(lvg.Status.ExtentSize))
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error WaitForStatusUpdate", traceID, volumeID))
 		return nil, err

@@ -368,6 +368,19 @@ func AlignSizeToExtent(size, extentSize resource.Quantity) (resource.Quantity, e
 	return *resource.NewQuantity(aligned, resource.BinarySI), nil
 }
 
+var lvmDefaultExtentSize = resource.MustParse("4Mi")
+
+// SafeExtentSize returns extentSize if positive, otherwise falls back to 4Mi
+// (the default LVM physical extent size). This prevents errors when the
+// sds-node-configurator discoverer has not yet populated ExtentSize in the
+// LVMVolumeGroup status.
+func SafeExtentSize(extentSize resource.Quantity) resource.Quantity {
+	if extentSize.Value() > 0 {
+		return extentSize
+	}
+	return lvmDefaultExtentSize
+}
+
 func GetNodeWithMaxFreeSpace(lvgs []snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
 	var maxFreeSpace int64
 	for _, lvg := range lvgs {
