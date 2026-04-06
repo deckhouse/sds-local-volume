@@ -34,8 +34,6 @@ const (
 	LLVSStatusCreated           = "Created"
 	BindingModeWFFC             = "WaitForFirstConsumer"
 	BindingModeI                = "Immediate"
-	ResizeDelta                 = "32Mi"
-
 	FSTypeKey = "csi.storage.k8s.io/fstype"
 
 	// supported filesystem types
