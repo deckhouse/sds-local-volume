@@ -19,7 +19,10 @@ package rawfile
 import (
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -184,7 +187,7 @@ func TestManager_ExpandVolume(t *testing.T) {
 	m := NewManager(log, tmpDir)
 
 	volumeID := "test-expand-volume"
-	initialSize := int64(1024 * 1024)  // 1 MB
+	initialSize := int64(1024 * 1024)      // 1 MB
 	expandedSize := int64(2 * 1024 * 1024) // 2 MB
 
 	// Create volume
@@ -273,3 +276,254 @@ func TestManager_EnsureDataDir(t *testing.T) {
 	assert.True(t, stat.IsDir())
 }
 
+func TestManager_ReclaimPolicyMarker(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "rawfile-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	log, _ := logger.NewLogger(logger.DebugLevel)
+	m := NewManager(log, tmpDir)
+
+	const volumeID = "pvc-reclaim"
+
+	t.Run("missing marker returns empty string", func(t *testing.T) {
+		got, err := m.GetReclaimPolicy(volumeID)
+		require.NoError(t, err)
+		assert.Equal(t, "", got)
+	})
+
+	t.Run("set then get persists value", func(t *testing.T) {
+		require.NoError(t, m.SetReclaimPolicy(volumeID, "Delete"))
+		got, err := m.GetReclaimPolicy(volumeID)
+		require.NoError(t, err)
+		assert.Equal(t, "Delete", got)
+
+		// File must live in the volume directory.
+		_, statErr := os.Stat(filepath.Join(m.GetVolumeDir(volumeID), reclaimMarkerFile))
+		require.NoError(t, statErr)
+	})
+
+	t.Run("overwrite atomically", func(t *testing.T) {
+		require.NoError(t, m.SetReclaimPolicy(volumeID, "Retain"))
+		got, err := m.GetReclaimPolicy(volumeID)
+		require.NoError(t, err)
+		assert.Equal(t, "Retain", got)
+	})
+
+	t.Run("empty value rejected", func(t *testing.T) {
+		err := m.SetReclaimPolicy(volumeID, "")
+		require.Error(t, err)
+	})
+
+	t.Run("invalid volumeID rejected", func(t *testing.T) {
+		err := m.SetReclaimPolicy("", "Delete")
+		require.ErrorIs(t, err, ErrInvalidVolumeID)
+		_, err = m.GetReclaimPolicy("../etc")
+		require.ErrorIs(t, err, ErrInvalidVolumeID)
+	})
+
+	t.Run("DeleteVolume removes marker", func(t *testing.T) {
+		_, err := m.CreateVolume(volumeID, 1024, true)
+		require.NoError(t, err)
+		require.NoError(t, m.SetReclaimPolicy(volumeID, "Delete"))
+
+		require.NoError(t, m.DeleteVolume(volumeID))
+
+		got, err := m.GetReclaimPolicy(volumeID)
+		require.NoError(t, err)
+		assert.Equal(t, "", got, "marker must be gone after DeleteVolume")
+	})
+}
+
+func TestManager_SparseMarker(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "rawfile-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	log, _ := logger.NewLogger(logger.DebugLevel)
+	m := NewManager(log, tmpDir)
+
+	const volumeID = "pvc-sparse"
+
+	t.Run("missing marker returns ok=false", func(t *testing.T) {
+		_, ok, err := m.GetSparse(volumeID)
+		require.NoError(t, err)
+		assert.False(t, ok)
+	})
+
+	t.Run("true round-trips", func(t *testing.T) {
+		require.NoError(t, m.SetSparse(volumeID, true))
+		val, ok, err := m.GetSparse(volumeID)
+		require.NoError(t, err)
+		assert.True(t, ok)
+		assert.True(t, val)
+	})
+
+	t.Run("false round-trips", func(t *testing.T) {
+		require.NoError(t, m.SetSparse(volumeID, false))
+		val, ok, err := m.GetSparse(volumeID)
+		require.NoError(t, err)
+		assert.True(t, ok)
+		assert.False(t, val)
+	})
+
+	t.Run("invalid disk content surfaces as error", func(t *testing.T) {
+		dir := m.GetVolumeDir(volumeID)
+		require.NoError(t, os.MkdirAll(dir, DefaultDirMode))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, sparseMarkerFile), []byte("not-a-bool"), 0o600))
+
+		_, _, err := m.GetSparse(volumeID)
+		require.Error(t, err)
+	})
+
+	t.Run("invalid volumeID rejected", func(t *testing.T) {
+		err := m.SetSparse("", true)
+		require.ErrorIs(t, err, ErrInvalidVolumeID)
+	})
+}
+
+func TestParseLosetupOutput(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"empty", "", nil},
+		{"whitespace only", "   \n\t\n", nil},
+		{
+			name: "single device",
+			in:   "/dev/loop0: [64768]:12345678 (/var/lib/sds-local-volume/rawfile/pvc-1/disk.img)",
+			want: []string{"/dev/loop0"},
+		},
+		{
+			name: "multiple devices preserve order",
+			in: `/dev/loop3: [64768]:12345678 (/path/disk.img)
+/dev/loop1: [64768]:12345678 (/path/disk.img)
+/dev/loop7: [64768]:12345678 (/path/disk.img)`,
+			want: []string{"/dev/loop3", "/dev/loop1", "/dev/loop7"},
+		},
+		{
+			name: "trailing newline tolerated",
+			in:   "/dev/loop0: [64768]:1 (/x)\n",
+			want: []string{"/dev/loop0"},
+		},
+		{
+			name: "CRLF tolerated",
+			in:   "/dev/loop0: [x]:1 (/x)\r\n/dev/loop2: [x]:2 (/x)\r\n",
+			want: []string{"/dev/loop0", "/dev/loop2"},
+		},
+		{
+			name: "blank lines skipped",
+			in:   "\n/dev/loop0: [x]:1 (/x)\n\n/dev/loop1: [x]:2 (/x)\n\n",
+			want: []string{"/dev/loop0", "/dev/loop1"},
+		},
+		{
+			name: "missing colon skipped",
+			in:   "garbage line without colon\n/dev/loop0: [x]:1 (/x)",
+			want: []string{"/dev/loop0"},
+		},
+		{
+			name: "leading whitespace before colon trimmed",
+			in:   "  /dev/loop0  : [x]:1 (/x)",
+			want: []string{"/dev/loop0"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := parseLosetupOutput(c.in)
+			assert.Equal(t, c.want, got)
+		})
+	}
+}
+
+func TestVolumeLock_MutualExclusion(t *testing.T) {
+	vl := newVolumeLock()
+
+	const volumeID = "pvc-lock"
+	var counter int32
+	var maxObserved int32
+
+	const goroutines = 16
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			vl.Lock(volumeID)
+			defer vl.Unlock(volumeID)
+
+			cur := atomic.AddInt32(&counter, 1)
+			for {
+				prev := atomic.LoadInt32(&maxObserved)
+				if cur <= prev || atomic.CompareAndSwapInt32(&maxObserved, prev, cur) {
+					break
+				}
+			}
+			time.Sleep(2 * time.Millisecond)
+			atomic.AddInt32(&counter, -1)
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, int32(1), atomic.LoadInt32(&maxObserved), "more than one goroutine held the lock at the same time")
+}
+
+func TestVolumeLock_DistinctVolumesNotBlocked(t *testing.T) {
+	vl := newVolumeLock()
+
+	vl.Lock("vol-a")
+	defer vl.Unlock("vol-a")
+
+	done := make(chan struct{})
+	go func() {
+		vl.Lock("vol-b")
+		vl.Unlock("vol-b")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Lock on a different volumeID was unexpectedly blocked")
+	}
+}
+
+func TestVolumeLock_ReleasesEntries(t *testing.T) {
+	vl := newVolumeLock()
+
+	for i := 0; i < 100; i++ {
+		vl.Lock("pvc-temp")
+		vl.Unlock("pvc-temp")
+	}
+
+	vl.mu.Lock()
+	mapLen := len(vl.locks)
+	vl.mu.Unlock()
+	assert.Equal(t, 0, mapLen, "lock map must drop entries with zero waiters")
+}
+
+func TestManager_DeleteVolume_RemovesMarkers(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "rawfile-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	log, _ := logger.NewLogger(logger.DebugLevel)
+	m := NewManager(log, tmpDir)
+
+	const volumeID = "pvc-cleanup"
+	_, err = m.CreateVolume(volumeID, 1024, true)
+	require.NoError(t, err)
+	require.NoError(t, m.SetReclaimPolicy(volumeID, "Delete"))
+	require.NoError(t, m.SetSparse(volumeID, true))
+
+	dir := m.GetVolumeDir(volumeID)
+	for _, name := range []string{"disk.img", reclaimMarkerFile, sparseMarkerFile} {
+		_, statErr := os.Stat(filepath.Join(dir, name))
+		require.NoErrorf(t, statErr, "expected %s to exist before deletion", name)
+	}
+
+	require.NoError(t, m.DeleteVolume(volumeID))
+
+	_, statErr := os.Stat(dir)
+	assert.True(t, os.IsNotExist(statErr), "volume directory must be gone after DeleteVolume")
+}
