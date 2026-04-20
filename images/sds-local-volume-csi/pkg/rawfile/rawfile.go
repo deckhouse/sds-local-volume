@@ -45,6 +45,13 @@ const (
 	// "Retain") next to disk.img, so the orphan-cleanup goroutine can honor
 	// Retain even if the PV API object disappears.
 	reclaimMarkerFile = "reclaim"
+
+	// sparseMarkerFile holds the persisted "sparse" flag of the volume
+	// ("true"/"false"). NodeExpandVolume reads it as a fallback when PV
+	// VolumeAttributes are unavailable, to avoid silently switching a sparse
+	// volume to pre-allocated mode (which would write zeros across the whole
+	// extent and exhaust disk space).
+	sparseMarkerFile = "sparse"
 )
 
 var (
@@ -213,6 +220,12 @@ func (m *Manager) createRawFile(path string, sizeBytes int64, sparse bool) error
 		// Create pre-allocated file using fallocate
 		if err := m.fallocate(path, sizeBytes); err != nil {
 			return fmt.Errorf("fallocate failed: %w", err)
+		}
+		// allocateFile opens with DefaultFileMode but it is masked by umask
+		// (typical Linux umask 022 yields 0644 instead of 0600). Enforce the
+		// intended mode explicitly to keep parity with the sparse branch.
+		if err := os.Chmod(path, DefaultFileMode); err != nil {
+			return fmt.Errorf("failed to set file permissions: %w", err)
 		}
 	}
 
@@ -441,6 +454,12 @@ func (m *Manager) FindLoopDevice(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if len(devices) == 0 {
+		// FindAllLoopDevices is expected to translate "no devices" into
+		// ErrLoopDeviceNotFound, but guard against accidental regressions
+		// to avoid a runtime index-out-of-range panic.
+		return "", ErrLoopDeviceNotFound
+	}
 	if len(devices) > 1 {
 		m.log.Warning(fmt.Sprintf("[RawFile] Multiple loop devices found for %s (%d devices), using first one", filePath, len(devices)))
 	}
@@ -466,28 +485,44 @@ func (m *Manager) FindAllLoopDevices(filePath string) ([]string, error) {
 		return nil, fmt.Errorf("losetup -j failed: %s: %w", outputStr, err)
 	}
 
-	// Parse output lines: /dev/loop0: [64768]:12345678 (/path/to/file)
-	outputStr := strings.TrimSpace(string(output))
-	if outputStr == "" {
-		return nil, ErrLoopDeviceNotFound
-	}
-
-	lines := strings.Split(outputStr, "\n")
-	devices := make([]string, 0, len(lines))
-	for _, line := range lines {
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) < 1 {
-			continue
-		}
-		dev := strings.TrimSpace(parts[0])
-		if dev != "" {
-			devices = append(devices, dev)
-		}
-	}
+	devices := parseLosetupOutput(string(output))
 	if len(devices) == 0 {
 		return nil, ErrLoopDeviceNotFound
 	}
 	return devices, nil
+}
+
+// parseLosetupOutput extracts loop device paths from `losetup -j <file>`
+// output. Each non-empty line has the form
+//
+//	/dev/loop0: [64768]:12345678 (/path/to/file)
+//
+// We take everything before the first ":" as the device path and skip
+// blank lines and lines that start with whitespace (continuation lines do
+// not appear in modern util-linux but we tolerate them defensively).
+func parseLosetupOutput(output string) []string {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return nil
+	}
+	lines := strings.Split(output, "\n")
+	devices := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimRight(line, "\r")
+		if line == "" {
+			continue
+		}
+		idx := strings.IndexByte(line, ':')
+		if idx <= 0 {
+			continue
+		}
+		dev := strings.TrimSpace(line[:idx])
+		if dev == "" {
+			continue
+		}
+		devices = append(devices, dev)
+	}
+	return devices
 }
 
 // GetVolumeInfo retrieves information about an existing volume
@@ -619,15 +654,14 @@ func (m *Manager) EnsureDataDir() error {
 	return nil
 }
 
-// SetReclaimPolicy persists the PV ReclaimPolicy ("Delete"/"Retain") next to
-// the volume file so that the orphan-cleanup goroutine can honor it even if the
-// PV API object is gone. Writes atomically via a temp file + rename.
-func (m *Manager) SetReclaimPolicy(volumeID, policy string) error {
+// writeMarker atomically persists a small marker file in the volume directory.
+// Used for reclaim policy and sparse flag persistence.
+func (m *Manager) writeMarker(volumeID, name, value string) error {
 	if err := ValidateVolumeID(volumeID); err != nil {
 		return err
 	}
-	if policy == "" {
-		return errors.New("reclaim policy must not be empty")
+	if value == "" {
+		return fmt.Errorf("%s marker value must not be empty", name)
 	}
 
 	dir := m.GetVolumeDir(volumeID)
@@ -635,48 +669,87 @@ func (m *Manager) SetReclaimPolicy(volumeID, policy string) error {
 		return fmt.Errorf("failed to ensure volume directory %s: %w", dir, err)
 	}
 
-	target := filepath.Join(dir, reclaimMarkerFile)
-	tmp, err := os.CreateTemp(dir, reclaimMarkerFile+".tmp-*")
+	target := filepath.Join(dir, name)
+	tmp, err := os.CreateTemp(dir, name+".tmp-*")
 	if err != nil {
-		return fmt.Errorf("failed to create reclaim marker tmp file: %w", err)
+		return fmt.Errorf("failed to create %s marker tmp file: %w", name, err)
 	}
 	tmpName := tmp.Name()
-	if _, err := tmp.WriteString(policy); err != nil {
+	if _, err := tmp.WriteString(value); err != nil {
 		tmp.Close()
 		_ = os.Remove(tmpName)
-		return fmt.Errorf("failed to write reclaim marker: %w", err)
+		return fmt.Errorf("failed to write %s marker: %w", name, err)
 	}
 	if err := tmp.Sync(); err != nil {
 		tmp.Close()
 		_ = os.Remove(tmpName)
-		return fmt.Errorf("failed to sync reclaim marker: %w", err)
+		return fmt.Errorf("failed to sync %s marker: %w", name, err)
 	}
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(tmpName)
-		return fmt.Errorf("failed to close reclaim marker: %w", err)
+		return fmt.Errorf("failed to close %s marker: %w", name, err)
 	}
 	if err := os.Rename(tmpName, target); err != nil {
 		_ = os.Remove(tmpName)
-		return fmt.Errorf("failed to rename reclaim marker into place: %w", err)
+		return fmt.Errorf("failed to rename %s marker into place: %w", name, err)
 	}
 	return nil
+}
+
+// readMarker reads a marker file. Returns ("", nil) if the marker was never
+// written, so callers can apply their own conservative default.
+func (m *Manager) readMarker(volumeID, name string) (string, error) {
+	if err := ValidateVolumeID(volumeID); err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(filepath.Join(m.GetVolumeDir(volumeID), name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to read %s marker: %w", name, err)
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// SetReclaimPolicy persists the PV ReclaimPolicy ("Delete"/"Retain") next to
+// the volume file so that the orphan-cleanup goroutine can honor it even if the
+// PV API object is gone. Writes atomically via a temp file + rename.
+func (m *Manager) SetReclaimPolicy(volumeID, policy string) error {
+	return m.writeMarker(volumeID, reclaimMarkerFile, policy)
 }
 
 // GetReclaimPolicy reads the persisted PV ReclaimPolicy. Returns ("", nil) if
 // the marker has never been written for this volume; the caller MUST treat that
 // as the conservative default (do not delete).
 func (m *Manager) GetReclaimPolicy(volumeID string) (string, error) {
-	if err := ValidateVolumeID(volumeID); err != nil {
-		return "", err
-	}
-	data, err := os.ReadFile(filepath.Join(m.GetVolumeDir(volumeID), reclaimMarkerFile))
+	return m.readMarker(volumeID, reclaimMarkerFile)
+}
+
+// SetSparse persists the volume's sparse flag next to the volume file. It is
+// the disk-side source of truth used by NodeExpandVolume when PV
+// VolumeAttributes are unavailable: without it we would default to sparse=false
+// and accidentally pre-allocate (write zeros across) a sparse volume.
+func (m *Manager) SetSparse(volumeID string, sparse bool) error {
+	return m.writeMarker(volumeID, sparseMarkerFile, strconv.FormatBool(sparse))
+}
+
+// GetSparse reads the persisted sparse flag. Returns (false, false, nil) when
+// the marker has never been written, letting the caller distinguish "unknown"
+// from a real value and decide whether to fail-closed.
+func (m *Manager) GetSparse(volumeID string) (sparse, ok bool, err error) {
+	val, err := m.readMarker(volumeID, sparseMarkerFile)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-		return "", fmt.Errorf("failed to read reclaim marker: %w", err)
+		return false, false, err
 	}
-	return strings.TrimSpace(string(data)), nil
+	if val == "" {
+		return false, false, nil
+	}
+	parsed, err := strconv.ParseBool(val)
+	if err != nil {
+		return false, false, fmt.Errorf("invalid sparse marker %q: %w", val, err)
+	}
+	return parsed, true, nil
 }
 
 // ListVolumes returns a list of all volume IDs in the data directory

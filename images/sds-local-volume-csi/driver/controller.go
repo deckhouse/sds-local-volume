@@ -146,18 +146,28 @@ func (d *Driver) createRawFileVolume(_ context.Context, request *csi.CreateVolum
 	// PVs as live). See review comment #2.
 	candidates := topologyCandidates(request.AccessibilityRequirements, bindingMode)
 	if len(candidates) == 0 {
-		switch bindingMode {
-		case internal.BindingModeWFFC:
-			return nil, status.Error(codes.InvalidArgument, "[CreateVolume] No node topology provided for WaitForFirstConsumer binding mode")
-		default:
-			candidates = []*csi.Topology{
-				{Segments: map[string]string{internal.TopologyKey: d.hostID}},
-			}
-			d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] No topology provided, falling back to current node: %s", traceID, volumeID, d.hostID))
-		}
+		// Both binding modes REQUIRE provisioner to pass topology. For
+		// Immediate, external-provisioner derives Requisite from
+		// StorageClass.AllowedTopologies (which we populate from
+		// rawFile.nodes in the LSC controller). For WFFC the scheduler
+		// fills in Preferred[0]. Falling back to the current controller
+		// pod's hostID is unsafe in HA: the leader can change between
+		// restarts, so two PVs created back-to-back could pin to two
+		// random nodes regardless of allowedNodes / data locality.
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			"[CreateVolume] no node topology provided (binding mode %q); set StorageClass.allowedTopologies or use WaitForFirstConsumer",
+			bindingMode,
+		)
 	}
 
-	// Filter topology by allowed nodes if configured.
+	// Defence-in-depth: re-apply the rawFile.nodes filter after the scheduler /
+	// external-provisioner already considered StorageClass.allowedTopologies.
+	// In normal operation this filter is a no-op because allowedTopologies is
+	// the authoritative source for kube-scheduler and external-provisioner.
+	// We keep it for cases where rawFile.nodes is changed but the StorageClass
+	// has not yet been re-rendered, or where the request bypasses the standard
+	// provisioner path.
 	if len(allowedNodes) > 0 {
 		var filtered []*csi.Topology
 		for _, t := range candidates {
@@ -170,7 +180,9 @@ func (d *Driver) createRawFileVolume(_ context.Context, request *csi.CreateVolum
 		if len(filtered) == 0 {
 			return nil, status.Errorf(codes.ResourceExhausted, "[CreateVolume] no eligible nodes after filtering by rawFile.nodes constraint (allowed: %v)", allowedNodes)
 		}
-		d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Filtered candidates from %d to %d nodes by rawFile.nodes", traceID, volumeID, len(candidates), len(filtered)))
+		if len(filtered) != len(candidates) {
+			d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Filtered candidates from %d to %d nodes by rawFile.nodes", traceID, volumeID, len(candidates), len(filtered)))
+		}
 		candidates = filtered
 	}
 
