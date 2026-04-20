@@ -243,8 +243,14 @@ const orphanGracePeriod = 5 * time.Minute
 // processRawFilePVs handles cleanup for RawFile PVs.
 // Finalizers are added at volume creation time (NodeStageVolume).
 // This goroutine handles:
-// 1. Processing PVs being deleted (with our finalizer) — delete file, remove finalizer
-// 2. Cleaning up orphaned volume files (PV no longer exists)
+//  1. Processing PVs being deleted (with our finalizer) — delete file, remove finalizer
+//  2. Cleaning up orphaned volume files (PV no longer exists)
+//
+// To avoid an O(N) burst of GET PV calls on every cycle (one per local file),
+// the apiserver is queried exactly once per cycle via LIST and the result is
+// indexed by PV name (PV name == CSI volumeID). This drops apiserver pressure
+// from O(N) to O(1) per cycle and keeps memory bounded by the cluster's PV
+// count rather than by local volume count.
 func (d *Driver) processRawFilePVs(ctx context.Context) {
 	d.log.Debug("[RawFileCleanup] Starting RawFile PV processing")
 
@@ -253,14 +259,22 @@ func (d *Driver) processRawFilePVs(ctx context.Context) {
 		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to list volumes: %v", err))
 		return
 	}
-
 	d.log.Debug(fmt.Sprintf("[RawFileCleanup] Found %d local volumes", len(volumes)))
 
+	pvIndex, err := d.listRawFilePVs(ctx)
+	if err != nil {
+		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to list PVs, skipping cycle: %v", err))
+		return
+	}
+	d.log.Debug(fmt.Sprintf("[RawFileCleanup] Indexed %d RawFile PVs from apiserver", len(pvIndex)))
+
 	for _, volumeID := range volumes {
-		pv, err := utils.GetPersistentVolume(ctx, d.cl, volumeID)
-		if err != nil {
-			// PV not found — check if volume file is old enough to be considered orphaned.
-			// Newly created files may not have a PV yet (API propagation delay).
+		pv, found := pvIndex[volumeID]
+		if !found {
+			// No PV with this name. Either truly orphaned, or this is not
+			// a RawFile PV (other types are intentionally not in pvIndex).
+			// Use modTime grace period to avoid racing freshly-created files
+			// whose PV hasn't yet been observed by our cache.
 			volInfo, infoErr := d.rawfileManager.GetVolumeInfo(volumeID)
 			if infoErr != nil {
 				d.log.Warning(fmt.Sprintf("[RawFileCleanup] PV %s not found and failed to get volume info: %v", volumeID, infoErr))
@@ -276,14 +290,7 @@ func (d *Driver) processRawFilePVs(ctx context.Context) {
 			continue
 		}
 
-		if pv.Spec.CSI == nil || pv.Spec.CSI.VolumeAttributes == nil {
-			continue
-		}
-		if pv.Spec.CSI.VolumeAttributes[internal.TypeKey] != internal.RawFile {
-			continue
-		}
-
-		// Process PVs being deleted that have our finalizer
+		// Process PVs being deleted that have our finalizer.
 		if pv.DeletionTimestamp != nil && d.hasFinalizer(pv) {
 			d.log.Info(fmt.Sprintf("[RawFileCleanup] PV %s is being deleted, cleaning up volume", volumeID))
 
@@ -306,6 +313,29 @@ func (d *Driver) processRawFilePVs(ctx context.Context) {
 	}
 
 	d.log.Debug("[RawFileCleanup] Processing completed")
+}
+
+// listRawFilePVs returns a map[pvName]*PV containing only PVs provisioned by
+// this driver and tagged as RawFile. Non-RawFile PVs are filtered out so the
+// caller can rely on map presence as "this volumeID corresponds to a live
+// RawFile PV". A single LIST is issued per call.
+func (d *Driver) listRawFilePVs(ctx context.Context) (map[string]*corev1.PersistentVolume, error) {
+	pvList := &corev1.PersistentVolumeList{}
+	if err := d.cl.List(ctx, pvList); err != nil {
+		return nil, fmt.Errorf("list PVs: %w", err)
+	}
+	out := make(map[string]*corev1.PersistentVolume, len(pvList.Items))
+	for i := range pvList.Items {
+		pv := &pvList.Items[i]
+		if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != DefaultDriverName {
+			continue
+		}
+		if pv.Spec.CSI.VolumeAttributes[internal.TypeKey] != internal.RawFile {
+			continue
+		}
+		out[pv.Name] = pv
+	}
+	return out, nil
 }
 
 // cleanupOrphanedVolume removes a volume file that has no corresponding PV.
@@ -345,56 +375,120 @@ func (d *Driver) hasFinalizer(pv *corev1.PersistentVolume) bool {
 	return false
 }
 
-// addFinalizer adds our RawFile finalizer to the PV using Patch with retry on conflict
-func (d *Driver) addFinalizer(ctx context.Context, pvName string) error {
-	const maxRetries = 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
+// finalizerMaxAttempts caps total tries (initial + retries) for the
+// finalizer add/remove loops. Backoff is exponential between attempts.
+const finalizerMaxAttempts = 5
+
+// finalizerInitialBackoff is the initial sleep before retry #1; each
+// subsequent retry doubles, capped by finalizerMaxBackoff.
+const finalizerInitialBackoff = 100 * time.Millisecond
+
+// finalizerMaxBackoff caps the per-retry sleep so a long flap of API errors
+// does not stall NodeStageVolume / cleanup loops indefinitely.
+const finalizerMaxBackoff = 2 * time.Second
+
+// isRetryableAPIError reports whether err looks like a transient apiserver
+// failure that is worth retrying. We treat 409 Conflict, 408/504 Server
+// Timeouts, 429 TooManyRequests, 500 InternalError and 503
+// ServiceUnavailable as retryable; anything else (NotFound, Forbidden,
+// Invalid, …) propagates immediately.
+func isRetryableAPIError(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch {
+	case kerrors.IsConflict(err),
+		kerrors.IsServerTimeout(err),
+		kerrors.IsTimeout(err),
+		kerrors.IsTooManyRequests(err),
+		kerrors.IsInternalError(err),
+		kerrors.IsServiceUnavailable(err):
+		return true
+	}
+	return false
+}
+
+// patchFinalizerWithRetry runs mutate(pv) (which must return early when
+// no patch is needed), then PATCHes the PV. The whole get/mutate/patch
+// cycle is retried with exponential backoff for transient apiserver
+// errors; non-retryable errors are returned immediately.
+func (d *Driver) patchFinalizerWithRetry(ctx context.Context, pvName, op string, mutate func(*corev1.PersistentVolume) bool) error {
+	backoff := finalizerInitialBackoff
+	for attempt := 1; attempt <= finalizerMaxAttempts; attempt++ {
 		pv, err := utils.GetPersistentVolume(ctx, d.cl, pvName)
 		if err != nil {
-			return fmt.Errorf("failed to get PV: %w", err)
-		}
-		if d.hasFinalizer(pv) {
-			return nil
-		}
-		patch := client.MergeFrom(pv.DeepCopy())
-		pv.Finalizers = append(pv.Finalizers, internal.RawFilePVFinalizer)
-		if err := d.cl.Patch(ctx, pv, patch); err != nil {
-			if kerrors.IsConflict(err) && attempt < maxRetries-1 {
+			if isRetryableAPIError(err) && attempt < finalizerMaxAttempts {
+				if waitErr := sleepCtx(ctx, backoff); waitErr != nil {
+					return waitErr
+				}
+				backoff = nextBackoff(backoff)
 				continue
 			}
-			return fmt.Errorf("failed to add finalizer to PV %s: %w", pvName, err)
+			return fmt.Errorf("failed to get PV %s: %w", pvName, err)
+		}
+		patch := client.MergeFrom(pv.DeepCopy())
+		if !mutate(pv) {
+			return nil
+		}
+		if err := d.cl.Patch(ctx, pv, patch); err != nil {
+			if isRetryableAPIError(err) && attempt < finalizerMaxAttempts {
+				if waitErr := sleepCtx(ctx, backoff); waitErr != nil {
+					return waitErr
+				}
+				backoff = nextBackoff(backoff)
+				continue
+			}
+			return fmt.Errorf("failed to %s finalizer on PV %s: %w", op, pvName, err)
 		}
 		return nil
 	}
-	return fmt.Errorf("failed to add finalizer to PV %s after %d retries", pvName, maxRetries)
+	return fmt.Errorf("failed to %s finalizer on PV %s after %d attempts", op, pvName, finalizerMaxAttempts)
 }
 
-// removeFinalizer removes our RawFile finalizer from the PV using Patch with retry on conflict
+// sleepCtx blocks for d or until ctx is cancelled, whichever happens first.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+func nextBackoff(cur time.Duration) time.Duration {
+	next := cur * 2
+	if next > finalizerMaxBackoff {
+		return finalizerMaxBackoff
+	}
+	return next
+}
+
+// addFinalizer adds our RawFile finalizer to the PV.
+func (d *Driver) addFinalizer(ctx context.Context, pvName string) error {
+	return d.patchFinalizerWithRetry(ctx, pvName, "add", func(pv *corev1.PersistentVolume) bool {
+		if d.hasFinalizer(pv) {
+			return false
+		}
+		pv.Finalizers = append(pv.Finalizers, internal.RawFilePVFinalizer)
+		return true
+	})
+}
+
+// removeFinalizer removes our RawFile finalizer from the PV.
 func (d *Driver) removeFinalizer(ctx context.Context, pvName string) error {
-	const maxRetries = 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		pv, err := utils.GetPersistentVolume(ctx, d.cl, pvName)
-		if err != nil {
-			return fmt.Errorf("failed to get PV: %w", err)
-		}
+	return d.patchFinalizerWithRetry(ctx, pvName, "remove", func(pv *corev1.PersistentVolume) bool {
 		if !d.hasFinalizer(pv) {
-			return nil
+			return false
 		}
-		patch := client.MergeFrom(pv.DeepCopy())
-		var newFinalizers []string
+		newFinalizers := pv.Finalizers[:0]
 		for _, f := range pv.Finalizers {
 			if f != internal.RawFilePVFinalizer {
 				newFinalizers = append(newFinalizers, f)
 			}
 		}
 		pv.Finalizers = newFinalizers
-		if err := d.cl.Patch(ctx, pv, patch); err != nil {
-			if kerrors.IsConflict(err) && attempt < maxRetries-1 {
-				continue
-			}
-			return fmt.Errorf("failed to remove finalizer from PV %s: %w", pvName, err)
-		}
-		return nil
-	}
-	return fmt.Errorf("failed to remove finalizer from PV %s after %d retries", pvName, maxRetries)
+		return true
+	})
 }
