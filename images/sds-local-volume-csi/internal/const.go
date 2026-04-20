@@ -34,7 +34,7 @@ const (
 	LLVSStatusCreated           = "Created"
 	BindingModeWFFC             = "WaitForFirstConsumer"
 	BindingModeI                = "Immediate"
-	FSTypeKey = "csi.storage.k8s.io/fstype"
+	FSTypeKey                   = "csi.storage.k8s.io/fstype"
 
 	// supported filesystem types
 	FSTypeExt4 = "ext4"
