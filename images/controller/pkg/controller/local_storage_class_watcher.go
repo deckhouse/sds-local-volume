@@ -63,6 +63,11 @@ const (
 	RawFileSparseParamKey = LocalStorageClassProvisioner + "/rawfile-sparse"
 	RawFileNodesParamKey  = LocalStorageClassProvisioner + "/rawfile-nodes"
 
+	// TopologyKey MUST stay in sync with the value used by the CSI driver
+	// (sds-local-volume-csi/internal.TopologyKey). Cross-image import is not
+	// available, so the constant is duplicated and pinned by tests.
+	TopologyKey = "topology.sds-local-volume-csi/node"
+
 	FSTypeParamKey = "csi.storage.k8s.io/fstype"
 	DefaultFSType  = "ext4"
 

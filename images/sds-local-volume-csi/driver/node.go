@@ -279,14 +279,24 @@ func (d *Driver) nodeStageRawFileVolume(ctx context.Context, request *csi.NodeSt
 		d.log.Debug(fmt.Sprintf("[NodeStageVolume] RawFile volume %s created successfully at %s", volumeID, volumePath))
 	}
 
-	// Add finalizer only for PVs with Delete reclaim policy.
-	// For Retain policy, the file should persist after PVC deletion.
+	// Persist ReclaimPolicy on disk next to the volume file so that the
+	// orphan-cleanup goroutine can honor Retain even if the PV API object
+	// disappears later. Add the cleanup finalizer only when the PV uses
+	// Delete; for Retain the file MUST survive PVC deletion.
 	pv, pvErr := utils.GetPersistentVolume(ctx, d.cl, volumeID)
 	if pvErr != nil {
 		d.log.Warning(fmt.Sprintf("[NodeStageVolume] Failed to get PV %s to check ReclaimPolicy: %v", volumeID, pvErr))
-	} else if pv.Spec.PersistentVolumeReclaimPolicy == corev1.PersistentVolumeReclaimDelete {
-		if err := d.addFinalizer(ctx, volumeID); err != nil {
-			d.log.Warning(fmt.Sprintf("[NodeStageVolume] Failed to add finalizer to PV %s: %v", volumeID, err))
+	} else {
+		policy := string(pv.Spec.PersistentVolumeReclaimPolicy)
+		if policy != "" {
+			if err := d.rawfileManager.SetReclaimPolicy(volumeID, policy); err != nil {
+				d.log.Warning(fmt.Sprintf("[NodeStageVolume] Failed to persist ReclaimPolicy for volume %s: %v", volumeID, err))
+			}
+		}
+		if pv.Spec.PersistentVolumeReclaimPolicy == corev1.PersistentVolumeReclaimDelete {
+			if err := d.addFinalizer(ctx, volumeID); err != nil {
+				d.log.Warning(fmt.Sprintf("[NodeStageVolume] Failed to add finalizer to PV %s: %v", volumeID, err))
+			}
 		}
 	}
 

@@ -136,67 +136,31 @@ func (d *Driver) createRawFileVolume(_ context.Context, request *csi.CreateVolum
 		d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] AccessibilityRequirements is nil", traceID, volumeID))
 	}
 
-	switch bindingMode {
-	case internal.BindingModeWFFC:
-		// For WaitForFirstConsumer, use the preferred node from scheduler
-		// The scheduler has already selected the node where the pod will run
-		if request.AccessibilityRequirements != nil {
-			if len(request.AccessibilityRequirements.Preferred) != 0 {
-				// Use the preferred topology from scheduler
-				accessibleTopology = request.AccessibilityRequirements.Preferred
-				d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] WFFC mode: Using preferred topology from scheduler: %d nodes", traceID, volumeID, len(accessibleTopology)))
-			} else if len(request.AccessibilityRequirements.Requisite) != 0 {
-				// Fallback to requisite topologies
-				accessibleTopology = request.AccessibilityRequirements.Requisite
-				d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] WFFC mode: Using requisite topology: %d nodes", traceID, volumeID, len(accessibleTopology)))
-			}
-		}
-		if len(accessibleTopology) == 0 {
+	// RawFile volumes are inherently node-local: the backing file lives on a single
+	// node's filesystem and cannot be migrated. Therefore we MUST advertise exactly
+	// one node in AccessibleTopology — otherwise external-provisioner would set
+	// PV.nodeAffinity to multiple nodes, the scheduler could place a Pod on a
+	// different node from the one that already holds the file, NodeStageVolume would
+	// silently create an empty file on the new node, and the original file would be
+	// orphaned with no clean way to detect it (the cleanup goroutine treats existing
+	// PVs as live). See review comment #2.
+	candidates := topologyCandidates(request.AccessibilityRequirements, bindingMode)
+	if len(candidates) == 0 {
+		switch bindingMode {
+		case internal.BindingModeWFFC:
 			return nil, status.Error(codes.InvalidArgument, "[CreateVolume] No node topology provided for WaitForFirstConsumer binding mode")
-		}
-	case internal.BindingModeI:
-		// For Immediate binding with RawFile, return ALL available nodes from AccessibilityRequirements
-		// Unlike LVM, RawFile doesn't require a specific node - the file will be created on any node
-		// when NodeStageVolume is called. This allows the scheduler to pick an appropriate node.
-		if request.AccessibilityRequirements != nil {
-			if len(request.AccessibilityRequirements.Requisite) != 0 {
-				accessibleTopology = request.AccessibilityRequirements.Requisite
-				d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Immediate mode: Using all requisite nodes: %d nodes", traceID, volumeID, len(accessibleTopology)))
-			} else if len(request.AccessibilityRequirements.Preferred) != 0 {
-				accessibleTopology = request.AccessibilityRequirements.Preferred
-				d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Immediate mode: Using all preferred nodes: %d nodes", traceID, volumeID, len(accessibleTopology)))
-			}
-		}
-		// Fallback to current node if no topology provided
-		if len(accessibleTopology) == 0 {
-			accessibleTopology = []*csi.Topology{
-				{Segments: map[string]string{internal.TopologyKey: d.hostID}},
-			}
-			d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Immediate mode: No topology provided, falling back to current node: %s", traceID, volumeID, d.hostID))
-		}
-	default:
-		// Unknown binding mode - try to use AccessibilityRequirements if available
-		d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Unknown bindingMode: '%s', trying to use AccessibilityRequirements", traceID, volumeID, bindingMode))
-		switch {
-		case request.AccessibilityRequirements != nil && len(request.AccessibilityRequirements.Preferred) != 0:
-			accessibleTopology = request.AccessibilityRequirements.Preferred
-			d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Using preferred topology: %d nodes", traceID, volumeID, len(accessibleTopology)))
-		case request.AccessibilityRequirements != nil && len(request.AccessibilityRequirements.Requisite) != 0:
-			accessibleTopology = request.AccessibilityRequirements.Requisite
-			d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Using requisite topology: %d nodes", traceID, volumeID, len(accessibleTopology)))
 		default:
-			// Last resort - use current node
-			accessibleTopology = []*csi.Topology{
+			candidates = []*csi.Topology{
 				{Segments: map[string]string{internal.TopologyKey: d.hostID}},
 			}
-			d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] No topology available, falling back to current node: %s", traceID, volumeID, d.hostID))
+			d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] No topology provided, falling back to current node: %s", traceID, volumeID, d.hostID))
 		}
 	}
 
-	// Filter topology by allowed nodes if configured
+	// Filter topology by allowed nodes if configured.
 	if len(allowedNodes) > 0 {
 		var filtered []*csi.Topology
-		for _, t := range accessibleTopology {
+		for _, t := range candidates {
 			if nodeName, ok := t.Segments[internal.TopologyKey]; ok {
 				if _, allowed := allowedNodes[nodeName]; allowed {
 					filtered = append(filtered, t)
@@ -206,8 +170,16 @@ func (d *Driver) createRawFileVolume(_ context.Context, request *csi.CreateVolum
 		if len(filtered) == 0 {
 			return nil, status.Errorf(codes.ResourceExhausted, "[CreateVolume] no eligible nodes after filtering by rawFile.nodes constraint (allowed: %v)", allowedNodes)
 		}
-		d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Filtered topology from %d to %d nodes by rawFile.nodes", traceID, volumeID, len(accessibleTopology), len(filtered)))
-		accessibleTopology = filtered
+		d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Filtered candidates from %d to %d nodes by rawFile.nodes", traceID, volumeID, len(candidates), len(filtered)))
+		candidates = filtered
+	}
+
+	// Pick exactly one node — the first candidate (Preferred[0] in WFFC, first
+	// allowed node otherwise). Single-node accessibility makes PV.nodeAffinity
+	// pin the volume to one node, eliminating the orphan-file scenario above.
+	accessibleTopology = candidates[:1]
+	if pinned, ok := accessibleTopology[0].Segments[internal.TopologyKey]; ok {
+		d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Pinned RawFile to single node: %s", traceID, volumeID, pinned))
 	}
 
 	d.log.Debug(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] RawFile volume metadata prepared, size: %d bytes", traceID, volumeID, sizeBytes))
@@ -747,4 +719,26 @@ func (d *Driver) ControllerGetVolume(_ context.Context, _ *csi.ControllerGetVolu
 func (d *Driver) ControllerModifyVolume(_ context.Context, _ *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
 	d.log.Info(" call method ControllerModifyVolume")
 	return &csi.ControllerModifyVolumeResponse{}, nil
+}
+
+// topologyCandidates returns the ordered list of candidate topology segments for
+// a CreateVolume request, picking Preferred first in WFFC mode (the scheduler
+// already chose a node) and Requisite first in Immediate mode. Returns nil when
+// the request did not carry any topology hints.
+func topologyCandidates(req *csi.TopologyRequirement, bindingMode string) []*csi.Topology {
+	if req == nil {
+		return nil
+	}
+	switch bindingMode {
+	case internal.BindingModeWFFC:
+		if len(req.Preferred) != 0 {
+			return req.Preferred
+		}
+		return req.Requisite
+	default:
+		if len(req.Requisite) != 0 {
+			return req.Requisite
+		}
+		return req.Preferred
+	}
 }

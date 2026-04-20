@@ -281,10 +281,58 @@ func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 		}
 	}
 
-	// RawFile config is immutable (enforced by CRD validation rule: self == oldSelf),
-	// so no diff check is needed here.
+	// RawFile-specific diff check. `sparse` is immutable at the CRD level,
+	// so we only check it as a defensive guard. `nodes` is mutable and MUST
+	// trigger a StorageClass recreation so the SC `parameters` and
+	// `allowedTopologies` stay in sync with the LSC.
+	if lsc.Spec.RawFile != nil {
+		expectedSparse := "false"
+		if lsc.Spec.RawFile.Sparse {
+			expectedSparse = "true"
+		}
+		if sc.Parameters[RawFileSparseParamKey] != expectedSparse {
+			return true, nil
+		}
+
+		if rawFileNodesDiffer(sc, lsc.Spec.RawFile.Nodes) {
+			return true, nil
+		}
+	}
 
 	return false, nil
+}
+
+// rawFileNodesDiffer reports whether the rawFile.nodes list on the LSC differs
+// from what is currently encoded on the StorageClass. The order of node names
+// is intentionally not significant — both the parameter (comma-joined) and the
+// allowedTopologies values are compared as sets.
+func rawFileNodesDiffer(sc *v1.StorageClass, lscNodes []slv.LocalStorageClassRawFileNode) bool {
+	expected := make(map[string]struct{}, len(lscNodes))
+	for _, n := range lscNodes {
+		if n.Name != "" {
+			expected[n.Name] = struct{}{}
+		}
+	}
+
+	current := make(map[string]struct{})
+	if raw, ok := sc.Parameters[RawFileNodesParamKey]; ok && raw != "" {
+		for _, name := range strings.Split(raw, ",") {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				current[name] = struct{}{}
+			}
+		}
+	}
+
+	if len(current) != len(expected) {
+		return true
+	}
+	for k := range expected {
+		if _, ok := current[k]; !ok {
+			return true
+		}
+	}
+	return false
 }
 
 func getLVGFromSCParams(sc *v1.StorageClass) ([]slv.LocalStorageClassLVG, error) {
@@ -519,6 +567,26 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 		ReclaimPolicy:        &reclaimPolicy,
 		AllowVolumeExpansion: &AllowVolumeExpansion,
 		VolumeBindingMode:    &volumeBindingMode,
+	}
+
+	// Propagate rawFile.nodes constraint to AllowedTopologies so that the
+	// scheduler can respect it for WaitForFirstConsumer (it filters Pods to
+	// nodes whose label values match) and so that external-provisioner can
+	// honor it in Immediate mode. Without this, rawFile.nodes was only checked
+	// post-hoc by the controller in CreateVolume, which does not influence
+	// scheduling.
+	if lsc.Spec.RawFile != nil && len(lsc.Spec.RawFile.Nodes) > 0 {
+		nodeNames := make([]string, 0, len(lsc.Spec.RawFile.Nodes))
+		for _, node := range lsc.Spec.RawFile.Nodes {
+			nodeNames = append(nodeNames, node.Name)
+		}
+		sc.AllowedTopologies = []corev1.TopologySelectorTerm{
+			{
+				MatchLabelExpressions: []corev1.TopologySelectorLabelRequirement{
+					{Key: TopologyKey, Values: nodeNames},
+				},
+			},
+		}
 	}
 
 	if lsc.Labels != nil {
