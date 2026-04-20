@@ -386,11 +386,17 @@ func (m *Manager) AttachLoopDevice(filePath string) (string, error) {
 	return devicePath, nil
 }
 
-// DetachLoopDevice detaches a loop device associated with a file
+// DetachLoopDevice detaches every loop device associated with the backing
+// file. losetup permits multiple loop devices per file (e.g., manual
+// `losetup --find` after CSI staging, or kernel never auto-detached one),
+// and the previous implementation only detached the first hit, leaving the
+// extras attached and blocking volume deletion (busy device). On any
+// per-device failure we keep going for the remaining ones and return a
+// joined error so the caller sees the full picture.
 func (m *Manager) DetachLoopDevice(filePath string) error {
-	m.log.Debug(fmt.Sprintf("[RawFile] Detaching loop device for %s", filePath))
+	m.log.Debug(fmt.Sprintf("[RawFile] Detaching loop devices for %s", filePath))
 
-	devicePath, err := m.FindLoopDevice(filePath)
+	devices, err := m.FindAllLoopDevices(filePath)
 	if err != nil {
 		if errors.Is(err, ErrLoopDeviceNotFound) {
 			m.log.Debug(fmt.Sprintf("[RawFile] No loop device found for %s", filePath))
@@ -399,7 +405,17 @@ func (m *Manager) DetachLoopDevice(filePath string) error {
 		return err
 	}
 
-	return m.DetachLoopDeviceByPath(devicePath)
+	var errs []error
+	for _, devicePath := range devices {
+		if detachErr := m.DetachLoopDeviceByPath(devicePath); detachErr != nil {
+			m.log.Warning(fmt.Sprintf("[RawFile] Failed to detach %s for %s: %v", devicePath, filePath, detachErr))
+			errs = append(errs, fmt.Errorf("detach %s: %w", devicePath, detachErr))
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }
 
 // DetachLoopDeviceByPath detaches a specific loop device
@@ -416,12 +432,28 @@ func (m *Manager) DetachLoopDeviceByPath(devicePath string) error {
 	return nil
 }
 
-// FindLoopDevice finds the loop device associated with a backing file.
-// If multiple loop devices are attached, the first one is returned and a warning is logged.
+// FindLoopDevice finds the primary loop device associated with a backing file.
+// If multiple loop devices are attached, the first one is returned and a
+// warning is logged. Use FindAllLoopDevices when every attachment matters
+// (e.g., teardown).
 func (m *Manager) FindLoopDevice(filePath string) (string, error) {
+	devices, err := m.FindAllLoopDevices(filePath)
+	if err != nil {
+		return "", err
+	}
+	if len(devices) > 1 {
+		m.log.Warning(fmt.Sprintf("[RawFile] Multiple loop devices found for %s (%d devices), using first one", filePath, len(devices)))
+	}
+	return devices[0], nil
+}
+
+// FindAllLoopDevices returns every loop device that has filePath as its
+// backing file (`losetup -j`), preserving the order reported by losetup.
+// Returns ErrLoopDeviceNotFound when none is attached.
+func (m *Manager) FindAllLoopDevices(filePath string) ([]string, error) {
 	absPath, err := filepath.Abs(filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path: %w", err)
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
 	cmd := exec.Command("losetup", "-j", absPath)
@@ -429,28 +461,33 @@ func (m *Manager) FindLoopDevice(filePath string) (string, error) {
 	if err != nil {
 		outputStr := strings.TrimSpace(string(output))
 		if outputStr == "" {
-			return "", ErrLoopDeviceNotFound
+			return nil, ErrLoopDeviceNotFound
 		}
-		return "", fmt.Errorf("losetup -j failed: %s: %w", outputStr, err)
+		return nil, fmt.Errorf("losetup -j failed: %s: %w", outputStr, err)
 	}
 
 	// Parse output lines: /dev/loop0: [64768]:12345678 (/path/to/file)
 	outputStr := strings.TrimSpace(string(output))
 	if outputStr == "" {
-		return "", ErrLoopDeviceNotFound
+		return nil, ErrLoopDeviceNotFound
 	}
 
 	lines := strings.Split(outputStr, "\n")
-	if len(lines) > 1 {
-		m.log.Warning(fmt.Sprintf("[RawFile] Multiple loop devices found for %s (%d devices), using first one", filePath, len(lines)))
+	devices := make([]string, 0, len(lines))
+	for _, line := range lines {
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) < 1 {
+			continue
+		}
+		dev := strings.TrimSpace(parts[0])
+		if dev != "" {
+			devices = append(devices, dev)
+		}
 	}
-
-	parts := strings.SplitN(lines[0], ":", 2)
-	if len(parts) < 1 || strings.TrimSpace(parts[0]) == "" {
-		return "", ErrLoopDeviceNotFound
+	if len(devices) == 0 {
+		return nil, ErrLoopDeviceNotFound
 	}
-
-	return strings.TrimSpace(parts[0]), nil
+	return devices, nil
 }
 
 // GetVolumeInfo retrieves information about an existing volume
