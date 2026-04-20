@@ -27,17 +27,20 @@ const (
 	LVMVolumeGroupKey           = "local.csi.storage.deckhouse.io/lvm-volume-groups"
 	LVMVThickContiguousParamKey = "local.csi.storage.deckhouse.io/lvm-thick-contiguous"
 	ActualNameOnTheNodeKey      = "local.csi.storage.deckhouse.io/actualNameOnTheNode"
-	TopologyKey                 = "topology.sds-local-volume-csi/node"
-	SubPath                     = "subPath"
-	VGNameKey                   = "vgname"
-	ThinPoolNameKey             = "thinPoolName"
-	LVMTypeThin                 = "Thin"
-	LVMTypeThick                = "Thick"
-	LLVStatusCreated            = "Created"
-	LLVSStatusCreated           = "Created"
-	BindingModeWFFC             = "WaitForFirstConsumer"
-	BindingModeI                = "Immediate"
-	FSTypeKey                   = "csi.storage.k8s.io/fstype"
+	// TopologyKey MUST stay in sync with the value used by the controller
+	// (controller/pkg/controller.TopologyKey). Cross-image import is not
+	// available, so the constant is duplicated and pinned by tests.
+	TopologyKey       = "topology.sds-local-volume-csi/node"
+	SubPath           = "subPath"
+	VGNameKey         = "vgname"
+	ThinPoolNameKey   = "thinPoolName"
+	LVMTypeThin       = "Thin"
+	LVMTypeThick      = "Thick"
+	LLVStatusCreated  = "Created"
+	LLVSStatusCreated = "Created"
+	BindingModeWFFC   = "WaitForFirstConsumer"
+	BindingModeI      = "Immediate"
+	FSTypeKey         = "csi.storage.k8s.io/fstype"
 
 	// supported filesystem types
 	FSTypeExt4 = "ext4"
