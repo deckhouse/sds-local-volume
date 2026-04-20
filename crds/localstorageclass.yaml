@@ -39,6 +39,9 @@ spec:
                 - rule: |
                     (has(self.lvm) && !has(self.rawFile)) || (!has(self.lvm) && has(self.rawFile))
                   message: "Exactly one of 'lvm' or 'rawFile' must be specified."
+                - rule: |
+                    has(self.lvm) == has(oldSelf.lvm) && has(self.rawFile) == has(oldSelf.rawFile)
+                  message: "Switching the storage backend (lvm <-> rawFile) after creation is forbidden."
               properties:
                 reclaimPolicy:
                   type: string
@@ -157,21 +160,25 @@ spec:
                   type: object
                   description: |
                     RawFile configuration for volumes backed by local files mounted as loop devices.
-                  x-kubernetes-validations:
-                    - rule: self == oldSelf
-                      message: RawFile configuration is immutable.
                   properties:
                     sparse:
                       type: boolean
+                      x-kubernetes-validations:
+                        - rule: self == oldSelf
+                          message: Value is immutable.
                       description: |
                         If `true`, sparse files will be created (faster but may cause fragmentation).
                         If `false`, files will be pre-allocated (slower but no fragmentation).
+                        Immutable: changing this would require recreating existing volumes.
                       default: false
                     nodes:
                       type: array
                       description: |
                         List of nodes where RawFile volumes can be created.
-                        If empty, all nodes are eligible.
+                        If empty, all nodes are eligible. Mutable: the list MAY be edited
+                        post-creation (existing PVs keep their original placement; the new
+                        list takes effect for subsequent provisioning and propagates to the
+                        underlying StorageClass `allowedTopologies`).
                       items:
                         type: object
                         required:

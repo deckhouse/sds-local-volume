@@ -48,7 +48,8 @@ const (
 	RawFileDefaultDataDirEnv = "RAWFILE_DEFAULT_DATA_DIR"
 	RawFileSparseKey         = "local.csi.storage.deckhouse.io/rawfile-sparse"
 	RawFileNodesKey          = "local.csi.storage.deckhouse.io/rawfile-nodes"
-	RawFileSizeKey           = "rawfileSize"
+	RawFileSizeKey           = "local.csi.storage.deckhouse.io/rawfile-size"
+	RawFileReclaimPolicyKey  = "local.csi.storage.deckhouse.io/rawfile-reclaim-policy"
 	RawFilePVFinalizer       = "storage.deckhouse.io/rawfile-pv-protection"
 )
 

@@ -40,6 +40,11 @@ const (
 	DefaultDirMode = 0750
 	// DefaultFileMode is the default permission mode for raw files
 	DefaultFileMode = 0600
+
+	// reclaimMarkerFile holds the persisted PV ReclaimPolicy ("Delete" or
+	// "Retain") next to disk.img, so the orphan-cleanup goroutine can honor
+	// Retain even if the PV API object disappears.
+	reclaimMarkerFile = "reclaim"
 )
 
 var (
@@ -577,6 +582,66 @@ func (m *Manager) EnsureDataDir() error {
 	return nil
 }
 
+// SetReclaimPolicy persists the PV ReclaimPolicy ("Delete"/"Retain") next to
+// the volume file so that the orphan-cleanup goroutine can honor it even if the
+// PV API object is gone. Writes atomically via a temp file + rename.
+func (m *Manager) SetReclaimPolicy(volumeID, policy string) error {
+	if err := ValidateVolumeID(volumeID); err != nil {
+		return err
+	}
+	if policy == "" {
+		return errors.New("reclaim policy must not be empty")
+	}
+
+	dir := m.GetVolumeDir(volumeID)
+	if err := os.MkdirAll(dir, DefaultDirMode); err != nil {
+		return fmt.Errorf("failed to ensure volume directory %s: %w", dir, err)
+	}
+
+	target := filepath.Join(dir, reclaimMarkerFile)
+	tmp, err := os.CreateTemp(dir, reclaimMarkerFile+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to create reclaim marker tmp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.WriteString(policy); err != nil {
+		tmp.Close()
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to write reclaim marker: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to sync reclaim marker: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to close reclaim marker: %w", err)
+	}
+	if err := os.Rename(tmpName, target); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to rename reclaim marker into place: %w", err)
+	}
+	return nil
+}
+
+// GetReclaimPolicy reads the persisted PV ReclaimPolicy. Returns ("", nil) if
+// the marker has never been written for this volume; the caller MUST treat that
+// as the conservative default (do not delete).
+func (m *Manager) GetReclaimPolicy(volumeID string) (string, error) {
+	if err := ValidateVolumeID(volumeID); err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(filepath.Join(m.GetVolumeDir(volumeID), reclaimMarkerFile))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to read reclaim marker: %w", err)
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
 // ListVolumes returns a list of all volume IDs in the data directory
 func (m *Manager) ListVolumes() ([]string, error) {
 	entries, err := os.ReadDir(m.dataDir)
@@ -599,4 +664,3 @@ func (m *Manager) ListVolumes() ([]string, error) {
 
 	return volumes, nil
 }
-

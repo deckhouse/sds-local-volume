@@ -26,6 +26,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -307,8 +308,22 @@ func (d *Driver) processRawFilePVs(ctx context.Context) {
 	d.log.Debug("[RawFileCleanup] Processing completed")
 }
 
-// cleanupOrphanedVolume removes a volume file that has no corresponding PV
+// cleanupOrphanedVolume removes a volume file that has no corresponding PV.
+// To honor PersistentVolumeReclaimPolicy: Retain even after the PV API object is
+// gone, we read the on-disk reclaim marker (written by NodeStageVolume) and
+// only delete files whose persisted policy is "Delete". An empty / missing
+// marker is treated as the conservative default — keep the file and log.
 func (d *Driver) cleanupOrphanedVolume(volumeID string) {
+	policy, err := d.rawfileManager.GetReclaimPolicy(volumeID)
+	if err != nil {
+		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to read reclaim marker for orphaned volume %s, keeping file: %v", volumeID, err))
+		return
+	}
+	if !strings.EqualFold(policy, string(corev1.PersistentVolumeReclaimDelete)) {
+		d.log.Info(fmt.Sprintf("[RawFileCleanup] Orphaned volume %s has ReclaimPolicy=%q (default Retain when empty), keeping file on disk", volumeID, policy))
+		return
+	}
+
 	volumePath := d.rawfileManager.GetVolumePath(volumeID)
 	if err := d.rawfileManager.DetachLoopDevice(volumePath); err != nil {
 		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to detach loop device for orphaned volume %s: %v", volumeID, err))
@@ -383,4 +398,3 @@ func (d *Driver) removeFinalizer(ctx context.Context, pvName string) error {
 	}
 	return fmt.Errorf("failed to remove finalizer from PV %s after %d retries", pvName, maxRetries)
 }
-
