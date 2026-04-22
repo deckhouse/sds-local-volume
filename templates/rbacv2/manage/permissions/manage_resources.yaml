@@ -1,0 +1,22 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    heritage: deckhouse
+    module: sds-local-volume
+    rbac.deckhouse.io/aggregate-to-sds-local-volume-as: manager
+    rbac.deckhouse.io/kind: manage
+    rbac.deckhouse.io/level: module
+    rbac.deckhouse.io/namespace: d8-sds-local-volume
+  name: d8:manage:permission:subsystem:sds-local-volume:manage_resources
+rules:
+  - apiGroups:
+      - storage.deckhouse.io
+    resources:
+      - localstorageclasses
+    verbs:
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection
