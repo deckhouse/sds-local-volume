@@ -16,6 +16,23 @@ Use overprovisioning in LVM-thin with caution. Monitor the available space in th
 If there is no free space in the pool, module degradation and data loss may occur.
 {{< /alert >}}
 
+## When to use RawFile?
+
+Use RawFile when:
+
+- **No dedicated block devices** — you want to use available filesystem space instead of managing LVM
+- **Quick setup** — you need storage without configuring LVMVolumeGroup resources
+- **Development/testing** — for non-production environments where simplicity is more important than performance
+- **LVM is not available** — when the system doesn't have LVM configured or available
+
+**Avoid RawFile when:**
+
+- **Maximum performance is required** — loop device overhead reduces performance compared to LVM or direct block access
+- **Snapshots are needed** — RawFile doesn't support volume snapshots
+- **Data security is critical** — `volumeCleanup` is not supported for RawFile volumes
+
+For more details, see [Using RawFile volumes](./usage.html#using-rawfile-volumes).
+
 ## Why can't I create a PVC on the selected node?
 
 Check that the `csi-node` pod is running on the selected node:

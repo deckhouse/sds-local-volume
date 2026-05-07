@@ -24,7 +24,10 @@ import (
 
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
+	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
@@ -38,6 +41,100 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 		return &kwhvalidating.ValidatorResult{}, nil
 	}
 
+	// Validate that either LVM or RawFile is specified, but not both
+	if lsc.Spec.LVM != nil && lsc.Spec.RawFile != nil {
+		errMsg := "LocalStorageClass must have either lvm or rawFile configuration, not both"
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+	}
+
+	if lsc.Spec.LVM == nil && lsc.Spec.RawFile == nil {
+		errMsg := "LocalStorageClass must have either lvm or rawFile configuration"
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+	}
+
+	// RawFile validation
+	if lsc.Spec.RawFile != nil {
+		return validateRawFile(ctx, lsc)
+	}
+
+	// LVM validation
+	return validateLVM(ctx, lsc)
+}
+
+// nodeExistenceChecker is overridable from tests to avoid spinning up a real
+// API client. Production code uses the default kube client built by
+// NewKubeClient.
+var nodeExistenceChecker = defaultNodeExistenceChecker
+
+// defaultNodeExistenceChecker returns the set of node names from `wanted`
+// that DO NOT currently exist in the cluster, plus a hard error if the API
+// call itself failed (which the caller MUST treat as fail-open: the cluster
+// might be temporarily unreachable, and we don't want webhook outages to
+// block LSC edits indefinitely).
+func defaultNodeExistenceChecker(ctx context.Context, wanted []string) (missing []string, err error) {
+	cl, cerr := NewKubeClient("")
+	if cerr != nil {
+		return nil, fmt.Errorf("build kube client: %w", cerr)
+	}
+	for _, name := range wanted {
+		node := &corev1.Node{}
+		gerr := cl.Get(ctx, types.NamespacedName{Name: name}, node)
+		switch {
+		case gerr == nil:
+			continue
+		case kerrors.IsNotFound(gerr):
+			missing = append(missing, name)
+		default:
+			return nil, fmt.Errorf("get node %q: %w", name, gerr)
+		}
+	}
+	return missing, nil
+}
+
+func validateRawFile(ctx context.Context, lsc *slv.LocalStorageClass) (*kwhvalidating.ValidatorResult, error) {
+	klog.Infof("Validating RawFile LocalStorageClass: %s", lsc.Name)
+
+	if len(lsc.Spec.RawFile.Nodes) == 0 {
+		return &kwhvalidating.ValidatorResult{Valid: true}, nil
+	}
+
+	nodeNames := make(map[string]struct{}, len(lsc.Spec.RawFile.Nodes))
+	wanted := make([]string, 0, len(lsc.Spec.RawFile.Nodes))
+	for _, node := range lsc.Spec.RawFile.Nodes {
+		if node.Name == "" {
+			errMsg := "RawFile node name must not be empty"
+			klog.Info(errMsg)
+			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+		}
+		if _, exists := nodeNames[node.Name]; exists {
+			errMsg := fmt.Sprintf("Duplicate node name in RawFile nodes: %s", node.Name)
+			klog.Info(errMsg)
+			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+		}
+		nodeNames[node.Name] = struct{}{}
+		wanted = append(wanted, node.Name)
+	}
+
+	missing, err := nodeExistenceChecker(ctx, wanted)
+	if err != nil {
+		// Fail-open: log and accept. A transient API failure must not
+		// block LSC edits; later reconciliation in the controller will
+		// surface the misconfiguration via events.
+		klog.Warningf("RawFile node existence check failed for LSC %q, accepting: %v", lsc.Name, err)
+		return &kwhvalidating.ValidatorResult{Valid: true}, nil
+	}
+	if len(missing) > 0 {
+		errMsg := fmt.Sprintf("RawFile nodes not found in the cluster: %s", strings.Join(missing, ", "))
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+	}
+
+	return &kwhvalidating.ValidatorResult{Valid: true}, nil
+}
+
+func validateLVM(ctx context.Context, lsc *slv.LocalStorageClass) (*kwhvalidating.ValidatorResult, error) {
 	cl, err := NewKubeClient("")
 	if err != nil {
 		klog.Fatal(err)

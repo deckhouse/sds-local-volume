@@ -269,6 +269,147 @@ Note that [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup
 The node itself will have the `storage.deckhouse.io/sds-local-volume-need-manual-eviction` label.
 {{< /alert >}}
 
+## Using RawFile volumes
+
+RawFile volumes use local files mounted as loop devices to provide storage. This approach doesn't require LVM configuration and is useful when you need simple file-based storage on nodes.
+
+### When to use RawFile
+
+- When LVM is not available or not desired
+- For development and testing environments
+- When you need quick provisioning without block device management
+- For lightweight storage requirements
+
+### Configuring data directory
+
+The default directory for RawFile volumes is configured in the module settings using the `rawFileDefaultDataDir` parameter. Default value: `/var/lib/sds-local-volume/rawfile`.
+
+To change the default directory:
+
+```shell
+d8 k apply -f -<<EOF
+apiVersion: deckhouse.io/v1alpha1
+kind: ModuleConfig
+metadata:
+  name: sds-local-volume
+spec:
+  enabled: true
+  version: 1
+  settings:
+    rawFileDefaultDataDir: /mnt/data/rawfile
+EOF
+```
+
+### Creating RawFile-based LocalStorageClass
+
+1. Create a [LocalStorageClass](./cr.html#localstorageclass) resource with RawFile configuration:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: rawfile-storage-class
+   spec:
+     rawFile:
+       sparse: false
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+     fsType: ext4
+   EOF
+   ```
+
+   Parameters:
+
+   - `sparse` — if `true`, sparse files are created (faster but may cause fragmentation). If `false`, files are pre-allocated (slower but no fragmentation). Default: `false`
+   - `fsType` — filesystem type to format volumes. Supported values: `ext4`, `xfs`. Default: `ext4`
+
+1. Wait for the [LocalStorageClass](cr.html#localstorageclass) resource to transition to the `Created` state:
+
+   ```shell
+   d8 k get lsc rawfile-storage-class -w
+   ```
+
+1. Verify that the corresponding StorageClass is created:
+
+   ```shell
+   d8 k get sc rawfile-storage-class
+   ```
+
+### Creating a PersistentVolumeClaim with RawFile storage
+
+1. Create a PVC using the RawFile StorageClass:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: v1
+   kind: PersistentVolumeClaim
+   metadata:
+     name: my-rawfile-pvc
+     namespace: default
+   spec:
+     accessModes:
+       - ReadWriteOnce
+     storageClassName: rawfile-storage-class
+     resources:
+       requests:
+         storage: 10Gi
+   EOF
+   ```
+
+1. Create a Pod that uses the PVC:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: v1
+   kind: Pod
+   metadata:
+     name: test-rawfile-pod
+     namespace: default
+   spec:
+     containers:
+     - name: test
+       image: nginx:alpine
+       volumeMounts:
+       - name: data
+         mountPath: /data
+     volumes:
+     - name: data
+       persistentVolumeClaim:
+         claimName: my-rawfile-pvc
+   EOF
+   ```
+
+### Using sparse files for faster provisioning
+
+Sparse files are faster to create but may cause fragmentation over time:
+
+```shell
+d8 k apply -f -<<EOF
+apiVersion: storage.deckhouse.io/v1alpha1
+kind: LocalStorageClass
+metadata:
+  name: rawfile-sparse
+spec:
+  rawFile:
+    sparse: true
+  reclaimPolicy: Delete
+  volumeBindingMode: WaitForFirstConsumer
+  fsType: ext4
+EOF
+```
+
+{{< alert level="info" >}}
+Sparse files appear to be the full requested size but only consume disk space as data is written. This is useful for testing or when over-provisioning is acceptable.
+{{< /alert >}}
+
+### RawFile volume limitations
+
+- RawFile volumes are node-local and cannot be migrated between nodes
+- Performance may be lower than LVM or direct block device access due to the loop device layer
+- Snapshots are not supported for RawFile volumes
+- The `volumeCleanup` parameter is not applicable to RawFile volumes
+
 ## Creating thin storage
 
 1. Get a list of available [BlockDevice](/modules/sds-node-configurator/cr.html#blockdevice) resources in the cluster:

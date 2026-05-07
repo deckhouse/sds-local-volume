@@ -1,6 +1,7 @@
 module github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi
 
 go 1.25.9
+
 require (
 	github.com/container-storage-interface/spec v1.10.0
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
@@ -55,6 +56,7 @@ require (
 	golang.org/x/time v0.9.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
+	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect

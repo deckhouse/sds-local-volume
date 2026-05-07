@@ -1,12 +1,14 @@
 module github.com/deckhouse/sds-local-volume/images/webhooks
 
 go 1.25.9
+
 require (
 	github.com/deckhouse/sds-common-lib v0.5.0
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
 	github.com/deckhouse/sds-node-configurator/api v0.0.0-20260318114210-2fdda7b75905
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slok/kubewebhook/v2 v2.6.0
+	github.com/stretchr/testify v1.10.0
 	k8s.io/api v0.33.0
 	k8s.io/apiextensions-apiserver v0.33.0
 	k8s.io/apimachinery v0.33.0
@@ -35,6 +37,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/net v0.39.0 // indirect
