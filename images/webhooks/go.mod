@@ -1,6 +1,6 @@
 module github.com/deckhouse/sds-local-volume/images/webhooks
 
-go 1.25.9
+go 1.25.10
 require (
 	github.com/deckhouse/sds-common-lib v0.5.0
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
