@@ -144,8 +144,10 @@ func RunLocalStorageClassWatcherController(
 			oldLsc := e.ObjectOld
 			newLsc := e.ObjectNew
 
-			if reflect.DeepEqual(oldLsc.Spec, newLsc.Spec) && newLsc.DeletionTimestamp == nil {
-				log.Info(fmt.Sprintf("[UpdateFunc] an update event for the LocalStorageClass %s has no Spec field updates. It will not be reconciled", newLsc.Name))
+			if reflect.DeepEqual(oldLsc.Spec, newLsc.Spec) &&
+				reflect.DeepEqual(oldLsc.Labels, newLsc.Labels) &&
+				newLsc.DeletionTimestamp == nil {
+				log.Info(fmt.Sprintf("[UpdateFunc] an update event for the LocalStorageClass %s has no Spec or Labels updates. It will not be reconciled", newLsc.Name))
 				return
 			}
 
