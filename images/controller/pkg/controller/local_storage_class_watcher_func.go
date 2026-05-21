@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -246,6 +247,10 @@ func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 		return true, nil
 	}
 
+	if !labelsMatchLSC(sc.Labels, lsc.Labels) {
+		return true, nil
+	}
+
 	if len(currentLVGs) != len(lsc.Spec.LVM.LVMVolumeGroups) {
 		return true, nil
 	}
@@ -269,6 +274,18 @@ func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// labelsMatchLSC reports whether the labels of the existing StorageClass match
+// the labels propagated from the LocalStorageClass (CR labels + managed-by).
+func labelsMatchLSC(scLabels, lscLabels map[string]string) bool {
+	expected := make(map[string]string, len(lscLabels)+1)
+	for k, v := range lscLabels {
+		expected[k] = v
+	}
+	expected[internal.SLVStorageManagedLabelKey] = internal.SLVStorageClassCtrlName
+
+	return reflect.DeepEqual(scLabels, expected)
 }
 
 func getLVGFromSCParams(sc *v1.StorageClass) ([]slv.LocalStorageClassLVG, error) {
