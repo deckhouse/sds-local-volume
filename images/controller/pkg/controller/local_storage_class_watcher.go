@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	errors2 "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/yaml"
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
@@ -111,7 +113,12 @@ func RunLocalStorageClassWatcherController(
 				return reconcile.Result{}, err
 			}
 
-			shouldRequeue, err := RunEventReconcile(ctx, cl, log, scList, lsc)
+			ignoredLabelPrefixes, err := getStorageClassLabelIgnoredPrefixes(ctx, cl, cfg.ControllerNamespace, cfg.ConfigSecretName)
+			if err != nil {
+				log.Warning(fmt.Sprintf("[LocalStorageClassReconciler] unable to load storage class label ignored prefixes from secret %s/%s: %s. Proceeding without filtering.", cfg.ControllerNamespace, cfg.ConfigSecretName, err.Error()))
+			}
+
+			shouldRequeue, err := RunEventReconcile(ctx, cl, log, scList, lsc, ignoredLabelPrefixes)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] an error occurred while reconciles the LocalStorageClass, name: %s", lsc.Name))
 			}
@@ -166,8 +173,8 @@ func RunLocalStorageClassWatcherController(
 	return c, nil
 }
 
-func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger, scList *v1.StorageClassList, lsc *slv.LocalStorageClass) (bool, error) {
-	recType, err := identifyReconcileFunc(scList, lsc)
+func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger, scList *v1.StorageClassList, lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (bool, error) {
+	recType, err := identifyReconcileFunc(scList, lsc, ignoredLabelPrefixes)
 	if err != nil {
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
 		if upError != nil {
@@ -181,10 +188,10 @@ func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger,
 	switch recType {
 	case CreateReconcile:
 		log.Debug(fmt.Sprintf("[runEventReconcile] CreateReconcile starts reconciliataion for the LocalStorageClass, name: %s", lsc.Name))
-		return reconcileLSCCreateFunc(ctx, cl, log, scList, lsc)
+		return reconcileLSCCreateFunc(ctx, cl, log, scList, lsc, ignoredLabelPrefixes)
 	case UpdateReconcile:
 		log.Debug(fmt.Sprintf("[runEventReconcile] UpdateReconcile starts reconciliataion for the LocalStorageClass, name: %s", lsc.Name))
-		return reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc)
+		return reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc, ignoredLabelPrefixes)
 	case DeleteReconcile:
 		log.Debug(fmt.Sprintf("[runEventReconcile] DeleteReconcile starts reconciliataion for the LocalStorageClass, name: %s", lsc.Name))
 		return reconcileLSCDeleteFunc(ctx, cl, log, scList, lsc)
@@ -193,4 +200,36 @@ func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger,
 	}
 
 	return false, nil
+}
+
+// getStorageClassLabelIgnoredPrefixes reads the controller config Secret and
+// extracts the union of system and user label-key prefixes that must NOT be
+// propagated from a LocalStorageClass to the managed StorageClass.
+//
+// Returns a nil slice (no filtering) if the secret is missing or the field is
+// empty. This keeps the controller forward/backward compatible with secrets
+// produced by older module versions.
+func getStorageClassLabelIgnoredPrefixes(ctx context.Context, cl client.Client, namespace, name string) ([]string, error) {
+	if namespace == "" || name == "" {
+		return nil, nil
+	}
+	secret := &corev1.Secret{}
+	if err := cl.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, secret); err != nil {
+		if errors2.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	raw, ok := secret.Data["config"]
+	if !ok || len(raw) == 0 {
+		return nil, nil
+	}
+
+	var parsed config.SdsLocalVolumeConfig
+	if err := yaml.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("unable to parse config from secret %s/%s: %w", namespace, name, err)
+	}
+
+	return parsed.StorageClassLabelIgnoredPrefixes, nil
 }

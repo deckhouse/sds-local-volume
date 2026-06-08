@@ -81,4 +81,9 @@ func NewConfig() *Options {
 
 type SdsLocalVolumeConfig struct {
 	NodeSelector map[string]string `yaml:"nodeSelector"`
+	// StorageClassLabelIgnoredPrefixes holds the union of the system list (from
+	// internal values) and the user-configured list (from ModuleConfig). Labels
+	// on a LocalStorageClass whose keys start with any of these prefixes are
+	// NOT propagated to the managed Kubernetes StorageClass.
+	StorageClassLabelIgnoredPrefixes []string `yaml:"storageClassLabelIgnoredPrefixes"`
 }
