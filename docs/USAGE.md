@@ -194,9 +194,10 @@ The module uses nodes that have the labels specified in the `nodeSelector` field
        dataNodes:
          nodeSelector:
            my-custom-label-key: my-custom-label-value
+     version: 2
    status:
      message: ""
-     version: "1"
+     version: 2
    ```
 
 1. Run the command to view labels in the `nodeSelector` field:

@@ -48,6 +48,7 @@ All commands below must be run on a machine with access to the Kubernetes API an
      name: sds-local-volume
    spec:
      enabled: true
+     version: 2
    EOF
    ```
 

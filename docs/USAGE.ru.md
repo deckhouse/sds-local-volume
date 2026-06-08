@@ -194,9 +194,10 @@ d8 k annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kube
        dataNodes:
          nodeSelector:
            my-custom-label-key: my-custom-label-value
+     version: 2
    status:
      message: ""
-     version: "1"
+     version: 2
    ```
 
 1. Выполните команду для просмотра меток в поле `nodeSelector`:
