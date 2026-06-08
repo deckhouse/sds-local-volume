@@ -23,6 +23,7 @@ weight: 3
      name: sds-local-volume
    spec:
      enabled: true
+     version: 2
    EOF
    ```
 
