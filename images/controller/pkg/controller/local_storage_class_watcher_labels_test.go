@@ -42,7 +42,7 @@ var defaultIgnoredPrefixes = []string{
 	"argocd.argoproj.io/",
 	"kustomize.toolkit.fluxcd.io/",
 	"helm.toolkit.fluxcd.io/",
-	"fleet.cattle.op/",
+	"fleet.cattle.io/",
 }
 
 var _ = Describe("local-storage-class-controller label filtering", Ordered, func() {
@@ -88,7 +88,7 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 			"argocd.argoproj.io/instance":      "infra",
 			"kustomize.toolkit.fluxcd.io/name": "infra",
 			"helm.toolkit.fluxcd.io/name":      "infra",
-			"fleet.cattle.op/cluster":          "edge",
+			"fleet.cattle.io/cluster":          "edge",
 		}
 		Expect(cl.Create(ctx, lsc)).To(Succeed())
 
@@ -118,7 +118,7 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 		Expect(sc.Labels).NotTo(HaveKey("argocd.argoproj.io/instance"))
 		Expect(sc.Labels).NotTo(HaveKey("kustomize.toolkit.fluxcd.io/name"))
 		Expect(sc.Labels).NotTo(HaveKey("helm.toolkit.fluxcd.io/name"))
-		Expect(sc.Labels).NotTo(HaveKey("fleet.cattle.op/cluster"))
+		Expect(sc.Labels).NotTo(HaveKey("fleet.cattle.io/cluster"))
 
 		// 3 propagated + 1 managed-by = 4 total.
 		Expect(sc.Labels).To(HaveLen(4))

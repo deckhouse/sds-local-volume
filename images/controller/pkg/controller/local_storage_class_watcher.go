@@ -113,9 +113,16 @@ func RunLocalStorageClassWatcherController(
 				return reconcile.Result{}, err
 			}
 
+			// Treat a Secret-load failure as a hard error and requeue: proceeding
+			// with a nil filter would silently regress to pre-PR-#221 behaviour
+			// and propagate GitOps / system labels onto the managed StorageClass,
+			// which is exactly the bug this controller is meant to prevent.
 			ignoredLabelPrefixes, err := getStorageClassLabelIgnoredPrefixes(ctx, cl, cfg.ControllerNamespace, cfg.ConfigSecretName)
 			if err != nil {
-				log.Warning(fmt.Sprintf("[LocalStorageClassReconciler] unable to load storage class label ignored prefixes from secret %s/%s: %s. Proceeding without filtering.", cfg.ControllerNamespace, cfg.ConfigSecretName, err.Error()))
+				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] unable to load storage class label ignored prefixes from secret %s/%s; requeueing without applying reconcile", cfg.ControllerNamespace, cfg.ConfigSecretName))
+				return reconcile.Result{
+					RequeueAfter: cfg.RequeueStorageClassInterval * time.Second,
+				}, nil
 			}
 
 			shouldRequeue, err := RunEventReconcile(ctx, cl, log, scList, lsc, ignoredLabelPrefixes)
@@ -167,6 +174,39 @@ func RunLocalStorageClassWatcherController(
 	)
 	if err != nil {
 		log.Error(err, "[RunLocalStorageClassWatcherController] unable to watch the events")
+		return nil, err
+	}
+
+	// Watch the controller-config Secret so that a ModuleConfig update to
+	// storageClassLabelIgnoredPrefixes re-renders the Secret via Helm and
+	// triggers re-reconciliation of every existing LocalStorageClass without
+	// requiring a controller restart or an unrelated LSC event.
+	err = c.Watch(source.Kind(
+		mgr.GetCache(),
+		&corev1.Secret{},
+		handler.TypedEnqueueRequestsFromMapFunc[*corev1.Secret, reconcile.Request](
+			func(ctx context.Context, s *corev1.Secret) []reconcile.Request {
+				if s == nil || s.Namespace != cfg.ControllerNamespace || s.Name != cfg.ConfigSecretName {
+					return nil
+				}
+				log.Info(fmt.Sprintf("[SecretWatcher] controller-config Secret %s/%s changed; enqueueing all LocalStorageClasses", s.Namespace, s.Name))
+				lscList := &slv.LocalStorageClassList{}
+				if err := cl.List(ctx, lscList); err != nil {
+					log.Error(err, "[SecretWatcher] unable to list LocalStorageClasses for re-reconcile after config Secret change")
+					return nil
+				}
+				reqs := make([]reconcile.Request, 0, len(lscList.Items))
+				for _, lsc := range lscList.Items {
+					reqs = append(reqs, reconcile.Request{
+						NamespacedName: types.NamespacedName{Namespace: lsc.Namespace, Name: lsc.Name},
+					})
+				}
+				return reqs
+			},
+		),
+	))
+	if err != nil {
+		log.Error(err, "[RunLocalStorageClassWatcherController] unable to watch the controller-config Secret")
 		return nil, err
 	}
 
