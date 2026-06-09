@@ -79,6 +79,18 @@ func NewConfig() *Options {
 	return &opts
 }
 
+// SdsLocalVolumeConfig mirrors the structure of the controller-config Secret
+// (stringData."config"). The Secret is rendered by Helm from values.yaml /
+// config-values.yaml and consumed by the controller at runtime.
+//
+// Struct tags are `json:` (not `yaml:`) because the controller uses
+// sigs.k8s.io/yaml, which converts YAML to JSON and then uses encoding/json
+// — `yaml:` tags have no effect there.
 type SdsLocalVolumeConfig struct {
-	NodeSelector map[string]string `yaml:"nodeSelector"`
+	NodeSelector map[string]string `json:"nodeSelector"`
+	// StorageClassLabelIgnoredPrefixes holds the union of the system list (from
+	// internal values) and the user-configured list (from ModuleConfig). Labels
+	// on a LocalStorageClass whose keys start with any of these prefixes are
+	// NOT propagated to the managed Kubernetes StorageClass.
+	StorageClassLabelIgnoredPrefixes []string `json:"storageClassLabelIgnoredPrefixes"`
 }

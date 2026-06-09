@@ -98,6 +98,7 @@ func reconcileLSCUpdateFunc(
 	log logger.Logger,
 	scList *v1.StorageClassList,
 	lsc *slv.LocalStorageClass,
+	ignoredLabelPrefixes []string,
 ) (bool, error) {
 	log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] starts the LocalStorageClass %s validation", lsc.Name))
 	valid, msg := validateLocalStorageClass(ctx, cl, scList, lsc)
@@ -134,7 +135,7 @@ func reconcileLSCUpdateFunc(
 
 	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] storage class %s params: %+v", oldSC.Name, oldSC.Parameters))
 	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] LocalStorageClass %s Spec.LVM: %+v", lsc.Name, lsc.Spec.LVM))
-	hasDiff, err := hasSCDiff(oldSC, lsc)
+	hasDiff, err := hasSCDiff(oldSC, lsc, ignoredLabelPrefixes)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to identify the LVMVolumeGroup difference for the LocalStorageClass %s", lsc.Name))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -146,7 +147,7 @@ func reconcileLSCUpdateFunc(
 
 	if hasDiff {
 		log.Info(fmt.Sprintf("[reconcileLSCUpdateFunc] current Storage Class LVMVolumeGroups do not match LocalStorageClass ones. The Storage Class %s will be recreated with new ones", lsc.Name))
-		newSC, err := updateStorageClass(lsc, oldSC)
+		newSC, err := updateStorageClass(lsc, oldSC, ignoredLabelPrefixes)
 		if err != nil {
 			log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to configure a Storage Class for the LocalStorageClass %s", lsc.Name))
 			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -180,7 +181,7 @@ func reconcileLSCUpdateFunc(
 	return false, nil
 }
 
-func identifyReconcileFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass) (reconcileType, error) {
+func identifyReconcileFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (reconcileType, error) {
 	if shouldReconcileByDeleteFunc(lsc) {
 		return DeleteReconcile, nil
 	}
@@ -189,7 +190,7 @@ func identifyReconcileFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageCla
 		return CreateReconcile, nil
 	}
 
-	should, err := shouldReconcileByUpdateFunc(scList, lsc)
+	should, err := shouldReconcileByUpdateFunc(scList, lsc, ignoredLabelPrefixes)
 	if err != nil {
 		return "none", err
 	}
@@ -204,7 +205,7 @@ func shouldReconcileByDeleteFunc(lsc *slv.LocalStorageClass) bool {
 	return lsc.DeletionTimestamp != nil
 }
 
-func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass) (bool, error) {
+func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (bool, error) {
 	if lsc.DeletionTimestamp != nil {
 		return false, nil
 	}
@@ -212,7 +213,7 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 	for _, sc := range scList.Items {
 		if sc.Name == lsc.Name {
 			if sc.Provisioner == LocalStorageClassProvisioner {
-				diff, err := hasSCDiff(&sc, lsc)
+				diff, err := hasSCDiff(&sc, lsc, ignoredLabelPrefixes)
 				if err != nil {
 					return false, err
 				}
@@ -237,7 +238,7 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 	return false, err
 }
 
-func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
+func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (bool, error) {
 	currentLVGs, err := getLVGFromSCParams(sc)
 	if err != nil {
 		return false, err
@@ -247,7 +248,7 @@ func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 		return true, nil
 	}
 
-	if !labelsMatchLSC(sc.Labels, lsc.Labels) {
+	if !labelsMatchLSC(sc.Labels, lsc.Labels, ignoredLabelPrefixes) {
 		return true, nil
 	}
 
@@ -277,15 +278,47 @@ func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass) (bool, error) {
 }
 
 // labelsMatchLSC reports whether the labels of the existing StorageClass match
-// the labels propagated from the LocalStorageClass (CR labels + managed-by).
-func labelsMatchLSC(scLabels, lscLabels map[string]string) bool {
-	expected := make(map[string]string, len(lscLabels)+1)
-	for k, v := range lscLabels {
+// the labels propagated from the LocalStorageClass (CR labels + managed-by),
+// taking the ignoredLabelPrefixes filter into account. Labels whose keys start
+// with any of the ignoredLabelPrefixes are dropped before the comparison.
+func labelsMatchLSC(scLabels, lscLabels map[string]string, ignoredLabelPrefixes []string) bool {
+	filtered := filterLabelsForStorageClass(lscLabels, ignoredLabelPrefixes)
+	expected := make(map[string]string, len(filtered)+1)
+	for k, v := range filtered {
 		expected[k] = v
 	}
 	expected[internal.SLVStorageManagedLabelKey] = internal.SLVStorageClassCtrlName
 
 	return reflect.DeepEqual(scLabels, expected)
+}
+
+// filterLabelsForStorageClass returns a copy of lscLabels with all keys whose
+// prefix matches any entry in ignoredLabelPrefixes removed. Empty entries in
+// ignoredLabelPrefixes are skipped to avoid silently dropping every label.
+func filterLabelsForStorageClass(lscLabels map[string]string, ignoredLabelPrefixes []string) map[string]string {
+	if len(lscLabels) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(lscLabels))
+	for k, v := range lscLabels {
+		if isIgnoredLabelKey(k, ignoredLabelPrefixes) {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+func isIgnoredLabelKey(key string, ignoredLabelPrefixes []string) bool {
+	for _, prefix := range ignoredLabelPrefixes {
+		if prefix == "" {
+			continue
+		}
+		if strings.HasPrefix(key, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func getLVGFromSCParams(sc *v1.StorageClass) ([]slv.LocalStorageClassLVG, error) {
@@ -320,6 +353,7 @@ func reconcileLSCCreateFunc(
 	log logger.Logger,
 	scList *v1.StorageClassList,
 	lsc *slv.LocalStorageClass,
+	ignoredLabelPrefixes []string,
 ) (bool, error) {
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] starts the LocalStorageClass %s validation", lsc.Name))
 	added, err := addFinalizerIfNotExistsForLSC(ctx, cl, lsc)
@@ -343,7 +377,7 @@ func reconcileLSCCreateFunc(
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] successfully validated the LocalStorageClass, name: %s", lsc.Name))
 
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] starts storage class configuration for the LocalStorageClass, name: %s", lsc.Name))
-	sc, err := configureStorageClass(lsc)
+	sc, err := configureStorageClass(lsc, ignoredLabelPrefixes)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[reconcileLSCCreateFunc] unable to configure Storage Class for LocalStorageClass, name: %s", lsc.Name))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -436,7 +470,7 @@ func addFinalizerIfNotExistsForSC(ctx context.Context, cl client.Client, sc *v1.
 	return true, nil
 }
 
-func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error) {
+func configureStorageClass(lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (*v1.StorageClass, error) {
 	reclaimPolicy := corev1.PersistentVolumeReclaimPolicy(lsc.Spec.ReclaimPolicy)
 	volumeBindingMode := v1.VolumeBindingMode(lsc.Spec.VolumeBindingMode)
 	AllowVolumeExpansion := AllowVolumeExpansionDefaultValue
@@ -494,8 +528,9 @@ func configureStorageClass(lsc *slv.LocalStorageClass) (*v1.StorageClass, error)
 		VolumeBindingMode:    &volumeBindingMode,
 	}
 
-	if lsc.Labels != nil {
-		sc.Labels = lsc.Labels
+	filteredLabels := filterLabelsForStorageClass(lsc.Labels, ignoredLabelPrefixes)
+	if len(filteredLabels) > 0 {
+		sc.Labels = filteredLabels
 		sc.Labels[internal.SLVStorageManagedLabelKey] = internal.SLVStorageClassCtrlName
 	} else {
 		sc.Labels = map[string]string{
@@ -750,8 +785,8 @@ func removeFinalizerIfExists(ctx context.Context, cl client.Client, obj metav1.O
 	return removed, nil
 }
 
-func updateStorageClass(lsc *slv.LocalStorageClass, oldSC *v1.StorageClass) (*v1.StorageClass, error) {
-	newSC, err := configureStorageClass(lsc)
+func updateStorageClass(lsc *slv.LocalStorageClass, oldSC *v1.StorageClass, ignoredLabelPrefixes []string) (*v1.StorageClass, error) {
+	newSC, err := configureStorageClass(lsc, ignoredLabelPrefixes)
 	if err != nil {
 		return nil, err
 	}
