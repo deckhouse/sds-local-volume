@@ -42,6 +42,9 @@ spec:
                 - rule: |
                     has(self.lvm) == has(oldSelf.lvm) && has(self.rawFile) == has(oldSelf.rawFile)
                   message: "Switching the storage backend (lvm <-> rawFile) after creation is forbidden."
+                - rule: |
+                    !has(self.rawFile) || self.volumeBindingMode != "Immediate" || (has(self.rawFile.nodes) && size(self.rawFile.nodes) > 0)
+                  message: "For rawFile storage with Immediate volumeBindingMode, spec.rawFile.nodes must list at least one node."
               properties:
                 reclaimPolicy:
                   type: string

@@ -205,15 +205,22 @@ func (d *Driver) Run(ctx context.Context) error {
 }
 
 // runRawFileCleanup periodically checks for RawFile volumes that need cleanup.
-// Two cadences: fast (1 min) for local volume cleanup on this node, slow
-// (5 min) for removing stuck finalizers from PVs whose node no longer exists.
+// A single ticker drives the loop and a single PersistentVolume LIST is issued
+// per cycle (see runCleanupCycle), shared between the local-volume cleanup and
+// the stuck-finalizer GC. Local-volume cleanup runs every cycle (1 min);
+// stuck-finalizer GC (for PVs whose node was removed) runs every fifth cycle
+// (~5 min). Because this binary runs in every node DaemonSet pod as well as in
+// the controller, capping the LIST to at most one per cycle bounds the load on
+// the apiserver.
 func (d *Driver) runRawFileCleanup(ctx context.Context) {
-	initialDelay := 30 * time.Second
-	cleanupInterval := 1 * time.Minute
-	stuckFinalizerInterval := 5 * time.Minute
+	const (
+		initialDelay          = 30 * time.Second
+		cleanupInterval       = 1 * time.Minute
+		finalizerEveryNCycles = 5 // stuck-finalizer GC cadence in cleanup cycles (~5 min)
+	)
 
-	d.log.Info(fmt.Sprintf("[RawFileCleanup] Starting cleanup goroutine, initial delay: %v, cleanup interval: %v, stuck finalizer interval: %v",
-		initialDelay, cleanupInterval, stuckFinalizerInterval))
+	d.log.Info(fmt.Sprintf("[RawFileCleanup] Starting cleanup goroutine, initial delay: %v, cleanup interval: %v, stuck-finalizer every %d cycles",
+		initialDelay, cleanupInterval, finalizerEveryNCycles))
 
 	select {
 	case <-ctx.Done():
@@ -221,24 +228,55 @@ func (d *Driver) runRawFileCleanup(ctx context.Context) {
 	case <-time.After(initialDelay):
 	}
 
-	d.processRawFilePVs(ctx)
-	d.processStuckRawFileFinalizers(ctx)
+	// The first cycle also runs the stuck-finalizer GC so a freshly (re)started
+	// pod does not wait ~5 min before reclaiming PVs pinned to dead nodes.
+	d.runCleanupCycle(ctx, true)
 
-	cleanupTicker := time.NewTicker(cleanupInterval)
-	finalizerTicker := time.NewTicker(stuckFinalizerInterval)
-	defer cleanupTicker.Stop()
-	defer finalizerTicker.Stop()
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
 
+	cycle := 0
 	for {
 		select {
 		case <-ctx.Done():
 			d.log.Debug("[RawFileCleanup] Stopping cleanup goroutine")
 			return
-		case <-cleanupTicker.C:
-			d.processRawFilePVs(ctx)
-		case <-finalizerTicker.C:
-			d.processStuckRawFileFinalizers(ctx)
+		case <-ticker.C:
+			cycle++
+			d.runCleanupCycle(ctx, cycle%finalizerEveryNCycles == 0)
 		}
+	}
+}
+
+// runCleanupCycle performs one cleanup pass. It issues at most one
+// PersistentVolume LIST and shares the resulting index between the local-volume
+// reconciliation and (when doStuckFinalizers is true) the stuck-finalizer GC.
+// When there are no local volumes and the stuck-finalizer GC is not due, no
+// LIST is issued at all.
+func (d *Driver) runCleanupCycle(ctx context.Context, doStuckFinalizers bool) {
+	volumes, err := d.rawfileManager.ListVolumes()
+	if err != nil {
+		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to list local volumes: %v", err))
+		volumes = nil
+	}
+
+	if len(volumes) == 0 && !doStuckFinalizers {
+		d.log.Debug("[RawFileCleanup] No local RawFile volumes and no stuck-finalizer scan due, skipping PV list")
+		return
+	}
+
+	pvIndex, err := d.listRawFilePVs(ctx)
+	if err != nil {
+		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to list PVs, skipping cycle: %v", err))
+		return
+	}
+	d.log.Debug(fmt.Sprintf("[RawFileCleanup] Indexed %d RawFile PVs from apiserver", len(pvIndex)))
+
+	if len(volumes) > 0 {
+		d.reconcileLocalRawFileVolumes(ctx, volumes, pvIndex)
+	}
+	if doStuckFinalizers {
+		d.reconcileStuckRawFileFinalizers(ctx, pvIndex)
 	}
 }
 
@@ -247,17 +285,17 @@ func (d *Driver) runRawFileCleanup(ctx context.Context) {
 // but whose PV hasn't appeared in the API yet.
 const orphanGracePeriod = 5 * time.Minute
 
-// processRawFilePVs handles cleanup for RawFile PVs.
-// Finalizers are added at volume creation time (NodeStageVolume).
-// This goroutine handles:
-//  1. Processing PVs being deleted (with our finalizer) — delete file, remove finalizer
-//  2. Cleaning up orphaned volume files (PV no longer exists)
+// processRawFilePVs handles cleanup for RawFile PVs on this node. It is kept as
+// a thin wrapper (used directly by tests and as a standalone entrypoint) that
+// fetches the RawFile PV index and delegates to reconcileLocalRawFileVolumes.
+// The periodic cleanup loop does not call this directly; it uses
+// runCleanupCycle, which shares a single PV LIST across the local-volume and
+// stuck-finalizer passes.
 //
-// To avoid an O(N) burst of GET PV calls on every cycle (one per local file),
-// the apiserver is queried exactly once per cycle via LIST and the result is
-// indexed by PV name (PV name == CSI volumeID). This drops apiserver pressure
-// from O(N) to O(1) per cycle and keeps memory bounded by the cluster's PV
-// count rather than by local volume count.
+// The apiserver is queried exactly once via LIST and the result is indexed by
+// PV name (PV name == CSI volumeID). This drops apiserver pressure from O(N) to
+// O(1) per cycle and keeps memory bounded by the cluster's PV count rather than
+// by local volume count.
 func (d *Driver) processRawFilePVs(ctx context.Context) {
 	d.log.Debug("[RawFileCleanup] Starting RawFile PV processing")
 
@@ -280,13 +318,34 @@ func (d *Driver) processRawFilePVs(ctx context.Context) {
 	}
 	d.log.Debug(fmt.Sprintf("[RawFileCleanup] Indexed %d RawFile PVs from apiserver", len(pvIndex)))
 
+	d.reconcileLocalRawFileVolumes(ctx, volumes, pvIndex)
+}
+
+// reconcileLocalRawFileVolumes processes the given local volumes against a
+// pre-fetched index of RawFile PVs. It handles:
+//  1. PVs being deleted (with our finalizer) — delete the file, remove finalizer.
+//  2. Orphaned volume files (PV no longer exists) — delete subject to the
+//     on-disk reclaim marker and the orphan grace period.
+func (d *Driver) reconcileLocalRawFileVolumes(ctx context.Context, volumes []string, pvIndex map[string]*corev1.PersistentVolume) {
 	for _, volumeID := range volumes {
 		pv, found := pvIndex[volumeID]
 		if !found {
-			// No PV with this name. Either truly orphaned, or this is not
-			// a RawFile PV (other types are intentionally not in pvIndex).
-			// Use modTime grace period to avoid racing freshly-created files
-			// whose PV hasn't yet been observed by our cache.
+			// Not present in the RawFile PV index. That can mean either a true
+			// orphan, or a live PV that is simply not recognized as RawFile
+			// (e.g. created by an older driver, or with edited VolumeAttributes
+			// so that the type/driver filter no longer matches). Deleting the
+			// file of a live, in-use volume would destroy user data, so confirm
+			// true absence with a direct GET before treating it as an orphan.
+			if _, getErr := utils.GetPersistentVolume(ctx, d.cl, volumeID); getErr == nil {
+				d.log.Debug(fmt.Sprintf("[RawFileCleanup] PV %s exists but is not indexed as RawFile, leaving file untouched", volumeID))
+				continue
+			} else if !kerrors.IsNotFound(getErr) {
+				d.log.Warning(fmt.Sprintf("[RawFileCleanup] Could not confirm PV %s absence, skipping to stay safe: %v", volumeID, getErr))
+				continue
+			}
+
+			// Use the modTime grace period to avoid racing freshly-created
+			// files whose PV has not yet been observed by the apiserver.
 			volInfo, infoErr := d.rawfileManager.GetVolumeInfo(volumeID)
 			if infoErr != nil {
 				d.log.Warning(fmt.Sprintf("[RawFileCleanup] PV %s not found and failed to get volume info: %v", volumeID, infoErr))
@@ -306,13 +365,13 @@ func (d *Driver) processRawFilePVs(ctx context.Context) {
 		if pv.DeletionTimestamp != nil && d.hasFinalizer(pv) {
 			d.log.Info(fmt.Sprintf("[RawFileCleanup] PV %s is being deleted, cleaning up volume", volumeID))
 
-			volumePath := d.rawfileManager.GetVolumePath(volumeID)
-			if err := d.rawfileManager.DetachLoopDevice(volumePath); err != nil {
-				d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to detach loop device for %s: %v", volumeID, err))
-			}
-
-			if err := d.rawfileManager.DeleteVolume(volumeID); err != nil {
+			deleted, err := d.deleteLocalRawFileVolume(volumeID)
+			if err != nil {
 				d.log.Error(err, fmt.Sprintf("[RawFileCleanup] Failed to delete volume %s", volumeID))
+				continue
+			}
+			if !deleted {
+				// A node RPC is in flight for this volume; retry next cycle.
 				continue
 			}
 
@@ -325,6 +384,25 @@ func (d *Driver) processRawFilePVs(ctx context.Context) {
 	}
 
 	d.log.Debug("[RawFileCleanup] Processing completed")
+}
+
+// deleteLocalRawFileVolume removes the backing file for volumeID. DeleteVolume
+// detaches any attached loop devices internally, so no separate detach is
+// needed. The operation is guarded by the inFlight set to avoid racing a
+// concurrent node RPC (Stage/Unstage/Expand) on the same volume. It returns
+// (false, nil) when the volume is currently in flight and was therefore left
+// untouched, so the caller can retry on the next cycle.
+func (d *Driver) deleteLocalRawFileVolume(volumeID string) (bool, error) {
+	if !d.inFlight.Insert(volumeID) {
+		d.log.Debug(fmt.Sprintf("[RawFileCleanup] Volume %s has an in-flight operation, deferring cleanup", volumeID))
+		return false, nil
+	}
+	defer d.inFlight.Delete(volumeID)
+
+	if err := d.rawfileManager.DeleteVolume(volumeID); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // listRawFilePVs returns a map[pvName]*PV containing only PVs provisioned by
@@ -366,13 +444,12 @@ func (d *Driver) cleanupOrphanedVolume(volumeID string) {
 		return
 	}
 
-	volumePath := d.rawfileManager.GetVolumePath(volumeID)
-	if err := d.rawfileManager.DetachLoopDevice(volumePath); err != nil {
-		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to detach loop device for orphaned volume %s: %v", volumeID, err))
-	}
-	if err := d.rawfileManager.DeleteVolume(volumeID); err != nil {
+	deleted, err := d.deleteLocalRawFileVolume(volumeID)
+	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[RawFileCleanup] Failed to delete orphaned volume %s", volumeID))
-	} else {
+		return
+	}
+	if deleted {
 		d.log.Info(fmt.Sprintf("[RawFileCleanup] Orphaned volume %s cleaned up", volumeID))
 	}
 }
@@ -383,20 +460,28 @@ func (d *Driver) cleanupOrphanedVolume(volumeID string) {
 // rebooting or temporarily partitioned from the apiserver.
 const stuckFinalizerGracePeriod = 10 * time.Minute
 
-// processStuckRawFileFinalizers iterates RawFile PVs that carry our finalizer
-// and are in Terminating state for longer than stuckFinalizerGracePeriod. If
-// the node referenced in the PV's node affinity no longer exists (Node object
-// deleted), the finalizer is removed so that the PV can be garbage-collected.
-// Without this, permanently decommissioned nodes leave PVs stuck in
-// Terminating because no node-side cleanup goroutine holds the local file.
+// processStuckRawFileFinalizers is a thin wrapper (used directly by tests and
+// as a standalone entrypoint) that fetches the RawFile PV index and delegates
+// to reconcileStuckRawFileFinalizers. The periodic cleanup loop uses
+// runCleanupCycle, which shares a single PV LIST across passes.
 func (d *Driver) processStuckRawFileFinalizers(ctx context.Context) {
-	d.log.Debug("[RawFileCleanup] Checking for PVs with stuck finalizers (node removed)")
-
 	pvIndex, err := d.listRawFilePVs(ctx)
 	if err != nil {
 		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to list PVs for stuck-finalizer check: %v", err))
 		return
 	}
+	d.reconcileStuckRawFileFinalizers(ctx, pvIndex)
+}
+
+// reconcileStuckRawFileFinalizers iterates a pre-fetched index of RawFile PVs
+// that carry our finalizer and are in Terminating state for longer than
+// stuckFinalizerGracePeriod. If the node referenced in the PV's node affinity
+// no longer exists (Node object deleted), the finalizer is removed so that the
+// PV can be garbage-collected. Without this, permanently decommissioned nodes
+// leave PVs stuck in Terminating because no node-side cleanup goroutine holds
+// the local file.
+func (d *Driver) reconcileStuckRawFileFinalizers(ctx context.Context, pvIndex map[string]*corev1.PersistentVolume) {
+	d.log.Debug("[RawFileCleanup] Checking for PVs with stuck finalizers (node removed)")
 
 	now := time.Now()
 	for pvName, pv := range pvIndex {

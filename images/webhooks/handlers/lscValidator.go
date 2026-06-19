@@ -137,14 +137,22 @@ func validateRawFile(ctx context.Context, lsc *slv.LocalStorageClass) (*kwhvalid
 func validateLVM(ctx context.Context, lsc *slv.LocalStorageClass) (*kwhvalidating.ValidatorResult, error) {
 	cl, err := NewKubeClient("")
 	if err != nil {
-		klog.Fatal(err)
+		// Fail-open: a client build failure must not crash the webhook
+		// process (which would take down validation for every resource it
+		// serves) nor block LSC edits. The controller reconciliation will
+		// surface a genuine misconfiguration later via events.
+		klog.Errorf("LVM validation: failed to build kube client for LSC %q, accepting: %v", lsc.Name, err)
+		return &kwhvalidating.ValidatorResult{Valid: true}, nil
 	}
 
 	listDevice := &snc.LVMVolumeGroupList{}
 
 	err = cl.List(ctx, listDevice)
 	if err != nil {
-		klog.Fatal(err)
+		// Fail-open on a transient API failure, consistent with the
+		// RawFile node existence check above.
+		klog.Errorf("LVM validation: failed to list LVMVolumeGroups for LSC %q, accepting: %v", lsc.Name, err)
+		return &kwhvalidating.ValidatorResult{Valid: true}, nil
 	}
 
 	errMsg := ""

@@ -349,6 +349,18 @@ func (d *Driver) nodeStageRawFileVolume(ctx context.Context, request *csi.NodeSt
 	// next successful Stage handle it.
 	if pv != nil && pv.Spec.PersistentVolumeReclaimPolicy == corev1.PersistentVolumeReclaimDelete {
 		if err := d.addFinalizer(ctx, volumeID); err != nil {
+			if createdInThisCall {
+				// The finalizer is the only thing that keeps a freshly created
+				// Delete volume's PV from being garbage-collected before the
+				// node-side cleanup removes the backing file. Without it the
+				// file would be orphaned, so fail the stage (kubelet retries)
+				// and roll the fresh file back to keep the next attempt clean.
+				d.log.Error(err, fmt.Sprintf("[NodeStageVolume] Failed to add protection finalizer to freshly-created PV %s, rolling back", volumeID))
+				if delErr := d.rawfileManager.DeleteVolume(volumeID); delErr != nil {
+					d.log.Warning(fmt.Sprintf("[NodeStageVolume] Failed to roll back freshly-created RawFile volume %s after finalizer failure: %v", volumeID, delErr))
+				}
+				return nil, status.Errorf(codes.Unavailable, "[NodeStageVolume] Failed to add protection finalizer to PV %s: %v", volumeID, err)
+			}
 			d.log.Warning(fmt.Sprintf("[NodeStageVolume] Failed to add finalizer to PV %s: %v", volumeID, err))
 		}
 	}
