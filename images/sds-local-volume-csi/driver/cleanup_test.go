@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -223,4 +224,143 @@ func TestHasFinalizer(t *testing.T) {
 
 func TestIsRetryableAPIError(t *testing.T) {
 	assert.False(t, isRetryableAPIError(nil))
+}
+
+func TestNodeNameFromPV(t *testing.T) {
+	t.Run("nil node affinity returns empty", func(t *testing.T) {
+		pv := rawFilePV("pvc-no-affinity", false)
+		assert.Equal(t, "", nodeNameFromPV(pv))
+	})
+
+	t.Run("extracts node from topology key", func(t *testing.T) {
+		pv := rawFilePV("pvc-with-affinity", false)
+		pv.Spec.NodeAffinity = &corev1.VolumeNodeAffinity{
+			Required: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      internal.TopologyKey,
+								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{"worker-3"},
+							},
+						},
+					},
+				},
+			},
+		}
+		assert.Equal(t, "worker-3", nodeNameFromPV(pv))
+	})
+
+	t.Run("ignores multi-value expressions", func(t *testing.T) {
+		pv := rawFilePV("pvc-multi-value", false)
+		pv.Spec.NodeAffinity = &corev1.VolumeNodeAffinity{
+			Required: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{
+					{
+						MatchExpressions: []corev1.NodeSelectorRequirement{
+							{
+								Key:      internal.TopologyKey,
+								Operator: corev1.NodeSelectorOpIn,
+								Values:   []string{"node-a", "node-b"},
+							},
+						},
+					},
+				},
+			},
+		}
+		assert.Equal(t, "", nodeNameFromPV(pv))
+	})
+}
+
+func terminatingPVOnNode(name, nodeName string) *corev1.PersistentVolume {
+	pv := rawFilePV(name, true)
+	deletionTime := metav1.NewTime(time.Now().Add(-2 * stuckFinalizerGracePeriod))
+	pv.DeletionTimestamp = &deletionTime
+	pv.Spec.NodeAffinity = &corev1.VolumeNodeAffinity{
+		Required: &corev1.NodeSelector{
+			NodeSelectorTerms: []corev1.NodeSelectorTerm{
+				{
+					MatchExpressions: []corev1.NodeSelectorRequirement{
+						{
+							Key:      internal.TopologyKey,
+							Operator: corev1.NodeSelectorOpIn,
+							Values:   []string{nodeName},
+						},
+					},
+				},
+			},
+		},
+	}
+	return pv
+}
+
+func TestProcessStuckRawFileFinalizers_RemovesFinalizerWhenNodeGone(t *testing.T) {
+	pv := terminatingPVOnNode("pvc-stuck", "dead-node")
+
+	cl := newTestClient(pv)
+	d := newTestDriver(t, t.TempDir(), cl)
+
+	d.processStuckRawFileFinalizers(context.Background())
+
+	// The fake client garbage-collects the PV once the last finalizer is
+	// removed from an object with a DeletionTimestamp. NotFound proves the
+	// finalizer was successfully removed.
+	updated := &corev1.PersistentVolume{}
+	err := cl.Get(context.Background(), client.ObjectKey{Name: "pvc-stuck"}, updated)
+	assert.True(t, kerrors.IsNotFound(err), "PV must be gone after finalizer removal (fake client GC)")
+}
+
+func TestProcessStuckRawFileFinalizers_KeepsFinalizerWhenNodeExists(t *testing.T) {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "alive-node"},
+	}
+	pv := terminatingPVOnNode("pvc-alive", "alive-node")
+
+	cl := newTestClient(pv, node)
+	d := newTestDriver(t, t.TempDir(), cl)
+
+	d.processStuckRawFileFinalizers(context.Background())
+
+	updated := &corev1.PersistentVolume{}
+	require.NoError(t, cl.Get(context.Background(), client.ObjectKey{Name: "pvc-alive"}, updated))
+	assert.True(t, d.hasFinalizer(updated), "finalizer must stay when node exists")
+}
+
+func TestProcessStuckRawFileFinalizers_SkipsRecentlyTerminatingPV(t *testing.T) {
+	pv := rawFilePV("pvc-recent", true)
+	recent := metav1.NewTime(time.Now().Add(-1 * time.Minute))
+	pv.DeletionTimestamp = &recent
+	pv.Spec.NodeAffinity = &corev1.VolumeNodeAffinity{
+		Required: &corev1.NodeSelector{
+			NodeSelectorTerms: []corev1.NodeSelectorTerm{
+				{MatchExpressions: []corev1.NodeSelectorRequirement{
+					{Key: internal.TopologyKey, Operator: corev1.NodeSelectorOpIn, Values: []string{"dead-node"}},
+				}},
+			},
+		},
+	}
+
+	cl := newTestClient(pv)
+	d := newTestDriver(t, t.TempDir(), cl)
+
+	d.processStuckRawFileFinalizers(context.Background())
+
+	updated := &corev1.PersistentVolume{}
+	require.NoError(t, cl.Get(context.Background(), client.ObjectKey{Name: "pvc-recent"}, updated))
+	assert.True(t, d.hasFinalizer(updated), "finalizer must stay when PV was recently deleted (grace period)")
+}
+
+func TestProcessRawFilePVs_SkipsPVListWhenNoLocalVolumes(t *testing.T) {
+	pv := rawFilePV("pvc-remote", false)
+	cl := newTestClient(pv)
+	d := newTestDriver(t, t.TempDir(), cl)
+
+	// No local files created — processRawFilePVs should short-circuit
+	// without calling listRawFilePVs. We verify by checking that the PV
+	// is still present (no side effects).
+	d.processRawFilePVs(context.Background())
+
+	updated := &corev1.PersistentVolume{}
+	require.NoError(t, cl.Get(context.Background(), client.ObjectKey{Name: "pvc-remote"}, updated))
 }

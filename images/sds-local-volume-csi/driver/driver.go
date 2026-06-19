@@ -204,34 +204,40 @@ func (d *Driver) Run(ctx context.Context) error {
 	return eg.Wait()
 }
 
-// runRawFileCleanup periodically checks for RawFile volumes that need cleanup
+// runRawFileCleanup periodically checks for RawFile volumes that need cleanup.
+// Two cadences: fast (1 min) for local volume cleanup on this node, slow
+// (5 min) for removing stuck finalizers from PVs whose node no longer exists.
 func (d *Driver) runRawFileCleanup(ctx context.Context) {
-	// Initial delay before first cleanup
 	initialDelay := 30 * time.Second
 	cleanupInterval := 1 * time.Minute
+	stuckFinalizerInterval := 5 * time.Minute
 
-	d.log.Info(fmt.Sprintf("[RawFileCleanup] Starting cleanup goroutine, initial delay: %v, interval: %v", initialDelay, cleanupInterval))
+	d.log.Info(fmt.Sprintf("[RawFileCleanup] Starting cleanup goroutine, initial delay: %v, cleanup interval: %v, stuck finalizer interval: %v",
+		initialDelay, cleanupInterval, stuckFinalizerInterval))
 
-	// Wait for initial delay
 	select {
 	case <-ctx.Done():
 		return
 	case <-time.After(initialDelay):
 	}
 
-	// Run first cleanup immediately after delay
 	d.processRawFilePVs(ctx)
+	d.processStuckRawFileFinalizers(ctx)
 
-	ticker := time.NewTicker(cleanupInterval)
-	defer ticker.Stop()
+	cleanupTicker := time.NewTicker(cleanupInterval)
+	finalizerTicker := time.NewTicker(stuckFinalizerInterval)
+	defer cleanupTicker.Stop()
+	defer finalizerTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			d.log.Debug("[RawFileCleanup] Stopping cleanup goroutine")
 			return
-		case <-ticker.C:
+		case <-cleanupTicker.C:
 			d.processRawFilePVs(ctx)
+		case <-finalizerTicker.C:
+			d.processStuckRawFileFinalizers(ctx)
 		}
 	}
 }
@@ -258,6 +264,11 @@ func (d *Driver) processRawFilePVs(ctx context.Context) {
 	volumes, err := d.rawfileManager.ListVolumes()
 	if err != nil {
 		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to list volumes: %v", err))
+		return
+	}
+
+	if len(volumes) == 0 {
+		d.log.Debug("[RawFileCleanup] No local RawFile volumes, skipping PV list")
 		return
 	}
 	d.log.Debug(fmt.Sprintf("[RawFileCleanup] Found %d local volumes", len(volumes)))
@@ -364,6 +375,75 @@ func (d *Driver) cleanupOrphanedVolume(volumeID string) {
 	} else {
 		d.log.Info(fmt.Sprintf("[RawFileCleanup] Orphaned volume %s cleaned up", volumeID))
 	}
+}
+
+// stuckFinalizerGracePeriod is the minimum time a PV must have been in
+// Terminating state before its finalizer is eligible for forced removal
+// due to a missing node. This avoids racing a node that is simply
+// rebooting or temporarily partitioned from the apiserver.
+const stuckFinalizerGracePeriod = 10 * time.Minute
+
+// processStuckRawFileFinalizers iterates RawFile PVs that carry our finalizer
+// and are in Terminating state for longer than stuckFinalizerGracePeriod. If
+// the node referenced in the PV's node affinity no longer exists (Node object
+// deleted), the finalizer is removed so that the PV can be garbage-collected.
+// Without this, permanently decommissioned nodes leave PVs stuck in
+// Terminating because no node-side cleanup goroutine holds the local file.
+func (d *Driver) processStuckRawFileFinalizers(ctx context.Context) {
+	d.log.Debug("[RawFileCleanup] Checking for PVs with stuck finalizers (node removed)")
+
+	pvIndex, err := d.listRawFilePVs(ctx)
+	if err != nil {
+		d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to list PVs for stuck-finalizer check: %v", err))
+		return
+	}
+
+	now := time.Now()
+	for pvName, pv := range pvIndex {
+		if pv.DeletionTimestamp == nil || !d.hasFinalizer(pv) {
+			continue
+		}
+		if now.Sub(pv.DeletionTimestamp.Time) < stuckFinalizerGracePeriod {
+			continue
+		}
+
+		nodeName := nodeNameFromPV(pv)
+		if nodeName == "" {
+			d.log.Debug(fmt.Sprintf("[RawFileCleanup] PV %s has no parseable node affinity, skipping stuck-finalizer check", pvName))
+			continue
+		}
+
+		node := &corev1.Node{}
+		if err := d.cl.Get(ctx, client.ObjectKey{Name: nodeName}, node); err == nil {
+			continue
+		} else if !kerrors.IsNotFound(err) {
+			d.log.Warning(fmt.Sprintf("[RawFileCleanup] Failed to check node %s existence for PV %s: %v", nodeName, pvName, err))
+			continue
+		}
+
+		d.log.Info(fmt.Sprintf("[RawFileCleanup] Node %s no longer exists, removing stuck finalizer from PV %s (terminating for %v)",
+			nodeName, pvName, now.Sub(pv.DeletionTimestamp.Time).Round(time.Second)))
+		if err := d.removeFinalizer(ctx, pvName); err != nil {
+			d.log.Error(err, fmt.Sprintf("[RawFileCleanup] Failed to remove stuck finalizer from PV %s", pvName))
+		}
+	}
+}
+
+// nodeNameFromPV extracts the node name from a PV's node affinity. It looks
+// for a single-value In match on the topology key used by this driver. Returns
+// "" if the affinity is missing or unparseable.
+func nodeNameFromPV(pv *corev1.PersistentVolume) string {
+	if pv.Spec.NodeAffinity == nil || pv.Spec.NodeAffinity.Required == nil {
+		return ""
+	}
+	for _, term := range pv.Spec.NodeAffinity.Required.NodeSelectorTerms {
+		for _, expr := range term.MatchExpressions {
+			if expr.Key == internal.TopologyKey && expr.Operator == corev1.NodeSelectorOpIn && len(expr.Values) == 1 {
+				return expr.Values[0]
+			}
+		}
+	}
+	return ""
 }
 
 // hasFinalizer checks if the PV has our RawFile finalizer
