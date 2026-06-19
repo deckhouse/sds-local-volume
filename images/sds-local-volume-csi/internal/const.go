@@ -16,27 +16,50 @@ limitations under the License.
 
 package internal
 
+import "os"
+
 const (
 	TypeKey                     = "local.csi.storage.deckhouse.io/type"
 	Lvm                         = "lvm"
+	RawFile                     = "rawfile"
 	LvmTypeKey                  = "local.csi.storage.deckhouse.io/lvm-type"
 	BindingModeKey              = "local.csi.storage.deckhouse.io/volume-binding-mode"
 	LVMVolumeGroupKey           = "local.csi.storage.deckhouse.io/lvm-volume-groups"
 	LVMVThickContiguousParamKey = "local.csi.storage.deckhouse.io/lvm-thick-contiguous"
 	ActualNameOnTheNodeKey      = "local.csi.storage.deckhouse.io/actualNameOnTheNode"
-	TopologyKey                 = "topology.sds-local-volume-csi/node"
-	SubPath                     = "subPath"
-	VGNameKey                   = "vgname"
-	ThinPoolNameKey             = "thinPoolName"
-	LVMTypeThin                 = "Thin"
-	LVMTypeThick                = "Thick"
-	LLVStatusCreated            = "Created"
-	LLVSStatusCreated           = "Created"
-	BindingModeWFFC             = "WaitForFirstConsumer"
-	BindingModeI                = "Immediate"
-	FSTypeKey                   = "csi.storage.k8s.io/fstype"
+	// TopologyKey MUST stay in sync with the value used by the controller
+	// (controller/pkg/controller.TopologyKey). Cross-image import is not
+	// available, so the constant is duplicated and pinned by tests.
+	TopologyKey       = "topology.sds-local-volume-csi/node"
+	SubPath           = "subPath"
+	VGNameKey         = "vgname"
+	ThinPoolNameKey   = "thinPoolName"
+	LVMTypeThin       = "Thin"
+	LVMTypeThick      = "Thick"
+	LLVStatusCreated  = "Created"
+	LLVSStatusCreated = "Created"
+	BindingModeWFFC   = "WaitForFirstConsumer"
+	BindingModeI      = "Immediate"
+	FSTypeKey         = "csi.storage.k8s.io/fstype"
 
 	// supported filesystem types
 	FSTypeExt4 = "ext4"
 	FSTypeXfs  = "xfs"
+
+	// RawFile volume type constants
+	RawFileDefaultDir        = "/var/lib/sds-local-volume/rawfile"
+	RawFileDefaultDataDirEnv = "RAWFILE_DEFAULT_DATA_DIR"
+	RawFileSparseKey         = "local.csi.storage.deckhouse.io/rawfile-sparse"
+	RawFileNodesKey          = "local.csi.storage.deckhouse.io/rawfile-nodes"
+	RawFileSizeKey           = "local.csi.storage.deckhouse.io/rawfile-size"
+	RawFilePVFinalizer       = "storage.deckhouse.io/rawfile-pv-protection"
 )
+
+// GetRawFileDataDir returns the data directory for RawFile volumes.
+// It first checks the environment variable, then falls back to the default.
+func GetRawFileDataDir() string {
+	if dir := os.Getenv(RawFileDefaultDataDirEnv); dir != "" {
+		return dir
+	}
+	return RawFileDefaultDir
+}
