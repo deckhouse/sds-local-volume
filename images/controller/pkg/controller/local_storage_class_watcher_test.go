@@ -789,7 +789,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 		scList := &v1.StorageClassList{}
 		Expect(cl.List(ctx, scList)).To(Succeed())
 
-		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(shouldRequeue).To(BeFalse())
 
@@ -807,7 +807,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 
 		Expect(cl.Delete(ctx, lsc)).To(Succeed())
 		Expect(cl.List(ctx, scList)).To(Succeed())
-		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(shouldRequeue).To(BeFalse())
 	})
@@ -840,7 +840,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 		scList := &v1.StorageClassList{}
 		Expect(cl.List(ctx, scList)).To(Succeed())
 
-		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(shouldRequeue).To(BeFalse())
 
@@ -862,7 +862,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 
 		Expect(cl.Delete(ctx, lsc)).To(Succeed())
 		Expect(cl.List(ctx, scList)).To(Succeed())
-		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(shouldRequeue).To(BeFalse())
 	})
@@ -885,7 +885,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 
 		scList := &v1.StorageClassList{}
 		Expect(cl.List(ctx, scList)).To(Succeed())
-		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(shouldRequeue).To(BeFalse())
 
@@ -896,7 +896,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 
 		Expect(cl.Delete(ctx, lsc)).To(Succeed())
 		Expect(cl.List(ctx, scList)).To(Succeed())
-		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(shouldRequeue).To(BeFalse())
 	})
@@ -925,7 +925,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 
 		scList := &v1.StorageClassList{}
 		Expect(cl.List(ctx, scList)).To(Succeed())
-		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(shouldRequeue).To(BeFalse())
 
@@ -945,7 +945,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 		Expect(cl.Update(ctx, lsc)).To(Succeed())
 
 		Expect(cl.List(ctx, scList)).To(Succeed())
-		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(shouldRequeue).To(BeFalse())
 
@@ -957,7 +957,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 
 		Expect(cl.Delete(ctx, lsc)).To(Succeed())
 		Expect(cl.List(ctx, scList)).To(Succeed())
-		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc)
+		shouldRequeue, err = controller.RunEventReconcile(ctx, cl, log, scList, lsc, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(shouldRequeue).To(BeFalse())
 	})
