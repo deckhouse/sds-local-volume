@@ -8,7 +8,12 @@
   {{- $registryBase := $context.Values.global.modulesImages.registry.base }}
   {{- /* Try to get from storage foundation module if enabled */}}
   {{- if $context.Values.global.enabledModules | has "storage-foundation" }}
-    {{- $registryBase = join "/" (list $context.Values.storageFoundation.registry.base "modules" "storage-foundation" ) }}
+    {{- $sfRegistryHost := dig "registry" "base" "" (default dict $context.Values.storageFoundation) }}
+    {{- if $sfRegistryHost }}
+    {{- $registryBase = join "/" (list $sfRegistryHost "modules" "storage-foundation" ) }}
+    {{- else }}
+    {{- $registryBase = join "/" (list $registryBase "modules" "storage-foundation" ) }}
+    {{- end }}
     {{- $storageFoundationDigests := index $context.Values.global.modulesImages.digests "storageFoundation" | default dict }}
     {{- $currentMinor := int $kubernetesSemVer.Minor }}
     {{- $kubernetesMajor := int $kubernetesSemVer.Major }}

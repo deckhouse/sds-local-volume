@@ -1,5 +1,5 @@
 apiVersion: v2
 type: library
 name: deckhouse_lib_helm
-version: 1.72.4
+version: 1.72.5
 description: "Helm utils template definitions for Deckhouse modules."
