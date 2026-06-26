@@ -10,12 +10,8 @@
 
 {{- $_ := set . "Images" $baseImages }}
 ---
-image: builder/distroless
-from: {{ index $.Images "builder/distroless" }}
-final: false
----
 image: base/vex
-fromImage: builder/distroless
+from: {{ index $.Images "builder/distroless" }}
 final: false
 shell:
   install:
