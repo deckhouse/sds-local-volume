@@ -1,0 +1,4 @@
+Changes:
+- Fixed generation of access secret to registry (deckhouse-registry): Now it only
+    contains authorization data for the active image source
+- Updating container-base images to v1.1.8, Go 1.26.4 and lib-helm to 1.72.4
