@@ -1,5 +1,7 @@
 name: "sds-local-volume"
 stage: "General Availability"
+subsystems:
+  - storage
 descriptions:
   en: "Manages local block storage based on LVM."
   ru: "Управляет локальным блочным хранилищем на базе LVM."
