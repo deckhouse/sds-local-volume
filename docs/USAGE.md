@@ -412,6 +412,32 @@ The node itself will have the `storage.deckhouse.io/sds-local-volume-need-manual
    EOF
    ```
 
+   Instead of naming each LVMVolumeGroup, an `lvmVolumeGroups` entry can select them by labels with `labelSelector`. The controller resolves such an entry into every matching LVMVolumeGroup and keeps it up to date as matching LVMVolumeGroups are added, removed, or relabeled. Each entry must set exactly one of `name` or `labelSelector`, and the whole list must use one kind consistently (either all names or all selectors, not a mix). The per-entry `thin.poolName` is applied to all LVMVolumeGroups selected by that entry:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: local-storage-class
+   spec:
+     lvm:
+       lvmVolumeGroups:
+         - labelSelector:
+             matchLabels:
+               storage.deckhouse.io/pool: local
+           thin:
+             poolName: thindata
+       type: Thin
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+   EOF
+   ```
+
+   > An empty `labelSelector` (`labelSelector: {}`, with neither `matchLabels` nor `matchExpressions`) follows the standard Kubernetes rule and matches **every** LVMVolumeGroup in the cluster. Set at least one `matchLabels` or `matchExpressions` requirement unless you deliberately want to select all of them.
+   >
+   > When the set of matched LVMVolumeGroups changes (an LVMVolumeGroup is added, removed, or relabeled), the controller updates the managed StorageClass by recreating it, because StorageClass parameters are immutable. There is a brief window during which the StorageClass does not exist. Already-bound PersistentVolumes are unaffected; with `volumeBindingMode: WaitForFirstConsumer` (the default) new provisioning is deferred until Pod scheduling, so the window is normally invisible. With `Immediate` binding, a PersistentVolumeClaim created exactly in that window may see its provisioning retried.
+
 1. Wait for the [LocalStorageClass](cr.html#localstorageclass) resource to transition to the `Created` state:
 
    ```shell

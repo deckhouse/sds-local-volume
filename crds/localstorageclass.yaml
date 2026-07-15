@@ -80,6 +80,18 @@ spec:
                     - rule: |
                         (!has(oldSelf.thick) || has(self.thick) || !has(oldSelf.thick.contiguous))
                       message: "Field 'thick' cannot be removed if 'thick.contiguous' is specified."
+                    - rule: |
+                        self.lvmVolumeGroups.all(g, has(g.name) != has(g.labelSelector))
+                      message: "Each spec.lvm.lvmVolumeGroups entry must set exactly one of name or labelSelector."
+                    - rule: |
+                        self.lvmVolumeGroups.all(g, has(g.name)) || self.lvmVolumeGroups.all(g, has(g.labelSelector))
+                      message: "spec.lvm.lvmVolumeGroups must use either name entries or labelSelector entries, not a mix."
+                    - rule: |
+                        self.type != "Thin" || self.lvmVolumeGroups.all(g, has(g.thin) && has(g.thin.poolName) && size(g.thin.poolName) > 0)
+                      message: "Field thin.poolName is required for every spec.lvm.lvmVolumeGroups entry when type is Thin."
+                    - rule: |
+                        self.type != "Thick" || self.lvmVolumeGroups.all(g, !has(g.thin))
+                      message: "Field thin is forbidden for spec.lvm.lvmVolumeGroups entries when type is Thick."
                   properties:
                     type:
                       type: string
@@ -126,21 +138,61 @@ spec:
                         - `Discard`: Before deletion, all blocks of the volume will be marked as free using the `discard` system call. This option is applicable only to SSDs.
                     lvmVolumeGroups:
                       type: array
+                      minItems: 1
+                      maxItems: 256
                       description: |
-                        List of LVMVolumeGroup resources where PersistentVolumes will be created.
+                        List of entries selecting the LVMVolumeGroup resources where PersistentVolumes will be created.
+
+                        Each entry selects LVMVolumeGroups either by name (`name`) or by labels (`labelSelector`). Exactly one of the two must be set per entry, and the whole list must use one kind consistently — either all `name` entries or all `labelSelector` entries, not a mix. A `labelSelector` entry is resolved by the controller into every matching LVMVolumeGroup and kept in sync as LVMVolumeGroups are added, removed or relabeled.
                       items:
                         type: object
-                        required:
-                          - name
+                        x-kubernetes-validations:
+                          - rule: |
+                              has(self.name) != has(self.labelSelector)
+                            message: "Exactly one of name or labelSelector must be set."
                         properties:
                           name:
                             type: string
+                            maxLength: 253
                             description: |
-                              LVMVolumeGroup resource name.
+                              LVMVolumeGroup resource name. Mutually exclusive with `labelSelector`.
+                          labelSelector:
+                            type: object
+                            description: |
+                              Label selector that selects one or more LVMVolumeGroup resources by their labels. Mutually exclusive with `name`.
+                            properties:
+                              matchLabels:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                                description: |
+                                  Map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value".
+                              matchExpressions:
+                                type: array
+                                description: |
+                                  List of label selector requirements. The requirements are ANDed.
+                                items:
+                                  type: object
+                                  required:
+                                    - key
+                                    - operator
+                                  properties:
+                                    key:
+                                      type: string
+                                      description: key is the label key that the selector applies to.
+                                    operator:
+                                      type: string
+                                      description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                                    values:
+                                      type: array
+                                      items:
+                                        type: string
+                                      description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty.
+                            x-kubernetes-map-type: atomic
                           thin:
                             type: object
                             description: |
-                              Thin pool in a LVMVolumeGroup resource.
+                              Thin pool used for the LVMVolumeGroups selected by this entry. Required when `type` is `Thin`, forbidden when `type` is `Thick`.
                             required:
                               - poolName
                             properties:
@@ -149,6 +201,7 @@ spec:
                                 description: |
                                   Thin pool name.
                                 minLength: 1
+                                maxLength: 253
                                 pattern: ^.*$
                 fsType:
                   type: string

@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
@@ -43,6 +42,18 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 		klog.Fatal(err)
 	}
 
+	if lsc.Spec.LVM == nil {
+		errMsg := fmt.Sprintf("LocalStorageClass %s has no spec.lvm configured", lsc.Name)
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+	}
+
+	if len(lsc.Spec.LVM.LVMVolumeGroups) == 0 {
+		errMsg := "Field spec.lvm.lvmVolumeGroups must not be empty"
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+	}
+
 	listDevice := &snc.LVMVolumeGroupList{}
 
 	err = cl.List(ctx, listDevice)
@@ -50,63 +61,77 @@ func LSCValidate(ctx context.Context, _ *model.AdmissionReview, obj metav1.Objec
 		klog.Fatal(err)
 	}
 
-	errMsg := ""
+	nameEntries, selectorEntries := 0, 0
+	for _, lvmGroup := range lsc.Spec.LVM.LVMVolumeGroups {
+		if lvmGroup.Name != "" {
+			nameEntries++
+		}
+		if lvmGroup.LabelSelector != nil {
+			selectorEntries++
+		}
+	}
+	if nameEntries > 0 && selectorEntries > 0 {
+		errMsg := "spec.lvm.lvmVolumeGroups must use either name entries or labelSelector entries, not a mix"
+		klog.Info(errMsg)
+		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+	}
+
 	var lvmVolumeGroupUnique []string
 
-	var thickNames, thinNames []string
-	for _, lvmGroup := range lsc.Spec.LVM.LVMVolumeGroups {
-		lvgExists := false
+	for i, lvmGroup := range lsc.Spec.LVM.LVMVolumeGroups {
+		hasName := lvmGroup.Name != ""
+		hasSelector := lvmGroup.LabelSelector != nil
 
-		if slices.Contains(lvmVolumeGroupUnique, lvmGroup.Name) {
-			errMsg = fmt.Sprintf("There must be unique LVMVolumeGroup names (%s duplicates)", lvmGroup.Name)
+		if hasName == hasSelector {
+			errMsg := fmt.Sprintf("Each spec.lvm.lvmVolumeGroups entry must set exactly one of name or labelSelector (entry #%d)", i)
 			klog.Info(errMsg)
-			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
-				nil
+			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
 		}
 
+		if lsc.Spec.LVM.Type == "Thin" {
+			if lvmGroup.Thin == nil || lvmGroup.Thin.PoolName == "" {
+				errMsg := fmt.Sprintf("Field thin.poolName is required for spec.lvm.lvmVolumeGroups entry #%d when type is Thin", i)
+				klog.Info(errMsg)
+				return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+			}
+		} else if lvmGroup.Thin != nil {
+			errMsg := fmt.Sprintf("Field thin must not be specified for spec.lvm.lvmVolumeGroups entry #%d when type is Thick", i)
+			klog.Info(errMsg)
+			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+		}
+
+		if hasSelector {
+			if _, err := metav1.LabelSelectorAsSelector(lvmGroup.LabelSelector); err != nil {
+				errMsg := fmt.Sprintf("Invalid labelSelector in spec.lvm.lvmVolumeGroups entry #%d: %s", i, err.Error())
+				klog.Info(errMsg)
+				return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+			}
+			// The concrete match set (existence, emptiness, same-node conflicts)
+			// is validated by the controller, which reflects the result in the
+			// LocalStorageClass status.
+			continue
+		}
+
+		if slices.Contains(lvmVolumeGroupUnique, lvmGroup.Name) {
+			errMsg := fmt.Sprintf("There must be unique LVMVolumeGroup names (%s duplicates)", lvmGroup.Name)
+			klog.Info(errMsg)
+			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+		}
 		lvmVolumeGroupUnique = append(lvmVolumeGroupUnique, lvmGroup.Name)
 
+		lvgExists := false
 		for _, lvmVG := range listDevice.Items {
 			if lvmVG.Name == lvmGroup.Name {
 				lvgExists = true
 				break
 			}
 		}
-
 		if !lvgExists {
-			errMsg = fmt.Sprintf("LVMVolumeGroup %s not found; ", lvmGroup.Name)
+			errMsg := fmt.Sprintf("LVMVolumeGroup %s not found; ", lvmGroup.Name)
 			klog.Info(errMsg)
-			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
-				nil
-		}
-
-		if lvmGroup.Thin == nil {
-			thickNames = append(thickNames, lvmGroup.Name)
-		} else {
-			thinNames = append(thinNames, lvmGroup.Name)
+			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
 		}
 	}
 
-	thinExists, thickExists := len(thinNames) > 0, len(thickNames) > 0
-
-	if thinExists && lsc.Spec.LVM.Type == "Thick" {
-		errMsg = fmt.Sprintf("There must be only thick pools with Thick LVM type. Found: %s.", strings.Join(thinNames, ", "))
-		klog.Info(errMsg)
-		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
-			nil
-	}
-
-	if thickExists && lsc.Spec.LVM.Type == "Thin" {
-		errMsg = fmt.Sprintf("There must be only thin pools with Thin LVM type. Found: %s.", strings.Join(thickNames, ", "))
-		klog.Info(errMsg)
-		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg},
-			nil
-	}
-
-	if thickExists && thinExists {
-		errMsg = "There must be only thin or thick pools simultaneously"
-		klog.Info(errMsg)
-		return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
-	}
 	return &kwhvalidating.ValidatorResult{Valid: true}, nil
 }

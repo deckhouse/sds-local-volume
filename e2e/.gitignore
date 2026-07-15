@@ -1,0 +1,7 @@
+# Local env files with secrets (DKP license, registry cfg, SSH passphrase).
+# Keep them out of git.
+config/
+test_exports*
+.tmp-*.log
+e2e-artifacts-*/
+.gomodcache/

@@ -412,6 +412,32 @@ d8 k annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kube
    EOF
    ```
 
+   Вместо указания каждого LVMVolumeGroup по имени запись `lvmVolumeGroups` может отбирать их по лейблам с помощью `labelSelector`. Контроллер вычисляет (resolve — разрешает) такую запись в каждый подходящий LVMVolumeGroup и поддерживает её в актуальном состоянии при добавлении, удалении или перелейблировании (изменении лейблов) подходящих LVMVolumeGroup. В каждой записи должно быть задано ровно одно из полей `name` или `labelSelector`, и весь список должен использовать один тип записей (либо только имена, либо только селекторы, без смешивания). Указанный в записи `thin.poolName` применяется ко всем отобранным этой записью LVMVolumeGroup:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: storage.deckhouse.io/v1alpha1
+   kind: LocalStorageClass
+   metadata:
+     name: local-storage-class
+   spec:
+     lvm:
+       lvmVolumeGroups:
+         - labelSelector:
+             matchLabels:
+               storage.deckhouse.io/pool: local
+           thin:
+             poolName: thindata
+       type: Thin
+     reclaimPolicy: Delete
+     volumeBindingMode: WaitForFirstConsumer
+   EOF
+   ```
+
+   > Пустой `labelSelector` (`labelSelector: {}`, без `matchLabels` и `matchExpressions`) следует стандартному правилу Kubernetes и отбирает **все** LVMVolumeGroup в кластере. Задавайте хотя бы одно требование `matchLabels` или `matchExpressions`, если только вы намеренно не хотите отобрать их все.
+   >
+   > При изменении набора отобранных LVMVolumeGroup (LVMVolumeGroup добавлен, удалён или перелейблирован) контроллер обновляет управляемый StorageClass пересозданием, так как параметры StorageClass неизменяемы (immutable). Есть короткое окно, когда StorageClass отсутствует. На уже привязанные PersistentVolume это не влияет; при `volumeBindingMode: WaitForFirstConsumer` (значение по умолчанию) provisioning откладывается до планирования пода, поэтому окно обычно незаметно. При режиме `Immediate` для PersistentVolumeClaim, созданного ровно в это окно, provisioning может быть повторён (retry).
+
 1. Дождитесь перехода ресурса [LocalStorageClass](cr.html#localstorageclass) в состояние `Created`:
 
    ```shell

@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/yaml"
@@ -40,6 +41,7 @@ import (
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
 const (
@@ -210,11 +212,83 @@ func RunLocalStorageClassWatcherController(
 		return nil, err
 	}
 
+	// Watch LVMVolumeGroups so that adding, removing or relabeling an LVG
+	// re-reconciles every selector-based LocalStorageClass and keeps its
+	// managed StorageClass in sync with the current selector match set.
+	// Explicit-list LocalStorageClasses are unaffected by LVG label churn and
+	// are therefore skipped.
+	err = c.Watch(source.Kind(
+		mgr.GetCache(),
+		&snc.LVMVolumeGroup{},
+		handler.TypedEnqueueRequestsFromMapFunc[*snc.LVMVolumeGroup, reconcile.Request](
+			func(ctx context.Context, _ *snc.LVMVolumeGroup) []reconcile.Request {
+				lscList := &slv.LocalStorageClassList{}
+				if err := cl.List(ctx, lscList); err != nil {
+					log.Error(err, "[LVGWatcher] unable to list LocalStorageClasses for re-reconcile after LVMVolumeGroup change")
+					return nil
+				}
+				reqs := make([]reconcile.Request, 0, len(lscList.Items))
+				for i := range lscList.Items {
+					lsc := &lscList.Items[i]
+					if !lscUsesLabelSelector(lsc) {
+						continue
+					}
+					reqs = append(reqs, reconcile.Request{
+						NamespacedName: types.NamespacedName{Namespace: lsc.Namespace, Name: lsc.Name},
+					})
+				}
+				return reqs
+			},
+		),
+		// Only Create/Delete and label changes affect selector membership;
+		// ignore the frequent status-only updates the agent writes, otherwise
+		// every LVMVolumeGroup heartbeat would re-reconcile all selector-based
+		// LocalStorageClasses.
+		predicate.TypedFuncs[*snc.LVMVolumeGroup]{
+			CreateFunc: func(event.TypedCreateEvent[*snc.LVMVolumeGroup]) bool { return true },
+			DeleteFunc: func(event.TypedDeleteEvent[*snc.LVMVolumeGroup]) bool { return true },
+			UpdateFunc: func(e event.TypedUpdateEvent[*snc.LVMVolumeGroup]) bool {
+				return !reflect.DeepEqual(e.ObjectOld.GetLabels(), e.ObjectNew.GetLabels())
+			},
+			GenericFunc: func(event.TypedGenericEvent[*snc.LVMVolumeGroup]) bool { return false },
+		},
+	))
+	if err != nil {
+		log.Error(err, "[RunLocalStorageClassWatcherController] unable to watch LVMVolumeGroups")
+		return nil, err
+	}
+
 	return c, nil
 }
 
 func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger, scList *v1.StorageClassList, lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (bool, error) {
-	recType, err := identifyReconcileFunc(scList, lsc, ignoredLabelPrefixes)
+	// Resolve the effective LVMVolumeGroups (explicit list or the ones matched
+	// by the label selector) once per reconcile so that every downstream step
+	// operates on the same deterministic set. The LVMVolumeGroup list is only
+	// needed when the resource is not being deleted.
+	lvgList := &snc.LVMVolumeGroupList{}
+	if lsc.DeletionTimestamp == nil {
+		if err := cl.List(ctx, lvgList); err != nil {
+			log.Error(err, fmt.Sprintf("[runEventReconcile] unable to list LVMVolumeGroups for the LocalStorageClass %s", lsc.Name))
+			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+			if upError != nil {
+				err = errors.Join(err, fmt.Errorf("[runEventReconcile] unable to update the LocalStorageClass %s status: %w", lsc.Name, upError))
+			}
+			return true, err
+		}
+	}
+
+	effectiveLVGs, err := resolveEffectiveLVGs(lsc, lvgList)
+	if err != nil && lsc.DeletionTimestamp == nil {
+		log.Error(err, fmt.Sprintf("[runEventReconcile] unable to resolve LVMVolumeGroups for the LocalStorageClass %s", lsc.Name))
+		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+		if upError != nil {
+			err = errors.Join(err, fmt.Errorf("[runEventReconcile] unable to update the LocalStorageClass %s status: %w", lsc.Name, upError))
+		}
+		return true, err
+	}
+
+	recType, err := identifyReconcileFunc(scList, lsc, effectiveLVGs, ignoredLabelPrefixes)
 	if err != nil {
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
 		if upError != nil {
@@ -228,10 +302,10 @@ func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger,
 	switch recType {
 	case CreateReconcile:
 		log.Debug(fmt.Sprintf("[runEventReconcile] CreateReconcile starts reconciliataion for the LocalStorageClass, name: %s", lsc.Name))
-		return reconcileLSCCreateFunc(ctx, cl, log, scList, lsc, ignoredLabelPrefixes)
+		return reconcileLSCCreateFunc(ctx, cl, log, scList, lsc, lvgList, effectiveLVGs, ignoredLabelPrefixes)
 	case UpdateReconcile:
 		log.Debug(fmt.Sprintf("[runEventReconcile] UpdateReconcile starts reconciliataion for the LocalStorageClass, name: %s", lsc.Name))
-		return reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc, ignoredLabelPrefixes)
+		return reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc, lvgList, effectiveLVGs, ignoredLabelPrefixes)
 	case DeleteReconcile:
 		log.Debug(fmt.Sprintf("[runEventReconcile] DeleteReconcile starts reconciliataion for the LocalStorageClass, name: %s", lsc.Name))
 		return reconcileLSCDeleteFunc(ctx, cl, log, scList, lsc)
