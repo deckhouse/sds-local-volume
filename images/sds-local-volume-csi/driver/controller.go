@@ -227,6 +227,18 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error SelectLVG", traceID, volumeID))
 			return nil, status.Errorf(codes.Internal, "error during SelectLVG")
 		}
+
+		// Align the requested size to the LVM extent boundary so that Spec.Size and
+		// the reported capacity match the size the node actually provisions. The
+		// snapshot/volume content-source branches above already align; without this
+		// the plain path stores an unaligned size (e.g. 35Mi) that drifts from the
+		// extent-rounded LV on the node.
+		alignedLlvSize, alignErr := utils.AlignSizeToExtent(*llvSize, utils.SafeExtentSize(selectedLVG.Status.ExtentSize))
+		if alignErr != nil {
+			d.log.Error(alignErr, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error aligning size to extent", traceID, volumeID))
+			return nil, status.Errorf(codes.Internal, "error aligning size to extent: %s", alignErr.Error())
+		}
+		*llvSize = alignedLlvSize
 	}
 
 	volumeCleanup := request.Parameters[LVMVolumeCleanupParamKey]
@@ -293,7 +305,10 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			CapacityBytes: request.CapacityRange.GetRequiredBytes(),
+			// Report the extent-aligned size that was actually provisioned rather
+			// than the raw requested bytes, so the PV capacity matches the LV on
+			// the node (and is never zero when the size is derived from a source).
+			CapacityBytes: llvSize.Value(),
 			VolumeId:      request.Name,
 			VolumeContext: volumeCtx,
 			ContentSource: request.VolumeContentSource,
