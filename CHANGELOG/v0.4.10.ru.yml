@@ -1,0 +1,3 @@
+Изменения:
+  - Добавлена возможность выбора LVMVolumeGroup по меткам (labelSelector) в LocalStorageClass
+  - Внутренние изменения в сборке модуля
