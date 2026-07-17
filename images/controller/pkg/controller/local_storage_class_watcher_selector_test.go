@@ -282,6 +282,87 @@ var _ = Describe("local-storage-class-controller lvmVolumeGroups labelSelector",
 		Expect(lsc.Status.Phase).To(Equal(controller.FailedStatusPhase))
 	})
 
+	It("recovers from Failed to Created when a matching LVMVolumeGroup appears", func(ctx SpecContext) {
+		lsc := generateLocalStorageClass(lscName, reclaimPolicyDelete, volumeBindingModeWFFC,
+			controller.LVMThickType, []slv.LocalStorageClassLVG{selectorEntry("")})
+		Expect(cl.Create(ctx, lsc)).To(Succeed())
+
+		shouldRequeue, err := reconcile(ctx, lsc)
+		Expect(err).To(HaveOccurred())
+		Expect(shouldRequeue).To(BeTrue())
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		Expect(lsc.Status.Phase).To(Equal(controller.FailedStatusPhase))
+
+		scList := &v1.StorageClassList{}
+		Expect(cl.List(ctx, scList)).To(Succeed())
+		Expect(scList.Items).To(BeEmpty())
+
+		lvgA := generateLVMVolumeGroup(thickLVGAName, nil)
+		lvgA.Labels = matchedLabels
+		Expect(cl.Create(ctx, lvgA)).To(Succeed())
+
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		shouldRequeue, err = reconcile(ctx, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		Expect(lsc.Status.Phase).To(Equal(controller.CreatedStatusPhase))
+
+		sc := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, sc)).To(Succeed())
+		Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(Equal("- name: " + thickLVGAName + "\n"))
+	})
+
+	It("recovers from Failed to Created after a temporary empty match set when the StorageClass already exists", func(ctx SpecContext) {
+		// Healthy Created state with an SC first.
+		lvgA := generateLVMVolumeGroup(thickLVGAName, nil)
+		lvgA.Labels = matchedLabels
+		Expect(cl.Create(ctx, lvgA)).To(Succeed())
+
+		lsc := generateLocalStorageClass(lscName, reclaimPolicyDelete, volumeBindingModeWFFC,
+			controller.LVMThickType, []slv.LocalStorageClassLVG{selectorEntry("")})
+		Expect(cl.Create(ctx, lsc)).To(Succeed())
+
+		_, err := reconcile(ctx, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		Expect(lsc.Status.Phase).To(Equal(controller.CreatedStatusPhase))
+
+		// Relabel away so the selector matches nothing: validation fails, phase
+		// becomes Failed, but the StorageClass is left in place (update path
+		// fails before recreate).
+		Expect(cl.Get(ctx, client.ObjectKey{Name: thickLVGAName}, lvgA)).To(Succeed())
+		lvgA.Labels = nil
+		Expect(cl.Update(ctx, lvgA)).To(Succeed())
+
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		shouldRequeue, err := reconcile(ctx, lsc)
+		Expect(err).To(HaveOccurred())
+		Expect(shouldRequeue).To(BeTrue())
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		Expect(lsc.Status.Phase).To(Equal(controller.FailedStatusPhase))
+
+		sc := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, sc)).To(Succeed())
+
+		// Restore the label: match set is healthy again. Even with no SC param
+		// diff, Failed phase must force an update reconcile that clears Failed.
+		Expect(cl.Get(ctx, client.ObjectKey{Name: thickLVGAName}, lvgA)).To(Succeed())
+		lvgA.Labels = matchedLabels
+		Expect(cl.Update(ctx, lvgA)).To(Succeed())
+
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		shouldRequeue, err = reconcile(ctx, lsc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		Expect(lsc.Status.Phase).To(Equal(controller.CreatedStatusPhase))
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, sc)).To(Succeed())
+		Expect(sc.Parameters[controller.LVMVolumeGroupsParamKey]).To(Equal("- name: " + thickLVGAName + "\n"))
+	})
+
 	It("fails when an entry sets both name and labelSelector", func(ctx SpecContext) {
 		lvgA := generateLVMVolumeGroup(thickLVGAName, nil)
 		lvgA.Labels = matchedLabels
