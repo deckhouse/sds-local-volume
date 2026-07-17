@@ -20,11 +20,13 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -34,6 +36,104 @@ import (
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
+
+// lscUsesLabelSelector reports whether any of the LocalStorageClass
+// lvmVolumeGroups entries selects its LVMVolumeGroups by a label selector.
+func lscUsesLabelSelector(lsc *slv.LocalStorageClass) bool {
+	if lsc.Spec.LVM == nil {
+		return false
+	}
+	for _, entry := range lsc.Spec.LVM.LVMVolumeGroups {
+		if entry.LabelSelector != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveEffectiveLVGs expands the LocalStorageClass lvmVolumeGroups list into
+// the concrete set of named LVMVolumeGroups it targets. A name-based entry maps
+// to itself; a labelSelector-based entry expands to every LVMVolumeGroup whose
+// labels match, each inheriting that entry's thin pool. The result is sorted by
+// name so the resulting StorageClass parameter is deterministic across
+// reconciles.
+//
+// Deduplication rules:
+//   - Duplicate name-based entries are always an error (same as the admission
+//     webhook uniqueness check), even when they agree on the thin pool.
+//   - An LVMVolumeGroup matched by several overlapping labelSelector entries is
+//     collapsed to a single resolved entry when those entries agree on the thin
+//     pool; disagreeing thin pools are an error (ambiguous).
+func resolveEffectiveLVGs(lsc *slv.LocalStorageClass, lvgList *snc.LVMVolumeGroupList) ([]slv.LocalStorageClassLVG, error) {
+	if lsc.Spec.LVM == nil {
+		return nil, nil
+	}
+
+	resolved := make([]slv.LocalStorageClassLVG, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
+	seen := make(map[string]*slv.LocalStorageClassLVMThinPoolSpec, len(lsc.Spec.LVM.LVMVolumeGroups))
+
+	// allowCollapse=true is used for selector expansion: overlapping selectors
+	// that agree on the thin pool collapse to one entry. allowCollapse=false is
+	// used for name-based entries: any repeated name is a hard error.
+	appendEntry := func(name string, thin *slv.LocalStorageClassLVMThinPoolSpec, allowCollapse bool) error {
+		if prev, dup := seen[name]; dup {
+			if !allowCollapse {
+				return fmt.Errorf("LVMVolumeGroup %q is listed more than once in lvmVolumeGroups", name)
+			}
+			if !sameThinPool(prev, thin) {
+				return fmt.Errorf("LVMVolumeGroup %q is selected by more than one lvmVolumeGroups entry with different thin pools (%q vs %q)", name, thinPoolName(prev), thinPoolName(thin))
+			}
+			return nil
+		}
+		seen[name] = thin
+		resolved = append(resolved, slv.LocalStorageClassLVG{Name: name, Thin: thin})
+		return nil
+	}
+
+	for _, entry := range lsc.Spec.LVM.LVMVolumeGroups {
+		if entry.LabelSelector == nil {
+			if err := appendEntry(entry.Name, entry.Thin, false); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		selector, err := metav1.LabelSelectorAsSelector(entry.LabelSelector)
+		if err != nil {
+			return nil, fmt.Errorf("invalid labelSelector: %w", err)
+		}
+		for _, lvg := range lvgList.Items {
+			if !selector.Matches(labels.Set(lvg.Labels)) {
+				continue
+			}
+			if err := appendEntry(lvg.Name, entry.Thin, true); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	sort.Slice(resolved, func(i, j int) bool {
+		return resolved[i].Name < resolved[j].Name
+	})
+
+	return resolved, nil
+}
+
+// sameThinPool reports whether two thin pool specs are equivalent (both absent,
+// or both naming the same pool).
+func sameThinPool(a, b *slv.LocalStorageClassLVMThinPoolSpec) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.PoolName == b.PoolName
+}
+
+func thinPoolName(t *slv.LocalStorageClassLVMThinPoolSpec) string {
+	if t == nil {
+		return ""
+	}
+	return t.PoolName
+}
 
 func reconcileLSCDeleteFunc(
 	ctx context.Context,
@@ -98,10 +198,12 @@ func reconcileLSCUpdateFunc(
 	log logger.Logger,
 	scList *v1.StorageClassList,
 	lsc *slv.LocalStorageClass,
+	lvgList *snc.LVMVolumeGroupList,
+	effectiveLVGs []slv.LocalStorageClassLVG,
 	ignoredLabelPrefixes []string,
 ) (bool, error) {
 	log.Debug(fmt.Sprintf("[reconcileLSCUpdateFunc] starts the LocalStorageClass %s validation", lsc.Name))
-	valid, msg := validateLocalStorageClass(ctx, cl, scList, lsc)
+	valid, msg := validateLocalStorageClass(scList, lsc, lvgList, effectiveLVGs)
 	if !valid {
 		err := fmt.Errorf("validation failed: %s", msg)
 		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] Unable to reconcile the LocalStorageClass, name: %s", lsc.Name))
@@ -135,7 +237,7 @@ func reconcileLSCUpdateFunc(
 
 	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] storage class %s params: %+v", oldSC.Name, oldSC.Parameters))
 	log.Trace(fmt.Sprintf("[reconcileLSCUpdateFunc] LocalStorageClass %s Spec.LVM: %+v", lsc.Name, lsc.Spec.LVM))
-	hasDiff, err := hasSCDiff(oldSC, lsc, ignoredLabelPrefixes)
+	hasDiff, err := hasSCDiff(oldSC, lsc, effectiveLVGs, ignoredLabelPrefixes)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to identify the LVMVolumeGroup difference for the LocalStorageClass %s", lsc.Name))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -147,7 +249,7 @@ func reconcileLSCUpdateFunc(
 
 	if hasDiff {
 		log.Info(fmt.Sprintf("[reconcileLSCUpdateFunc] current Storage Class LVMVolumeGroups do not match LocalStorageClass ones. The Storage Class %s will be recreated with new ones", lsc.Name))
-		newSC, err := updateStorageClass(lsc, oldSC, ignoredLabelPrefixes)
+		newSC, err := updateStorageClass(lsc, oldSC, effectiveLVGs, ignoredLabelPrefixes)
 		if err != nil {
 			log.Error(err, fmt.Sprintf("[reconcileLSCUpdateFunc] unable to configure a Storage Class for the LocalStorageClass %s", lsc.Name))
 			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -181,7 +283,7 @@ func reconcileLSCUpdateFunc(
 	return false, nil
 }
 
-func identifyReconcileFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (reconcileType, error) {
+func identifyReconcileFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass, effectiveLVGs []slv.LocalStorageClassLVG, ignoredLabelPrefixes []string) (reconcileType, error) {
 	if shouldReconcileByDeleteFunc(lsc) {
 		return DeleteReconcile, nil
 	}
@@ -190,7 +292,7 @@ func identifyReconcileFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageCla
 		return CreateReconcile, nil
 	}
 
-	should, err := shouldReconcileByUpdateFunc(scList, lsc, ignoredLabelPrefixes)
+	should, err := shouldReconcileByUpdateFunc(scList, lsc, effectiveLVGs, ignoredLabelPrefixes)
 	if err != nil {
 		return "none", err
 	}
@@ -205,7 +307,7 @@ func shouldReconcileByDeleteFunc(lsc *slv.LocalStorageClass) bool {
 	return lsc.DeletionTimestamp != nil
 }
 
-func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (bool, error) {
+func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStorageClass, effectiveLVGs []slv.LocalStorageClassLVG, ignoredLabelPrefixes []string) (bool, error) {
 	if lsc.DeletionTimestamp != nil {
 		return false, nil
 	}
@@ -213,7 +315,7 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 	for _, sc := range scList.Items {
 		if sc.Name == lsc.Name {
 			if sc.Provisioner == LocalStorageClassProvisioner {
-				diff, err := hasSCDiff(&sc, lsc, ignoredLabelPrefixes)
+				diff, err := hasSCDiff(&sc, lsc, effectiveLVGs, ignoredLabelPrefixes)
 				if err != nil {
 					return false, err
 				}
@@ -238,7 +340,7 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 	return false, err
 }
 
-func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (bool, error) {
+func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass, effectiveLVGs []slv.LocalStorageClassLVG, ignoredLabelPrefixes []string) (bool, error) {
 	currentLVGs, err := getLVGFromSCParams(sc)
 	if err != nil {
 		return false, err
@@ -252,23 +354,32 @@ func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass, ignoredLabelPref
 		return true, nil
 	}
 
-	if len(currentLVGs) != len(lsc.Spec.LVM.LVMVolumeGroups) {
+	if len(currentLVGs) != len(effectiveLVGs) {
 		return true, nil
 	}
 
+	// Compare as sets keyed by LVMVolumeGroup name (not positionally): the
+	// effective list is sorted, but a StorageClass created by an older module
+	// version may store its LVMVolumeGroups in a different order, and a spurious
+	// order-only diff would trigger an unnecessary delete+create of the SC.
+	effectiveByName := make(map[string]*slv.LocalStorageClassLVMThinPoolSpec, len(effectiveLVGs))
+	for i := range effectiveLVGs {
+		effectiveByName[effectiveLVGs[i].Name] = effectiveLVGs[i].Thin
+	}
+
 	for i := range currentLVGs {
-		if currentLVGs[i].Name != lsc.Spec.LVM.LVMVolumeGroups[i].Name {
+		effThin, ok := effectiveByName[currentLVGs[i].Name]
+		if !ok {
 			return true, nil
 		}
 		if lsc.Spec.LVM.Type == LVMThinType {
-			if currentLVGs[i].Thin == nil && lsc.Spec.LVM.LVMVolumeGroups[i].Thin != nil {
+			curThin := currentLVGs[i].Thin
+			switch {
+			case curThin == nil && effThin == nil:
+				return false, fmt.Errorf("LocalStorageClass type=%q: unable to identify the Thin pool differences for the LocalStorageClass %q. The current LVMVolumeGroup %q does not have a Thin pool configured in either the StorageClass or the LocalStorageClass", lsc.Spec.LVM.Type, lsc.Name, currentLVGs[i].Name)
+			case curThin == nil || effThin == nil:
 				return true, nil
-			}
-			if currentLVGs[i].Thin == nil && lsc.Spec.LVM.LVMVolumeGroups[i].Thin == nil {
-				err := fmt.Errorf("LocalStorageClass type=%q: unable to identify the Thin pool differences for the LocalStorageClass %q. The current LVMVolumeGroup %q does not have a Thin pool configured in either the StorageClass or the LocalStorageClass", lsc.Spec.LVM.Type, lsc.Name, currentLVGs[i].Name)
-				return false, err
-			}
-			if currentLVGs[i].Thin.PoolName != lsc.Spec.LVM.LVMVolumeGroups[i].Thin.PoolName {
+			case curThin.PoolName != effThin.PoolName:
 				return true, nil
 			}
 		}
@@ -353,6 +464,8 @@ func reconcileLSCCreateFunc(
 	log logger.Logger,
 	scList *v1.StorageClassList,
 	lsc *slv.LocalStorageClass,
+	lvgList *snc.LVMVolumeGroupList,
+	effectiveLVGs []slv.LocalStorageClassLVG,
 	ignoredLabelPrefixes []string,
 ) (bool, error) {
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] starts the LocalStorageClass %s validation", lsc.Name))
@@ -363,7 +476,7 @@ func reconcileLSCCreateFunc(
 	}
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] finalizer %s was added to the LocalStorageClass %s: %t", LocalStorageClassFinalizerName, lsc.Name, added))
 
-	valid, msg := validateLocalStorageClass(ctx, cl, scList, lsc)
+	valid, msg := validateLocalStorageClass(scList, lsc, lvgList, effectiveLVGs)
 	if !valid {
 		err := fmt.Errorf("validation failed: %s", msg)
 		log.Error(err, fmt.Sprintf("[reconcileLSCCreateFunc] Unable to reconcile the LocalStorageClass, name: %s", lsc.Name))
@@ -377,7 +490,7 @@ func reconcileLSCCreateFunc(
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] successfully validated the LocalStorageClass, name: %s", lsc.Name))
 
 	log.Debug(fmt.Sprintf("[reconcileLSCCreateFunc] starts storage class configuration for the LocalStorageClass, name: %s", lsc.Name))
-	sc, err := configureStorageClass(lsc, ignoredLabelPrefixes)
+	sc, err := configureStorageClass(lsc, effectiveLVGs, ignoredLabelPrefixes)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("[reconcileLSCCreateFunc] unable to configure Storage Class for LocalStorageClass, name: %s", lsc.Name))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -470,7 +583,7 @@ func addFinalizerIfNotExistsForSC(ctx context.Context, cl client.Client, sc *v1.
 	return true, nil
 }
 
-func configureStorageClass(lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (*v1.StorageClass, error) {
+func configureStorageClass(lsc *slv.LocalStorageClass, effectiveLVGs []slv.LocalStorageClassLVG, ignoredLabelPrefixes []string) (*v1.StorageClass, error) {
 	reclaimPolicy := corev1.PersistentVolumeReclaimPolicy(lsc.Spec.ReclaimPolicy)
 	volumeBindingMode := v1.VolumeBindingMode(lsc.Spec.VolumeBindingMode)
 	AllowVolumeExpansion := AllowVolumeExpansionDefaultValue
@@ -480,7 +593,7 @@ func configureStorageClass(lsc *slv.LocalStorageClass, ignoredLabelPrefixes []st
 		return nil, fmt.Errorf("unable to identify the LocalStorageClass type")
 	}
 
-	lvgsParam, err := yaml.Marshal(lsc.Spec.LVM.LVMVolumeGroups)
+	lvgsParam, err := yaml.Marshal(effectiveLVGs)
 	if err != nil {
 		return nil, err
 	}
@@ -568,10 +681,10 @@ func updateLocalStorageClassPhase(
 }
 
 func validateLocalStorageClass(
-	ctx context.Context,
-	cl client.Client,
 	scList *v1.StorageClassList,
 	lsc *slv.LocalStorageClass,
+	lvgList *snc.LVMVolumeGroupList,
+	effectiveLVGs []slv.LocalStorageClassLVG,
 ) (bool, string) {
 	var (
 		failedMsgBuilder strings.Builder
@@ -584,35 +697,73 @@ func validateLocalStorageClass(
 		failedMsgBuilder.WriteString(fmt.Sprintf("There already is a storage class with the same name: %s but it is not managed by the LocalStorageClass controller\n", unmanagedScName))
 	}
 
-	lvgList := &snc.LVMVolumeGroupList{}
-	err := cl.List(ctx, lvgList)
-	if err != nil {
-		valid = false
-		failedMsgBuilder.WriteString(fmt.Sprintf("Unable to validate selected LVMVolumeGroups, err: %s\n", err.Error()))
-		return valid, failedMsgBuilder.String()
-	}
-
 	if lsc.Spec.LVM != nil {
-		LVGsFromTheSameNode := findLVMVolumeGroupsOnTheSameNode(lvgList, lsc)
+		if len(lsc.Spec.LVM.LVMVolumeGroups) == 0 {
+			valid = false
+			failedMsgBuilder.WriteString("Field spec.lvm.lvmVolumeGroups must not be empty\n")
+		}
+
+		nameEntries, selectorEntries := 0, 0
+		for i, entry := range lsc.Spec.LVM.LVMVolumeGroups {
+			hasName := entry.Name != ""
+			hasSelector := entry.LabelSelector != nil
+
+			if hasName {
+				nameEntries++
+			}
+			if hasSelector {
+				selectorEntries++
+			}
+
+			if hasName == hasSelector {
+				valid = false
+				failedMsgBuilder.WriteString(fmt.Sprintf("Each spec.lvm.lvmVolumeGroups entry must set exactly one of name or labelSelector (entry #%d)\n", i))
+			} else if hasSelector {
+				if _, err := metav1.LabelSelectorAsSelector(entry.LabelSelector); err != nil {
+					valid = false
+					failedMsgBuilder.WriteString(fmt.Sprintf("Invalid labelSelector in spec.lvm.lvmVolumeGroups entry #%d: %s\n", i, err.Error()))
+				} else if countLVGsMatchingSelector(lvgList, entry.LabelSelector) == 0 {
+					valid = false
+					failedMsgBuilder.WriteString(fmt.Sprintf("labelSelector in spec.lvm.lvmVolumeGroups entry #%d matched no LVMVolumeGroups\n", i))
+				}
+			}
+
+			if lsc.Spec.LVM.Type == LVMThinType {
+				if entry.Thin == nil || entry.Thin.PoolName == "" {
+					valid = false
+					failedMsgBuilder.WriteString(fmt.Sprintf("Field thin.poolName is required for spec.lvm.lvmVolumeGroups entry #%d when type is Thin\n", i))
+				}
+			} else if entry.Thin != nil {
+				valid = false
+				failedMsgBuilder.WriteString(fmt.Sprintf("Field thin must not be specified for spec.lvm.lvmVolumeGroups entry #%d when type is Thick\n", i))
+			}
+		}
+
+		if nameEntries > 0 && selectorEntries > 0 {
+			valid = false
+			failedMsgBuilder.WriteString("spec.lvm.lvmVolumeGroups must use either name entries or labelSelector entries, not a mix\n")
+		}
+
+		LVGsFromTheSameNode := findLVMVolumeGroupsOnTheSameNode(lvgList, effectiveLVGs)
 		if len(LVGsFromTheSameNode) != 0 {
 			valid = false
 			failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use the same node (|node: LVG names): %s\n", strings.Join(LVGsFromTheSameNode, "")))
 		}
 
-		nonexistentLVGs := findNonexistentLVGs(lvgList, lsc)
+		nonexistentLVGs := findNonexistentLVGs(lvgList, effectiveLVGs)
 		if len(nonexistentLVGs) != 0 {
 			valid = false
 			failedMsgBuilder.WriteString(fmt.Sprintf("Some of selected LVMVolumeGroups are nonexistent, LVG names: %s\n", strings.Join(nonexistentLVGs, ",")))
 		}
 
 		if lsc.Spec.LVM.Type == LVMThinType {
-			LVGSWithNonexistentTps := findNonexistentThinPools(lvgList, lsc)
+			LVGSWithNonexistentTps := findNonexistentThinPools(lvgList, effectiveLVGs)
 			if len(LVGSWithNonexistentTps) != 0 {
 				valid = false
 				failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use nonexistent thin pools, LVG names: %s\n", strings.Join(LVGSWithNonexistentTps, ",")))
 			}
 		} else {
-			LVGsWithTps := findAnyThinPool(lsc)
+			LVGsWithTps := findAnyThinPool(effectiveLVGs)
 			if len(LVGsWithTps) != 0 {
 				valid = false
 				failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use thin pools though device type is Thick, LVG names: %s\n", strings.Join(LVGsWithTps, ",")))
@@ -637,9 +788,9 @@ func findUnmanagedDuplicatedSC(scList *v1.StorageClassList, lsc *slv.LocalStorag
 	return ""
 }
 
-func findAnyThinPool(lsc *slv.LocalStorageClass) []string {
-	badLvgs := make([]string, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
-	for _, lvs := range lsc.Spec.LVM.LVMVolumeGroups {
+func findAnyThinPool(effectiveLVGs []slv.LocalStorageClassLVG) []string {
+	badLvgs := make([]string, 0, len(effectiveLVGs))
+	for _, lvs := range effectiveLVGs {
 		if lvs.Thin != nil {
 			badLvgs = append(badLvgs, lvs.Name)
 		}
@@ -648,14 +799,14 @@ func findAnyThinPool(lsc *slv.LocalStorageClass) []string {
 	return badLvgs
 }
 
-func findNonexistentThinPools(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalStorageClass) []string {
+func findNonexistentThinPools(lvgList *snc.LVMVolumeGroupList, effectiveLVGs []slv.LocalStorageClassLVG) []string {
 	lvgs := make(map[string]snc.LVMVolumeGroup, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		lvgs[lvg.Name] = lvg
 	}
 
-	badLvgs := make([]string, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
-	for _, lscLvg := range lsc.Spec.LVM.LVMVolumeGroups {
+	badLvgs := make([]string, 0, len(effectiveLVGs))
+	for _, lscLvg := range effectiveLVGs {
 		if lscLvg.Thin == nil {
 			badLvgs = append(badLvgs, lscLvg.Name)
 			continue
@@ -679,14 +830,30 @@ func findNonexistentThinPools(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalSto
 	return badLvgs
 }
 
-func findNonexistentLVGs(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalStorageClass) []string {
+func countLVGsMatchingSelector(lvgList *snc.LVMVolumeGroupList, labelSelector *metav1.LabelSelector) int {
+	selector, err := metav1.LabelSelectorAsSelector(labelSelector)
+	if err != nil {
+		return 0
+	}
+
+	count := 0
+	for _, lvg := range lvgList.Items {
+		if selector.Matches(labels.Set(lvg.Labels)) {
+			count++
+		}
+	}
+
+	return count
+}
+
+func findNonexistentLVGs(lvgList *snc.LVMVolumeGroupList, effectiveLVGs []slv.LocalStorageClassLVG) []string {
 	lvgs := make(map[string]struct{}, len(lvgList.Items))
 	for _, lvg := range lvgList.Items {
 		lvgs[lvg.Name] = struct{}{}
 	}
 
-	nonexistent := make([]string, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
-	for _, lvg := range lsc.Spec.LVM.LVMVolumeGroups {
+	nonexistent := make([]string, 0, len(effectiveLVGs))
+	for _, lvg := range effectiveLVGs {
 		if _, exist := lvgs[lvg.Name]; !exist {
 			nonexistent = append(nonexistent, lvg.Name)
 		}
@@ -695,14 +862,14 @@ func findNonexistentLVGs(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalStorageC
 	return nonexistent
 }
 
-func findLVMVolumeGroupsOnTheSameNode(lvgList *snc.LVMVolumeGroupList, lsc *slv.LocalStorageClass) []string {
-	nodesWithLVGs := make(map[string][]string, len(lsc.Spec.LVM.LVMVolumeGroups))
-	usedLVGs := make(map[string]struct{}, len(lsc.Spec.LVM.LVMVolumeGroups))
-	for _, lvg := range lsc.Spec.LVM.LVMVolumeGroups {
+func findLVMVolumeGroupsOnTheSameNode(lvgList *snc.LVMVolumeGroupList, effectiveLVGs []slv.LocalStorageClassLVG) []string {
+	nodesWithLVGs := make(map[string][]string, len(effectiveLVGs))
+	usedLVGs := make(map[string]struct{}, len(effectiveLVGs))
+	for _, lvg := range effectiveLVGs {
 		usedLVGs[lvg.Name] = struct{}{}
 	}
 
-	badLVGs := make([]string, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
+	badLVGs := make([]string, 0, len(effectiveLVGs))
 	for _, lvg := range lvgList.Items {
 		if _, used := usedLVGs[lvg.Name]; used {
 			for _, node := range lvg.Status.Nodes {
@@ -785,8 +952,8 @@ func removeFinalizerIfExists(ctx context.Context, cl client.Client, obj metav1.O
 	return removed, nil
 }
 
-func updateStorageClass(lsc *slv.LocalStorageClass, oldSC *v1.StorageClass, ignoredLabelPrefixes []string) (*v1.StorageClass, error) {
-	newSC, err := configureStorageClass(lsc, ignoredLabelPrefixes)
+func updateStorageClass(lsc *slv.LocalStorageClass, oldSC *v1.StorageClass, effectiveLVGs []slv.LocalStorageClassLVG, ignoredLabelPrefixes []string) (*v1.StorageClass, error) {
+	newSC, err := configureStorageClass(lsc, effectiveLVGs, ignoredLabelPrefixes)
 	if err != nil {
 		return nil, err
 	}

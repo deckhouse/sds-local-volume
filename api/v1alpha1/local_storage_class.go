@@ -40,10 +40,15 @@ type LocalStorageClassSpec struct {
 }
 
 type LocalStorageClassLVMSpec struct {
-	Type            string                         `json:"type"`
-	Thick           *LocalStorageClassLVMThickSpec `json:"thick,omitempty"`
-	VolumeCleanup   string                         `json:"volumeCleanup,omitempty"`
-	LVMVolumeGroups []LocalStorageClassLVG         `json:"lvmVolumeGroups"`
+	Type          string                         `json:"type"`
+	Thick         *LocalStorageClassLVMThickSpec `json:"thick,omitempty"`
+	VolumeCleanup string                         `json:"volumeCleanup,omitempty"`
+	// LVMVolumeGroups is the list of entries that select the LVMVolumeGroup
+	// resources where PersistentVolumes will be created. Each entry either names
+	// a single LVMVolumeGroup (Name) or selects LVMVolumeGroups by their labels
+	// (LabelSelector). Within one list all entries must be homogeneous — either
+	// all Name entries or all LabelSelector entries, not a mix.
+	LVMVolumeGroups []LocalStorageClassLVG `json:"lvmVolumeGroups"`
 }
 
 type LocalStorageClassStatus struct {
@@ -52,7 +57,15 @@ type LocalStorageClassStatus struct {
 }
 
 type LocalStorageClassLVG struct {
-	Name string                            `json:"name"`
+	// Name selects a single LVMVolumeGroup by its resource name. Mutually
+	// exclusive with LabelSelector; exactly one of the two must be set.
+	Name string `json:"name,omitempty"`
+	// LabelSelector selects one or more LVMVolumeGroup resources by their
+	// labels. The controller resolves it into the matching LVMVolumeGroups at
+	// reconcile time. Mutually exclusive with Name.
+	LabelSelector *metav1.LabelSelector `json:"labelSelector,omitempty"`
+	// Thin holds the thin pool used for the LVMVolumeGroups selected by this
+	// entry (required for type=Thin, forbidden for type=Thick).
 	Thin *LocalStorageClassLVMThinPoolSpec `json:"thin,omitempty"`
 }
 

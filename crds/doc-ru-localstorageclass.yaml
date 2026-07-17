@@ -49,15 +49,35 @@ spec:
                         - `Discard` — перед удалением все блоки тома отмечаются как свободные с помощью системного вызова `discard`. Применимо только для твердотельных накопителей и thick-томов.
                     lvmVolumeGroups:
                       description: |
-                        Список ресурсов LVMVolumeGroup, на которых создаются PersistentVolume.
+                        Список записей, отбирающих ресурсы LVMVolumeGroup, на которых создаются PersistentVolume.
+
+                        Каждая запись отбирает LVMVolumeGroup либо по имени (`name`), либо по лейблам (`labelSelector`). В записи должно быть задано ровно одно из этих полей, и весь список должен использовать один тип записей — либо только `name`, либо только `labelSelector`, без смешивания. Запись с `labelSelector` контроллер вычисляет (resolve — разрешает) в каждый подходящий LVMVolumeGroup и поддерживает в актуальном состоянии при добавлении, удалении или перелейблировании (изменении лейблов) LVMVolumeGroup. В name-based записях каждый LVMVolumeGroup может быть указан не более одного раза. Пересекающиеся `labelSelector`, разрешающиеся в один LVMVolumeGroup, сворачиваются при совпадении `thin.poolName` и отклоняются при конфликте thin pool.
                       items:
                         properties:
                           name:
                             description: |
-                              Имя ресурса LVMVolumeGroup.
+                              Имя ресурса LVMVolumeGroup. Взаимоисключающее с `labelSelector`.
+                          labelSelector:
+                            description: |
+                              Селектор по лейблам, отбирающий один или несколько ресурсов LVMVolumeGroup. Взаимоисключающий с `name`.
+                            properties:
+                              matchLabels:
+                                description: |
+                                  Карта пар {ключ, значение}. Одна пара {ключ, значение} в matchLabels эквивалентна элементу matchExpressions с полем key, равным «ключ», оператором In и массивом values, содержащим единственное значение «значение».
+                              matchExpressions:
+                                description: |
+                                  Список требований к лейблам. Требования объединяются логическим И (AND).
+                                items:
+                                  properties:
+                                    key:
+                                      description: Ключ лейбла, к которому применяется требование.
+                                    operator:
+                                      description: Оператор, задающий отношение ключа к набору значений. Допустимые операторы — In, NotIn, Exists и DoesNotExist.
+                                    values:
+                                      description: Массив строковых значений. Для операторов In и NotIn массив должен быть непустым, для Exists и DoesNotExist — пустым.
                           thin:
                             description: |
-                              Конфигурация thin pool в ресурсе LVMVolumeGroup.
+                              Thin pool, используемый для LVMVolumeGroup, отобранных этой записью. Обязателен при `type: Thin`, запрещён при `type: Thick`.
                             properties:
                               poolName:
                                 description: |

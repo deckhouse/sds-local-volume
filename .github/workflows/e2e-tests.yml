@@ -12,9 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Copy of deckhouse/storage-e2e/.github/templates/e2e-tests.yml with module inputs adjusted.
-# Required: PR labels e2e/run, e2e/keep-cluster, e2e/label:* and the inherited
-# org/repo secrets (see storage-e2e README "Enabling e2e in your module").
+# Callers for the reusable storage-e2e pipeline. Two variants, each gated on its
+# own PR label so they can be triggered independently:
+#   - e2e (default): label `e2e/run`, uses tests/cluster_config.yml.
+#   - e2e-commander: label `e2e/commander/run`, commander provider (fresh nested
+#     cluster), uses tests/cluster_config.ci.yml.
+# Both install the module under test at the PR image tag; dependencies come from
+# main. Other labels: `e2e/keep-cluster` (skip teardown), `e2e/label:*` (Ginkgo
+# label filter). Required org/repo secrets are inherited (see storage-e2e README
+# "Enabling e2e in your module").
 
 name: E2E
 
@@ -24,7 +30,7 @@ on:
 
 jobs:
   e2e:
-    # Heavy e2e runs only when the PR carries the e2e/run label.
+    # Default variant — runs only when the PR carries the e2e/run label.
     if: ${{ contains(github.event.pull_request.labels.*.name, 'e2e/run') }}
     uses: deckhouse/storage-e2e/.github/workflows/e2e.yml@main
     with:
@@ -32,5 +38,22 @@ jobs:
       module_path: e2e
       test_package: ./tests/
       cluster_config: e2e/tests/cluster_config.yml
+      module_image_tag: pr${{ github.event.pull_request.number }}
+    secrets: inherit
+
+  e2e-commander:
+    # Commander-provider variant — runs only when the PR carries the
+    # e2e/commander/run label. Creates a fresh nested cluster via
+    # Deckhouse Commander and uses cluster_config.ci.yml (modulePullOverride
+    # ${E2E_MODULE_IMAGE_TAG}, resolved during bootstrap to the PR image tag).
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'e2e/commander/run') }}
+    uses: deckhouse/storage-e2e/.github/workflows/e2e.yml@main
+    with:
+      module_slug: ${{ vars.MODULE_NAME }}
+      module_path: e2e
+      test_package: ./tests/
+      cluster_config: e2e/tests/cluster_config.ci.yml
+      cluster_provider: commander
+      storage_e2e_ref: main
       module_image_tag: pr${{ github.event.pull_request.number }}
     secrets: inherit
