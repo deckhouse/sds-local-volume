@@ -436,6 +436,8 @@ d8 k annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kube
 
    > Пустой `labelSelector` (`labelSelector: {}`, без `matchLabels` и `matchExpressions`) следует стандартному правилу Kubernetes и отбирает **все** LVMVolumeGroup в кластере. Задавайте хотя бы одно требование `matchLabels` или `matchExpressions`, если только вы намеренно не хотите отобрать их все.
    >
+   > В name-based записях каждый LVMVolumeGroup может быть указан не более одного раза. Пересекающиеся записи с `labelSelector`, которые разрешаются в один и тот же LVMVolumeGroup, сворачиваются в одну запись параметра StorageClass, если у них совпадает `thin.poolName`; если thin pool различается, LocalStorageClass переходит в Failed с ошибкой неоднозначного выбора.
+   >
    > При изменении набора отобранных LVMVolumeGroup (LVMVolumeGroup добавлен, удалён или перелейблирован) контроллер обновляет управляемый StorageClass пересозданием, так как параметры StorageClass неизменяемы (immutable). Есть короткое окно, когда StorageClass отсутствует. На уже привязанные PersistentVolume это не влияет; при `volumeBindingMode: WaitForFirstConsumer` (значение по умолчанию) provisioning откладывается до планирования пода, поэтому окно обычно незаметно. При режиме `Immediate` для PersistentVolumeClaim, созданного ровно в это окно, provisioning может быть повторён (retry).
 
 1. Дождитесь перехода ресурса [LocalStorageClass](cr.html#localstorageclass) в состояние `Created`:

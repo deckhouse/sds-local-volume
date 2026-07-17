@@ -179,4 +179,25 @@ var _ = Describe("local-storage-class-controller labelSelector (matchExpressions
 		Expect(lsc.Status).NotTo(BeNil())
 		Expect(lsc.Status.Phase).To(Equal(controller.FailedStatusPhase))
 	})
+
+	It("fails when the same LVMVolumeGroup name is listed twice (even with the same thin pool)", func(ctx SpecContext) {
+		// Defense-in-depth vs the admission webhook: name-based duplicates must
+		// be rejected by the controller too, not silently collapsed.
+		lvg := generateLVMVolumeGroup(vgFast, nil)
+		Expect(cl.Create(ctx, lvg)).To(Succeed())
+
+		lsc := generateLocalStorageClass(lscName, rp, vbm, controller.LVMThickType, []slv.LocalStorageClassLVG{
+			{Name: vgFast},
+			{Name: vgFast},
+		})
+		Expect(cl.Create(ctx, lsc)).To(Succeed())
+
+		shouldRequeue, err := reconcile(ctx, lsc)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("listed more than once"))
+		Expect(shouldRequeue).To(BeTrue())
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+		Expect(lsc.Status).NotTo(BeNil())
+		Expect(lsc.Status.Phase).To(Equal(controller.FailedStatusPhase))
+	})
 })

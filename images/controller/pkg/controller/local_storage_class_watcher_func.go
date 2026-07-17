@@ -54,10 +54,16 @@ func lscUsesLabelSelector(lsc *slv.LocalStorageClass) bool {
 // resolveEffectiveLVGs expands the LocalStorageClass lvmVolumeGroups list into
 // the concrete set of named LVMVolumeGroups it targets. A name-based entry maps
 // to itself; a labelSelector-based entry expands to every LVMVolumeGroup whose
-// labels match, each inheriting that entry's thin pool. The result is
-// deduplicated by name (a name selected more than once is an error) and sorted
-// by name so the resulting StorageClass parameter is deterministic across
+// labels match, each inheriting that entry's thin pool. The result is sorted by
+// name so the resulting StorageClass parameter is deterministic across
 // reconciles.
+//
+// Deduplication rules:
+//   - Duplicate name-based entries are always an error (same as the admission
+//     webhook uniqueness check), even when they agree on the thin pool.
+//   - An LVMVolumeGroup matched by several overlapping labelSelector entries is
+//     collapsed to a single resolved entry when those entries agree on the thin
+//     pool; disagreeing thin pools are an error (ambiguous).
 func resolveEffectiveLVGs(lsc *slv.LocalStorageClass, lvgList *snc.LVMVolumeGroupList) ([]slv.LocalStorageClassLVG, error) {
 	if lsc.Spec.LVM == nil {
 		return nil, nil
@@ -66,11 +72,14 @@ func resolveEffectiveLVGs(lsc *slv.LocalStorageClass, lvgList *snc.LVMVolumeGrou
 	resolved := make([]slv.LocalStorageClassLVG, 0, len(lsc.Spec.LVM.LVMVolumeGroups))
 	seen := make(map[string]*slv.LocalStorageClassLVMThinPoolSpec, len(lsc.Spec.LVM.LVMVolumeGroups))
 
-	// An LVMVolumeGroup matched by several entries (e.g. two overlapping label
-	// selectors) is collapsed to a single resolved entry. It is only an error
-	// when those entries disagree on the thin pool, which would be ambiguous.
-	appendEntry := func(name string, thin *slv.LocalStorageClassLVMThinPoolSpec) error {
+	// allowCollapse=true is used for selector expansion: overlapping selectors
+	// that agree on the thin pool collapse to one entry. allowCollapse=false is
+	// used for name-based entries: any repeated name is a hard error.
+	appendEntry := func(name string, thin *slv.LocalStorageClassLVMThinPoolSpec, allowCollapse bool) error {
 		if prev, dup := seen[name]; dup {
+			if !allowCollapse {
+				return fmt.Errorf("LVMVolumeGroup %q is listed more than once in lvmVolumeGroups", name)
+			}
 			if !sameThinPool(prev, thin) {
 				return fmt.Errorf("LVMVolumeGroup %q is selected by more than one lvmVolumeGroups entry with different thin pools (%q vs %q)", name, thinPoolName(prev), thinPoolName(thin))
 			}
@@ -83,7 +92,7 @@ func resolveEffectiveLVGs(lsc *slv.LocalStorageClass, lvgList *snc.LVMVolumeGrou
 
 	for _, entry := range lsc.Spec.LVM.LVMVolumeGroups {
 		if entry.LabelSelector == nil {
-			if err := appendEntry(entry.Name, entry.Thin); err != nil {
+			if err := appendEntry(entry.Name, entry.Thin, false); err != nil {
 				return nil, err
 			}
 			continue
@@ -97,7 +106,7 @@ func resolveEffectiveLVGs(lsc *slv.LocalStorageClass, lvgList *snc.LVMVolumeGrou
 			if !selector.Matches(labels.Set(lvg.Labels)) {
 				continue
 			}
-			if err := appendEntry(lvg.Name, entry.Thin); err != nil {
+			if err := appendEntry(lvg.Name, entry.Thin, true); err != nil {
 				return nil, err
 			}
 		}

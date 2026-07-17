@@ -436,6 +436,8 @@ The node itself will have the `storage.deckhouse.io/sds-local-volume-need-manual
 
    > An empty `labelSelector` (`labelSelector: {}`, with neither `matchLabels` nor `matchExpressions`) follows the standard Kubernetes rule and matches **every** LVMVolumeGroup in the cluster. Set at least one `matchLabels` or `matchExpressions` requirement unless you deliberately want to select all of them.
    >
+   > Name-based entries must list each LVMVolumeGroup at most once. Overlapping `labelSelector` entries that resolve to the same LVMVolumeGroup are collapsed into one StorageClass parameter entry when they agree on `thin.poolName`; if they disagree on the thin pool, the LocalStorageClass fails with an ambiguous-selection error.
+   >
    > When the set of matched LVMVolumeGroups changes (an LVMVolumeGroup is added, removed, or relabeled), the controller updates the managed StorageClass by recreating it, because StorageClass parameters are immutable. There is a brief window during which the StorageClass does not exist. Already-bound PersistentVolumes are unaffected; with `volumeBindingMode: WaitForFirstConsumer` (the default) new provisioning is deferred until Pod scheduling, so the window is normally invisible. With `Immediate` binding, a PersistentVolumeClaim created exactly in that window may see its provisioning retried.
 
 1. Wait for the [LocalStorageClass](cr.html#localstorageclass) resource to transition to the `Created` state:

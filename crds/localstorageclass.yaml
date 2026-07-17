@@ -143,7 +143,7 @@ spec:
                       description: |
                         List of entries selecting the LVMVolumeGroup resources where PersistentVolumes will be created.
 
-                        Each entry selects LVMVolumeGroups either by name (`name`) or by labels (`labelSelector`). Exactly one of the two must be set per entry, and the whole list must use one kind consistently — either all `name` entries or all `labelSelector` entries, not a mix. A `labelSelector` entry is resolved by the controller into every matching LVMVolumeGroup and kept in sync as LVMVolumeGroups are added, removed or relabeled.
+                        Each entry selects LVMVolumeGroups either by name (`name`) or by labels (`labelSelector`). Exactly one of the two must be set per entry, and the whole list must use one kind consistently — either all `name` entries or all `labelSelector` entries, not a mix. A `labelSelector` entry is resolved by the controller into every matching LVMVolumeGroup and kept in sync as LVMVolumeGroups are added, removed or relabeled. Name-based entries must list each LVMVolumeGroup at most once. Overlapping `labelSelector` entries that resolve to the same LVMVolumeGroup are collapsed when they agree on `thin.poolName` and rejected when they disagree.
                       items:
                         type: object
                         x-kubernetes-validations:
