@@ -9,5 +9,5 @@ requirements:
   deckhouse: ">= 1.72"
   modules:
     sds-node-configurator: ">= 0.6.1"
-    snapshot-controller: ">= 0.0.0"
+    storage-foundation: ">= 0.0.0"
 namespace: d8-sds-local-volume
