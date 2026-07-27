@@ -40,6 +40,62 @@ const (
 	LVMVolumeCleanupParamKey = "local.csi.storage.deckhouse.io/lvm-volume-cleanup"
 )
 
+// alignToLVGExtentOrStatusErr rounds size up to the extent boundary of the given
+// LVG. The node always provisions whole extents, so every size that ends up in
+// LVMLogicalVolume.Spec.Size or in a response capacity has to go through this
+// first, otherwise it drifts from the LV that actually exists.
+//
+// The returned error is already a gRPC status and is meant to be handed straight
+// back to the caller of the RPC.
+func (d *Driver) alignToLVGExtentOrStatusErr(traceID, volumeID string, size resource.Quantity, lvg *v1alpha1.LVMVolumeGroup) (resource.Quantity, error) {
+	aligned, err := utils.AlignSizeToExtent(size, utils.SafeExtentSize(lvg.Status.ExtentSize))
+	if err != nil {
+		d.log.Error(err, fmt.Sprintf("[traceID:%s][volumeID:%s] error aligning size to extent", traceID, volumeID))
+		return resource.Quantity{}, status.Errorf(codes.Internal, "error aligning size to extent: %s", err.Error())
+	}
+
+	return aligned, nil
+}
+
+// fitsFreeSpace reports whether an extent-aligned request fits into the free
+// space of the node picked by Immediate binding.
+//
+// Only thick volumes are checked: a thin volume is over-provisioned by design,
+// and with WaitForFirstConsumer the node is chosen by the scheduler, which has
+// already accounted for the space.
+//
+// The check is deliberately performed on the aligned size: a request that fits
+// only before rounding would pass here and then fail on the node with a far less
+// obvious "not enough space", after CreateVolume had already blocked waiting for
+// the LV.
+func fitsFreeSpace(bindingMode, lvmType string, alignedSize, freeSpace resource.Quantity) bool {
+	if bindingMode != internal.BindingModeI || lvmType != internal.LVMTypeThick {
+		return true
+	}
+
+	return alignedSize.Value() <= freeSpace.Value()
+}
+
+// resolveCapacityBytes returns the capacity to report for a created or resized
+// volume: the size that actually exists on the node rather than the size that
+// was asked for.
+//
+// The node provisions whole extents, and on the content-source paths the size
+// may have been derived from a source whose Spec.Size predates extent alignment,
+// so the requested value is not what the caller ends up with.
+//
+// llv is expected to carry a status — WaitForStatusUpdate only returns once it
+// does — but the fallback keeps a nil status from turning into a panic inside a
+// gRPC handler. The second return value reports whether the status was present,
+// so callers can log the anomaly.
+func resolveCapacityBytes(llv *v1alpha1.LVMLogicalVolume, fallback resource.Quantity) (int64, bool) {
+	if llv != nil && llv.Status != nil {
+		return llv.Status.ActualSize.Value(), true
+	}
+
+	return fallback.Value(), false
+}
+
 func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	traceID := uuid.New().String()
 
@@ -98,6 +154,17 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	var sourceVolume *v1alpha1.LVMLogicalVolumeSource
 
 	if request.VolumeContentSource != nil {
+		// The node clones and restores with `lvcreate -s`, which exists for thin
+		// volumes only. A Thick LVMLogicalVolume carrying a Source is created by the
+		// agent as an empty LV and the source is silently ignored, so the user would
+		// end up with a Bound PVC holding no data. Reject the combination here to
+		// turn that into a synchronous error.
+		if LvmType != internal.LVMTypeThin {
+			err := fmt.Errorf("volume content source is supported for %s volumes only, got %s", internal.LVMTypeThin, LvmType)
+			d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] unsupported LvmType for a volume with a content source", traceID, volumeID))
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+
 		sourceVolume = &v1alpha1.LVMLogicalVolumeSource{}
 		switch s := request.VolumeContentSource.Type.(type) {
 		case *csi.VolumeContentSource_Snapshot:
@@ -137,10 +204,9 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			if llvSize.Value() == 0 {
 				*llvSize = sourceVol.Status.Size
 			} else {
-				alignedLlvSize, alignErr := utils.AlignSizeToExtent(*llvSize, utils.SafeExtentSize(selectedLVG.Status.ExtentSize))
+				alignedLlvSize, alignErr := d.alignToLVGExtentOrStatusErr(traceID, volumeID, *llvSize, selectedLVG)
 				if alignErr != nil {
-					d.log.Error(alignErr, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error aligning size to extent", traceID, volumeID))
-					return nil, status.Errorf(codes.Internal, "error aligning size to extent: %s", alignErr.Error())
+					return nil, alignErr
 				}
 				*llvSize = alignedLlvSize
 				if llvSize.Value() < sourceVol.Status.Size.Value() {
@@ -183,10 +249,9 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			if llvSize.Value() == 0 {
 				*llvSize = sourceSizeQty
 			} else {
-				alignedLlvSize, alignErr := utils.AlignSizeToExtent(*llvSize, utils.SafeExtentSize(selectedLVG.Status.ExtentSize))
+				alignedLlvSize, alignErr := d.alignToLVGExtentOrStatusErr(traceID, volumeID, *llvSize, selectedLVG)
 				if alignErr != nil {
-					d.log.Error(alignErr, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error aligning size to extent", traceID, volumeID))
-					return nil, status.Errorf(codes.Internal, "error aligning size to extent: %s", alignErr.Error())
+					return nil, alignErr
 				}
 				*llvSize = alignedLlvSize
 				if llvSize.Value() < sourceSizeQty.Value() {
@@ -197,21 +262,23 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			preferredNode = selectedLVG.Spec.Local.NodeName
 		}
 	} else {
+		// Free space of the node picked by Immediate binding. The thick check against
+		// it is deferred until after the size has been aligned below, because the node
+		// provisions whole extents and it is the aligned size that has to fit.
+		var maxFreeSpace resource.Quantity
+
 		switch BindingMode {
 		case internal.BindingModeI:
 			d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] BindingMode is %s. Start selecting node", traceID, volumeID, internal.BindingModeI))
 			selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(storageClassLVGs, storageClassLVGParametersMap, LvmType)
 			if err != nil {
-				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error GetNodeMaxVGSize", traceID, volumeID))
+				d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error GetNodeWithMaxFreeSpace", traceID, volumeID))
+				return nil, status.Errorf(codes.Internal, "error selecting the node with max free space: %s", err.Error())
 			}
 
 			preferredNode = selectedNodeName
+			maxFreeSpace = freeSpace
 			d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] Selected node: %s, free space %s", traceID, volumeID, selectedNodeName, freeSpace.String()))
-			if LvmType == internal.LVMTypeThick {
-				if llvSize.Value() > freeSpace.Value() {
-					return nil, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), freeSpace.String())
-				}
-			}
 		case internal.BindingModeWFFC:
 			d.log.Info(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] BindingMode is %s. Get preferredNode", traceID, volumeID, internal.BindingModeWFFC))
 			if len(request.AccessibilityRequirements.Preferred) != 0 {
@@ -226,6 +293,21 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		if err != nil {
 			d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error SelectLVG", traceID, volumeID))
 			return nil, status.Errorf(codes.Internal, "error during SelectLVG")
+		}
+
+		// Align the requested size to the LVM extent boundary so that Spec.Size and
+		// the reported capacity match the size the node actually provisions. The
+		// snapshot/volume content-source branches above already align; without this
+		// the plain path stores an unaligned size (e.g. 35Mi) that drifts from the
+		// extent-rounded LV on the node.
+		alignedLlvSize, alignErr := d.alignToLVGExtentOrStatusErr(traceID, volumeID, *llvSize, selectedLVG)
+		if alignErr != nil {
+			return nil, alignErr
+		}
+		*llvSize = alignedLlvSize
+
+		if !fitsFreeSpace(BindingMode, LvmType, *llvSize, maxFreeSpace) {
+			return nil, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), maxFreeSpace.String())
 		}
 	}
 
@@ -262,7 +344,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] start wait CreateLVMLogicalVolume", traceID, volumeID))
 
-	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, d.log, traceID, request.Name, "", *llvSize, utils.SafeExtentSize(selectedLVG.Status.ExtentSize))
+	createdLLV, attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, d.log, traceID, request.Name, "", *llvSize, utils.SafeExtentSize(selectedLVG.Status.ExtentSize))
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] error WaitForStatusUpdate. Delete LVMLogicalVolume %s", traceID, volumeID, request.Name))
 
@@ -275,6 +357,11 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		return nil, err
 	}
 	d.log.Trace(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] finish wait CreateLVMLogicalVolume, attempt counter = %d", traceID, volumeID, attemptCounter))
+
+	capacityBytes, fromStatus := resolveCapacityBytes(createdLLV, *llvSize)
+	if !fromStatus {
+		d.log.Warning(fmt.Sprintf("[CreateVolume][traceID:%s][volumeID:%s] LVMLogicalVolume %s has no status after a successful wait, reporting the aligned requested size %s", traceID, volumeID, request.Name, llvSize.String()))
+	}
 
 	volumeCtx := make(map[string]string, len(request.Parameters))
 	for k, v := range request.Parameters {
@@ -293,7 +380,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			CapacityBytes: request.CapacityRange.GetRequiredBytes(),
+			CapacityBytes: capacityBytes,
 			VolumeId:      request.Name,
 			VolumeContext: volumeCtx,
 			ContentSource: request.VolumeContentSource,
@@ -433,10 +520,9 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 	requestCapacity := resource.NewQuantity(request.CapacityRange.GetRequiredBytes(), resource.BinarySI)
 	d.log.Trace(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] requestCapacity: %s", traceID, volumeID, requestCapacity.String()))
 
-	alignedRequestCapacity, err := utils.AlignSizeToExtent(*requestCapacity, utils.SafeExtentSize(lvg.Status.ExtentSize))
+	alignedRequestCapacity, err := d.alignToLVGExtentOrStatusErr(traceID, volumeID, *requestCapacity, lvg)
 	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error aligning size to extent", traceID, volumeID))
-		return nil, status.Errorf(codes.Internal, "error aligning size to extent: %s", err.Error())
+		return nil, err
 	}
 
 	nodeExpansionRequired := request.GetVolumeCapability().GetBlock() == nil
@@ -467,23 +553,22 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Errorf(codes.Internal, "error updating LVMLogicalVolume: %v", err)
 	}
 
-	attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, d.log, traceID, llv.Name, llv.Namespace, *requestCapacity, utils.SafeExtentSize(lvg.Status.ExtentSize))
+	updatedLLV, attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, d.log, traceID, llv.Name, llv.Namespace, *requestCapacity, utils.SafeExtentSize(lvg.Status.ExtentSize))
 	if err != nil {
 		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error WaitForStatusUpdate", traceID, volumeID))
 		return nil, err
 	}
 	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] finish resize LVMLogicalVolume, attempt counter = %d ", traceID, volumeID, attemptCounter))
 
-	updatedLLV, err := utils.GetLVMLogicalVolume(ctx, d.cl, llv.Name, llv.Namespace)
-	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] error re-fetching LVMLogicalVolume after resize", traceID, volumeID))
-		return nil, status.Errorf(codes.Internal, "error re-fetching LVMLogicalVolume after resize: %v", err)
+	capacityBytes, fromStatus := resolveCapacityBytes(updatedLLV, alignedRequestCapacity)
+	if !fromStatus {
+		d.log.Warning(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] LVMLogicalVolume %s has no status after a successful wait, reporting the aligned requested size %s", traceID, volumeID, llv.Name, alignedRequestCapacity.String()))
 	}
 
 	d.log.Info(fmt.Sprintf("[ControllerExpandVolume][traceID:%s][volumeID:%s] Volume expanded successfully", traceID, volumeID))
 
 	return &csi.ControllerExpandVolumeResponse{
-		CapacityBytes:         updatedLLV.Status.ActualSize.Value(),
+		CapacityBytes:         capacityBytes,
 		NodeExpansionRequired: nodeExpansionRequired,
 	}, nil
 }

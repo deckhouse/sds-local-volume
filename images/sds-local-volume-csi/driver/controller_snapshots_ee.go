@@ -18,7 +18,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
@@ -120,17 +119,19 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 	}
 	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] finish wait CreateLVMLogicalVolume, attempt counter = %d", traceID, name, attemptCounter))
 
-	sourceSizeQty, err := resource.ParseQuantity(llv.Spec.Size)
-	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s] error parsing quantity %s", traceID, llv.Spec.Size))
-		return nil, status.Errorf(codes.Internal, "error parsing quantity: %v", err)
-	}
+	// Reported from the status, not from Spec.Size: the node rounds the LV up to the
+	// extent boundary, and volumes provisioned before the CSI side started aligning
+	// still carry an unaligned Spec.Size (e.g. 35Mi against a 36Mi LV). Restoring
+	// such a snapshot would then ask for a size the source does not have. The
+	// precondition at the top of this function already guarantees a non-zero
+	// ActualSize, and the free-space check above is made against the same value.
+	sizeBytes := llv.Status.ActualSize.Value()
 
 	return &csi.CreateSnapshotResponse{
 		Snapshot: &csi.Snapshot{
 			SnapshotId:     name,
 			SourceVolumeId: request.SourceVolumeId,
-			SizeBytes:      sourceSizeQty.Value(),
+			SizeBytes:      sizeBytes,
 			CreationTime: &timestamp.Timestamp{
 				Seconds: time.Now().Unix(),
 				Nanos:   0,
