@@ -295,13 +295,18 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 	return err
 }
 
-func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, namespace string, llvSize, extentSize resource.Quantity) (int, error) {
+// WaitForStatusUpdate polls the LVMLogicalVolume until the node agent reports it
+// Created with an ActualSize that covers the extent-aligned llvSize, and returns
+// that very object. Callers need the resulting size, so returning the resource
+// they waited for saves them a second GET and closes the window in which the
+// status could change between the wait and the re-read.
+func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, namespace string, llvSize, extentSize resource.Quantity) (*snc.LVMLogicalVolume, int, error) {
 	var attemptCounter int
 	log.Info(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Waiting for LVM Logical Volume status update", traceID, lvmLogicalVolumeName))
 
 	alignedSize, err := AlignSizeToExtent(llvSize, extentSize)
 	if err != nil {
-		return 0, fmt.Errorf("unable to align size: %w", err)
+		return nil, 0, fmt.Errorf("unable to align size: %w", err)
 	}
 
 	for {
@@ -309,14 +314,14 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 		select {
 		case <-ctx.Done():
 			log.Warning(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] context done. Failed to wait for LVM Logical Volume status update", traceID, lvmLogicalVolumeName))
-			return attemptCounter, ctx.Err()
+			return nil, attemptCounter, ctx.Err()
 		default:
 			time.Sleep(500 * time.Millisecond)
 		}
 
 		llv, err := GetLVMLogicalVolume(ctx, kc, lvmLogicalVolumeName, namespace)
 		if err != nil {
-			return attemptCounter, err
+			return nil, attemptCounter, err
 		}
 
 		if attemptCounter%10 == 0 {
@@ -327,16 +332,16 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 			log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume status: %+v, full LVMLogicalVolume resource: %+v", traceID, lvmLogicalVolumeName, attemptCounter, llv.Status, llv))
 
 			if llv.DeletionTimestamp != nil {
-				return attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: LVMLogicalVolume is being deleted", lvmLogicalVolumeName)
+				return nil, attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: LVMLogicalVolume is being deleted", lvmLogicalVolumeName)
 			}
 
 			if llv.Status.Phase == LLVStatusFailed {
-				return attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: %s", lvmLogicalVolumeName, llv.Status.Reason)
+				return nil, attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: %s", lvmLogicalVolumeName, llv.Status.Reason)
 			}
 
 			if llv.Status.Phase == LLVStatusCreated {
 				if llv.Status.ActualSize.Value() >= alignedSize.Value() {
-					return attemptCounter, nil
+					return llv, attemptCounter, nil
 				}
 				log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume created but size does not match the requested size yet. Waiting...", traceID, lvmLogicalVolumeName, attemptCounter))
 			} else {
