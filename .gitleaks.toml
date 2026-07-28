@@ -1,6 +1,7 @@
-# Use default gitleaks rules + module allowlist
+# Extend the centralized Deckhouse gitleaks config + module allowlist
 [extend]
-useDefault = true
+useDefault = false
+path = "gitleaks.base.toml"
 
 [allowlist]
 paths = [
