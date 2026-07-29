@@ -32,11 +32,13 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	metricsstorage "github.com/deckhouse/deckhouse/pkg/metrics-storage"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/config"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/driver"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/kubutils"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/monitoring"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -106,7 +108,24 @@ func main() {
 		}
 	}()
 
-	drv, err := driver.NewDriver(cfgParams.CsiAddress, cfgParams.DriverName, cfgParams.Address, &cfgParams.NodeName, log, cl)
+	// The driver runs no controller-runtime manager, so it keeps its own registry
+	// and serves it on a dedicated listener. A separate mux keeps /metrics off the
+	// default one used by the health probes above.
+	metricStorage := metricsstorage.NewMetricStorage(metricsstorage.WithNewRegistry())
+	if err = monitoring.Register(metricStorage); err != nil {
+		log.Error(err, "[main] unable to register metrics")
+		os.Exit(1)
+	}
+	go func() {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", metricStorage.Handler())
+		if err := http.ListenAndServe(cfgParams.MetricsBindAddress, metricsMux); err != nil {
+			log.Error(err, "[main] serve metrics")
+		}
+	}()
+	log.Info(fmt.Sprintf("[main] metrics are registered and served on %s/metrics", cfgParams.MetricsBindAddress))
+
+	drv, err := driver.NewDriver(cfgParams.CsiAddress, cfgParams.DriverName, cfgParams.Address, &cfgParams.NodeName, log, monitoring.NewRecorder(metricStorage), cl)
 	if err != nil {
 		log.Error(err, "[main] create NewDriver")
 	}

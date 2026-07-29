@@ -33,6 +33,8 @@ const (
 	ControllerName                       = "d8-controller"
 	DefaultHealthProbeBindAddressEnvName = "HEALTH_PROBE_BIND_ADDRESS"
 	DefaultHealthProbeBindAddress        = ":8081"
+	MetricsBindAddressEnvName            = "METRICS_BIND_ADDRESS"
+	DefaultMetricsBindAddress            = ":8080"
 )
 
 type Options struct {
@@ -42,6 +44,7 @@ type Options struct {
 	ConfigSecretName            string
 	ControllerNamespace         string
 	HealthProbeBindAddress      string
+	MetricsBindAddress          string
 }
 
 func NewConfig() *Options {
@@ -57,6 +60,11 @@ func NewConfig() *Options {
 	opts.HealthProbeBindAddress = os.Getenv(DefaultHealthProbeBindAddressEnvName)
 	if opts.HealthProbeBindAddress == "" {
 		opts.HealthProbeBindAddress = DefaultHealthProbeBindAddress
+	}
+
+	opts.MetricsBindAddress = os.Getenv(MetricsBindAddressEnvName)
+	if opts.MetricsBindAddress == "" {
+		opts.MetricsBindAddress = DefaultMetricsBindAddress
 	}
 
 	opts.ControllerNamespace = os.Getenv(ControllerNamespaceEnv)

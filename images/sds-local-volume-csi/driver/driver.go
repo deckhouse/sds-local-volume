@@ -36,6 +36,7 @@ import (
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/monitoring"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 )
 
@@ -65,6 +66,7 @@ type Driver struct {
 	srv     *grpc.Server
 	httpSrv http.Server
 	log     *logger.Logger
+	metrics monitoring.Recorder
 
 	readyMu      sync.Mutex // protects ready
 	ready        bool
@@ -80,7 +82,7 @@ type Driver struct {
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing  disks
-func NewDriver(csiAddress, driverName, address string, nodeName *string, log *logger.Logger, cl client.Client) (*Driver, error) {
+func NewDriver(csiAddress, driverName, address string, nodeName *string, log *logger.Logger, metrics monitoring.Recorder, cl client.Client) (*Driver, error) {
 	if driverName == "" {
 		driverName = DefaultDriverName
 	}
@@ -93,6 +95,7 @@ func NewDriver(csiAddress, driverName, address string, nodeName *string, log *lo
 		csiAddress:        csiAddress,
 		address:           address,
 		log:               log,
+		metrics:           metrics,
 		waitActionTimeout: defaultWaitActionTimeout,
 		cl:                cl,
 		storeManager:      st,
@@ -133,9 +136,13 @@ func (d *Driver) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 
-	// log response errors for better observability
+	// log response errors and record the duration and status of every call.
+	// Doing it in the interceptor covers each CSI method exactly once, including
+	// the ones inherited from the Unimplemented*Server embeds.
 	errHandler := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		start := time.Now()
 		resp, err := handler(ctx, req)
+		d.metrics.ObserveOperation(info.FullMethod, start, err)
 		if err != nil {
 			d.log.Error(err, fmt.Sprintf("method %s method failed ", info.FullMethod))
 		}

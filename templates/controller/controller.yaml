@@ -12,11 +12,17 @@
   "webhookCertPath" "internal.customWebhookCert"
   "onMasterNode" true
   "podSecurityContext" "deckhouse"
+  "controllerMetricsPort" 8080
 }}
 {{ include "helm_lib_module_controller_manifests" (list . $config) }}
 
-{{- /* Webhook Service */ -}}
-{{ include "helm_lib_module_webhook_service" (list . dict) }}
+{{- /* Webhook Service with metrics port */ -}}
+{{- $serviceConfig := dict
+  "additionalPorts" (list
+    (dict "name" "metrics" "port" 8080 "targetPort" "metrics")
+  )
+}}
+{{ include "helm_lib_module_webhook_service" (list . $serviceConfig) }}
 
 {{- /* ValidatingWebhookConfiguration for LocalStorageClasses */ -}}
 {{- $lscWebhookConfig := dict

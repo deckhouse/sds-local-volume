@@ -35,6 +35,7 @@ import (
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/monitoring"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -50,11 +51,14 @@ func RunLocalCSINodeWatcherController(
 	mgr manager.Manager,
 	cfg config.Options,
 	log logger.Logger,
+	metrics monitoring.Recorder,
 ) (controller.Controller, error) {
 	cl := mgr.GetClient()
 
 	c, err := controller.New(LocalCSINodeWatcherCtrl, mgr, controller.Options{
-		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (res reconcile.Result, err error) {
+			defer metrics.ObserveReconcile(LocalCSINodeWatcherCtrl, time.Now(), &res, &err)
+
 			log.Info(fmt.Sprintf("[RunLocalCSINodeWatcherController] Reconciler func starts a reconciliation for the request: %s", request.String()))
 			if request.Name == cfg.ConfigSecretName {
 				log.Debug(fmt.Sprintf("[RunLocalCSINodeWatcherController] request name %s matches the target config secret name %s. Start to reconcile", request.Name, cfg.ConfigSecretName))

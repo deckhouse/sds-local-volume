@@ -41,6 +41,7 @@ import (
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/monitoring"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -90,14 +91,17 @@ func RunLocalStorageClassWatcherController(
 	mgr manager.Manager,
 	cfg config.Options,
 	log logger.Logger,
+	metrics monitoring.Recorder,
 ) (controller.Controller, error) {
 	cl := mgr.GetClient()
 
 	c, err := controller.New(LocalStorageClassCtrlName, mgr, controller.Options{
-		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (res reconcile.Result, err error) {
+			defer metrics.ObserveReconcile(LocalStorageClassCtrlName, time.Now(), &res, &err)
+
 			log.Info("[LocalStorageClassReconciler] starts Reconcile for the LocalStorageClass %s", request.Name)
 			lsc := &slv.LocalStorageClass{}
-			err := cl.Get(ctx, request.NamespacedName, lsc)
+			err = cl.Get(ctx, request.NamespacedName, lsc)
 			if err != nil && !errors2.IsNotFound(err) {
 				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] unable to get LocalStorageClass, name: %s", request.Name))
 				return reconcile.Result{}, err
@@ -105,6 +109,8 @@ func RunLocalStorageClassWatcherController(
 
 			if lsc.Name == "" {
 				log.Info(fmt.Sprintf("[LocalStorageClassReconciler] seems like the LocalStorageClass for the request %s was deleted. Reconcile retrying will stop.", request.Name))
+				// The resource is gone, so stop exporting its phase gauge.
+				metrics.ForgetLocalStorageClass(request.Name)
 				return reconcile.Result{}, nil
 			}
 
@@ -130,6 +136,13 @@ func RunLocalStorageClassWatcherController(
 			shouldRequeue, err := RunEventReconcile(ctx, cl, log, scList, lsc, ignoredLabelPrefixes)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] an error occurred while reconciles the LocalStorageClass, name: %s", lsc.Name))
+			}
+
+			// RunEventReconcile updates lsc.Status.Phase in place, so this reads
+			// the phase the reconcile just settled on. It stays empty while a
+			// resource is being deleted, in which case there is nothing to report.
+			if lsc.Status.Phase != "" {
+				metrics.SetLocalStorageClassPhase(lsc.Name, lsc.Status.Phase)
 			}
 
 			if shouldRequeue {

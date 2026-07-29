@@ -30,12 +30,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	metricsstorage "github.com/deckhouse/deckhouse/pkg/metrics-storage"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/controller"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/kubutils"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/monitoring"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -83,6 +87,22 @@ func main() {
 	}
 	log.Info("[main] successfully read scheme CR")
 
+	// The storage keeps its own registry and is then plugged into the
+	// controller-runtime registry as a collector, so that a single metrics
+	// endpoint serves both our metrics and the controller-runtime ones
+	// (workqueue depth, reconcile totals, client-go latency).
+	metricStorage := metricsstorage.NewMetricStorage(metricsstorage.WithNewRegistry())
+	if err = monitoring.Register(metricStorage); err != nil {
+		log.Error(err, "[main] unable to register metrics")
+		os.Exit(1)
+	}
+	if err = ctrlmetrics.Registry.Register(metricStorage.Collector()); err != nil {
+		log.Error(err, "[main] unable to add metrics to the controller-runtime registry")
+		os.Exit(1)
+	}
+	metrics := monitoring.NewRecorder(metricStorage)
+	log.Info(fmt.Sprintf("[main] metrics are registered and served on %s/metrics", cfgParams.MetricsBindAddress))
+
 	cacheOpt := cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
 			cfgParams.ControllerNamespace: {},
@@ -97,6 +117,9 @@ func main() {
 		LeaderElectionID:        config.ControllerName,
 		Logger:                  log.GetLogger(),
 		HealthProbeBindAddress:  cfgParams.HealthProbeBindAddress,
+		Metrics: metricsserver.Options{
+			BindAddress: cfgParams.MetricsBindAddress,
+		},
 	}
 
 	mgr, err := manager.New(kConfig, managerOpts)
@@ -106,12 +129,12 @@ func main() {
 	}
 	log.Info("[main] successfully created kubernetes manager")
 
-	if _, err = controller.RunLocalStorageClassWatcherController(mgr, *cfgParams, *log); err != nil {
+	if _, err = controller.RunLocalStorageClassWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
 		log.Error(err, fmt.Sprintf("[main] unable to run %s", controller.LocalStorageClassCtrlName))
 		os.Exit(1)
 	}
 
-	if _, err = controller.RunLocalCSINodeWatcherController(mgr, *cfgParams, *log); err != nil {
+	if _, err = controller.RunLocalCSINodeWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
 		log.Error(err, fmt.Sprintf("[main] unable to run %s", controller.LocalCSINodeWatcherCtrl))
 		os.Exit(1)
 	}

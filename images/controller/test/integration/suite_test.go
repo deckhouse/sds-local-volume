@@ -49,6 +49,7 @@ import (
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/controller"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/monitoring"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -114,7 +115,9 @@ var _ = BeforeSuite(func() {
 		ConfigSecretName:            config.ConfigSecretName,
 		RequeueStorageClassInterval: 1,
 	}
-	_, err = controller.RunLocalStorageClassWatcherController(mgr, cfgParams, log)
+	// The zero Recorder discards every observation, so the suite does not need a
+	// metrics registry to exercise the reconcile behaviour.
+	_, err = controller.RunLocalStorageClassWatcherController(mgr, cfgParams, log, monitoring.Recorder{})
 	Expect(err).NotTo(HaveOccurred())
 
 	go func() {
