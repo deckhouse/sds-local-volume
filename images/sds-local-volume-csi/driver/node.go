@@ -19,6 +19,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"slices"
 	"strconv"
@@ -32,6 +33,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 )
 
 const (
@@ -60,6 +62,7 @@ var (
 
 func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	volumeID := request.GetVolumeId()
+	log := d.log.Named("NodeStageVolume").With("volumeID", volumeID)
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "[NodeStageVolume] Volume id cannot be empty")
 	}
@@ -81,7 +84,7 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	}
 
 	if volCap.GetBlock() != nil {
-		d.log.Info("[NodeStageVolume] Block volume detected. Skipping staging.")
+		log.Info("block volume detected, skipping staging")
 		return &csi.NodeStageVolumeResponse{}, nil
 	}
 
@@ -97,7 +100,7 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 
 	_, ok = ValidFSTypes[strings.ToLower(fsType)]
 	if !ok {
-		d.log.Error(fmt.Errorf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes), "Invalid fsType")
+		log.Error("invalid filesystem type", slog.String("fsType", fsType), slog.String("supported", fmt.Sprintf("%v", ValidFSTypes)))
 		return nil, status.Errorf(codes.InvalidArgument, "invalid fsType")
 	}
 
@@ -109,24 +112,24 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 		return nil, err
 	}
 	if fsType == internal.FSTypeXfs && needLegacySupport {
-		d.log.Info("[NodeStageVolume] legacy xfs support is on")
+		log.Info("legacy xfs support is on")
 		formatOptions = append(formatOptions, "-m", "bigtime=0,inobtcount=0,reflink=0", "-i", "nrext64=0")
 	}
 
 	mountOptions := collectMountOptions(fsType, mountVolume.GetMountFlags(), []string{})
 
-	d.log.Debug(fmt.Sprintf("[NodeStageVolume] Volume %s operation started", volumeID))
+	log.Debug("volume operation started")
 	ok = d.inFlight.Insert(volumeID)
 	if !ok {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
 	}
 	defer func() {
-		d.log.Debug(fmt.Sprintf("[NodeStageVolume] Volume %s operation completed", volumeID))
+		log.Debug("volume operation completed")
 		d.inFlight.Delete(volumeID)
 	}()
 
 	devPath := fmt.Sprintf("/dev/%s/%s", vgName, request.VolumeId)
-	d.log.Debug(fmt.Sprintf("[NodeStageVolume] Checking if device exists: %s", devPath))
+	log.Debug("checking whether the device exists", "devicePath", devPath)
 	exists, err := d.storeManager.PathExists(devPath)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error checking if device exists: %v", err)
@@ -138,40 +141,41 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	lvmType := context[internal.LvmTypeKey]
 	lvmThinPoolName := context[internal.ThinPoolNameKey]
 
-	d.log.Trace(fmt.Sprintf("formatOptions = %s", formatOptions))
-	d.log.Trace(fmt.Sprintf("mountOptions = %s", mountOptions))
-	d.log.Trace(fmt.Sprintf("lvmType = %s", lvmType))
-	d.log.Trace(fmt.Sprintf("lvmThinPoolName = %s", lvmThinPoolName))
-	d.log.Trace(fmt.Sprintf("fsType = %s", fsType))
+	log.Trace("resolved format options", "formatOptions", formatOptions)
+	log.Trace("resolved mount options", "mountOptions", mountOptions)
+	log.Trace("resolved LVM type", "lvmType", lvmType)
+	log.Trace("resolved thin pool", "thinPoolName", lvmThinPoolName)
+	log.Trace("resolved filesystem type", "fsType", fsType)
 
 	err = d.storeManager.NodeStageVolumeFS(devPath, target, fsType, mountOptions, formatOptions, lvmType, lvmThinPoolName)
 	if err != nil {
-		d.log.Error(err, "[NodeStageVolume] Error mounting volume")
+		log.Error("unable to mount the volume", logger.Err(err), slog.String("devicePath", devPath), slog.String("target", target))
 		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error format device %q and mounting volume at %q: %v", devPath, target, err)
 	}
 
 	needResize, err := d.storeManager.NeedResize(devPath, target)
 	if err != nil {
-		d.log.Error(err, "[NodeStageVolume] Error checking if volume needs resize")
+		log.Error("unable to check whether the volume needs resizing", logger.Err(err), slog.String("devicePath", devPath), slog.String("target", target))
 		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error checking if the volume %q (%q) mounted at %q needs resizing: %v", volumeID, devPath, target, err)
 	}
 
 	if needResize {
-		d.log.Info(fmt.Sprintf("[NodeStageVolume] Resizing volume %q (%q) mounted at %q", volumeID, devPath, target))
+		log.Info("resizing the volume", "devicePath", devPath, "target", target)
 		err = d.storeManager.ResizeFS(target)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error resizing volume %q (%q) mounted at %q: %v", volumeID, devPath, target, err)
 		}
 	}
 
-	d.log.Info(fmt.Sprintf("[NodeStageVolume] Volume %q (%q) successfully staged at %s. FsType: %s", volumeID, devPath, target, fsType))
+	log.Info("volume staged successfully", "devicePath", devPath, "target", target, "fsType", fsType)
 
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
 func (d *Driver) NodeUnstageVolume(_ context.Context, request *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] method called with request: %v", request))
 	volumeID := request.GetVolumeId()
+	log := d.log.Named("NodeUnstageVolume").With("volumeID", volumeID)
+	log.Debug("called", "request", fmt.Sprintf("%v", request))
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "[NodeUnstageVolume] Volume id cannot be empty")
 	}
@@ -181,13 +185,13 @@ func (d *Driver) NodeUnstageVolume(_ context.Context, request *csi.NodeUnstageVo
 		return nil, status.Error(codes.InvalidArgument, "[NodeUnstageVolume] Staging target path cannot be empty")
 	}
 
-	d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] Volume %s operation started", volumeID))
+	log.Debug("volume operation started")
 	ok := d.inFlight.Insert(volumeID)
 	if !ok {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
 	}
 	defer func() {
-		d.log.Debug(fmt.Sprintf("[NodeUnstageVolume] Volume %s operation completed", volumeID))
+		log.Debug("volume operation completed")
 		d.inFlight.Delete(volumeID)
 	}()
 	err := d.storeManager.Unstage(target)
@@ -199,10 +203,9 @@ func (d *Driver) NodeUnstageVolume(_ context.Context, request *csi.NodeUnstageVo
 }
 
 func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	d.log.Info("Start method NodePublishVolume")
-	d.log.Trace("------------- NodePublishVolume --------------")
-	d.log.Trace(request.String())
-	d.log.Trace("------------- NodePublishVolume --------------")
+	log := d.log.Named("NodePublishVolume").With("volumeID", request.GetVolumeId())
+
+	log.Trace("start", "request", request.String())
 
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
@@ -235,7 +238,7 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 	}
 
 	devPath := fmt.Sprintf("/dev/%s/%s", vgName, request.VolumeId)
-	d.log.Debug(fmt.Sprintf("[NodePublishVolume] Checking if device exists: %s", devPath))
+	log.Debug("checking whether the device exists", "devicePath", devPath)
 	exists, err := d.storeManager.PathExists(devPath)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "[NodePublishVolume] Error checking if device exists: %v", err)
@@ -244,20 +247,20 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 		return nil, status.Errorf(codes.NotFound, "[NodePublishVolume] Device %q not found", devPath)
 	}
 
-	d.log.Debug(fmt.Sprintf("[NodePublishVolume] Volume %s operation started", volumeID))
+	log.Debug("volume operation started")
 
 	ok = d.inFlight.Insert(volumeID)
 	if !ok {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
 	}
 	defer func() {
-		d.log.Debug(fmt.Sprintf("[NodePublishVolume] Volume %s operation completed", volumeID))
+		log.Debug("volume operation completed")
 		d.inFlight.Delete(volumeID)
 	}()
 
 	switch volCap.GetAccessType().(type) {
 	case *csi.VolumeCapability_Block:
-		d.log.Trace("[NodePublishVolume] Block volume detected.")
+		log.Trace("block volume detected")
 
 		err := d.storeManager.NodePublishVolumeBlock(devPath, target, mountOptions)
 		if err != nil {
@@ -265,7 +268,7 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 		}
 
 	case *csi.VolumeCapability_Mount:
-		d.log.Trace("[NodePublishVolume] FS type volume detected.")
+		log.Trace("filesystem volume detected")
 		mountVolume := volCap.GetMount()
 		if mountVolume == nil {
 			return nil, status.Error(codes.InvalidArgument, "[NodePublishVolume] Volume capability mount cannot be empty")
@@ -277,7 +280,7 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 
 		_, ok = ValidFSTypes[strings.ToLower(fsType)]
 		if !ok {
-			d.log.Error(fmt.Errorf("[NodeStageVolume] Invalid fsType: %s. Supported values: %v", fsType, ValidFSTypes), "Invalid fsType")
+			log.Error("invalid filesystem type", slog.String("fsType", fsType), slog.String("supported", fmt.Sprintf("%v", ValidFSTypes)))
 			return nil, status.Errorf(codes.InvalidArgument, "Invalid fsType")
 		}
 
@@ -293,10 +296,10 @@ func (d *Driver) NodePublishVolume(_ context.Context, request *csi.NodePublishVo
 }
 
 func (d *Driver) NodeUnpublishVolume(_ context.Context, request *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
-	d.log.Debug(fmt.Sprintf("[NodeUnpublishVolume] method called with request: %v", request))
-	d.log.Trace("------------- NodeUnpublishVolume --------------")
-	d.log.Trace(request.String())
-	d.log.Trace("------------- NodeUnpublishVolume --------------")
+	log := d.log.Named("NodeUnpublishVolume").With("volumeID", request.GetVolumeId())
+	log.Debug("called", "request", fmt.Sprintf("%v", request))
+
+	log.Trace("start", "request", request.String())
 
 	volumeID := request.GetVolumeId()
 	if len(volumeID) == 0 {
@@ -308,13 +311,13 @@ func (d *Driver) NodeUnpublishVolume(_ context.Context, request *csi.NodeUnpubli
 		return nil, status.Error(codes.InvalidArgument, "[NodeUnpublishVolume] Staging target path cannot be empty")
 	}
 
-	d.log.Debug(fmt.Sprintf("[NodeUnpublishVolume] Volume %s operation started", volumeID))
+	log.Debug("volume operation started")
 	ok := d.inFlight.Insert(volumeID)
 	if !ok {
 		return nil, status.Errorf(codes.Aborted, VolumeOperationAlreadyExists, volumeID)
 	}
 	defer func() {
-		d.log.Debug(fmt.Sprintf("[NodeUnpublishVolume] Volume %s operation completed", volumeID))
+		log.Debug("volume operation completed")
 		d.inFlight.Delete(volumeID)
 	}()
 
@@ -357,7 +360,7 @@ func (d *Driver) getBlockSizeBytes(devicePath string) (uint64, error) {
 }
 
 func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	d.log.Info("method NodeGetVolumeStats")
+	d.log.Named("NodeGetVolumeStats").Info("called")
 
 	isBlock, err := d.IsBlockDevice(req.VolumePath)
 
@@ -413,11 +416,9 @@ func (d *Driver) NodeGetVolumeStats(_ context.Context, req *csi.NodeGetVolumeSta
 }
 
 func (d *Driver) NodeExpandVolume(_ context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	d.log.Info("Call method NodeExpandVolume")
+	log := d.log.Named("NodeExpandVolume").With("volumeID", request.GetVolumeId())
 
-	d.log.Trace("========== NodeExpandVolume ============")
-	d.log.Trace(request.String())
-	d.log.Trace("========== NodeExpandVolume ============")
+	log.Trace("start", "request", request.String())
 
 	volumeID := request.GetVolumeId()
 	volumePath := request.GetVolumePath()
@@ -430,7 +431,7 @@ func (d *Driver) NodeExpandVolume(_ context.Context, request *csi.NodeExpandVolu
 
 	err := d.storeManager.ResizeFS(volumePath)
 	if err != nil {
-		d.log.Error(err, "d.mounter.ResizeFS:")
+		log.Error("unable to resize the filesystem", logger.Err(err))
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -438,7 +439,7 @@ func (d *Driver) NodeExpandVolume(_ context.Context, request *csi.NodeExpandVolu
 }
 
 func (d *Driver) NodeGetCapabilities(_ context.Context, request *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	d.log.Debug(fmt.Sprintf("[NodeGetCapabilities] method called with request: %v", request))
+	d.log.Named("NodeGetCapabilities").Debug("called", "request", fmt.Sprintf("%v", request))
 
 	caps := make([]*csi.NodeServiceCapability, len(nodeCaps))
 	for i, capability := range nodeCaps {
@@ -457,8 +458,7 @@ func (d *Driver) NodeGetCapabilities(_ context.Context, request *csi.NodeGetCapa
 }
 
 func (d *Driver) NodeGetInfo(_ context.Context, _ *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	d.log.Info("method NodeGetInfo")
-	d.log.Info(fmt.Sprintf("hostID = %s", d.hostID))
+	d.log.Named("NodeGetInfo").Info("called", "hostID", d.hostID)
 
 	return &csi.NodeGetInfoResponse{
 		NodeId: d.hostID,

@@ -26,7 +26,6 @@ import (
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/controller"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/internal"
-	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 )
 
 // defaultIgnoredPrefixes mirrors the union of the system list (internal values)
@@ -54,7 +53,7 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 
 	var (
 		cl  client.Client
-		log = logger.NewLoggerFromLogr(GinkgoLogr)
+		log = NewTestLogger()
 
 		reclaimPolicy     = string(corev1.PersistentVolumeReclaimDelete)
 		volumeBindingMode = string(v1.VolumeBindingWaitForFirstConsumer)

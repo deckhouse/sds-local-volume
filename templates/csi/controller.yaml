@@ -7,6 +7,12 @@
 - "--csi-address=unix://$(ADDRESS)"
 {{- end }}
 
+{{- define "csi_controller_ports" }}
+- name: metrics
+  containerPort: 8080
+  protocol: TCP
+{{- end }}
+
 {{- define "additional_pull_secrets" }} 
 - name: {{ .Chart.Name }}-module-registry
 {{- end }}
@@ -58,6 +64,7 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiControllerConfig "additionalPullSecrets" (include "additional_pull_secrets" . | fromYamlArray) }}
 {{- $_ := set $csiControllerConfig "additionalControllerArgs" (include "csi_controller_args" . | fromYamlArray) }}
 {{- $_ := set $csiControllerConfig "additionalControllerEnvs" (include "csi_controller_envs" . | fromYamlArray) }}
+{{- $_ := set $csiControllerConfig "additionalControllerPorts" (include "csi_controller_ports" . | fromYamlArray) }}
 
 {{- include "helm_lib_csi_controller_manifests" (list . $csiControllerConfig) }}
 

@@ -32,11 +32,13 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	metricsstorage "github.com/deckhouse/deckhouse/pkg/metrics-storage"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/config"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/driver"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/kubutils"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/monitoring"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -74,24 +76,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info("version = ", cfgParams.Version)
+	log.Info("starting sds-local-volume-csi", "version", cfgParams.Version)
 
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {
-		log.Error(err, "[main] unable to KubernetesDefaultConfigCreate")
+		log.Error("unable to KubernetesDefaultConfigCreate", logger.Err(err))
 		os.Exit(1)
 	}
-	log.Info("[main] kubernetes config has been successfully created.")
+	log.Info("kubernetes config has been successfully created.")
 
 	scheme := apiruntime.NewScheme()
 	for _, f := range resourcesSchemeFuncs {
 		err := f(scheme)
 		if err != nil {
-			log.Error(err, "[main] unable to add scheme to func")
+			log.Error("unable to add scheme to func", logger.Err(err))
 			os.Exit(1)
 		}
 	}
-	log.Info("[main] successfully read scheme CR")
+	log.Info("successfully read scheme CR")
 
 	cl, err := client.New(kConfig, client.Options{
 		Scheme: scheme,
@@ -102,13 +104,30 @@ func main() {
 	go func() {
 		err = http.ListenAndServe(cfgParams.HealthProbeBindAddress, nil)
 		if err != nil {
-			log.Error(err, "[main] create probes")
+			log.Error("create probes", logger.Err(err))
 		}
 	}()
 
-	drv, err := driver.NewDriver(cfgParams.CsiAddress, cfgParams.DriverName, cfgParams.Address, &cfgParams.NodeName, log, cl)
+	// The driver runs no controller-runtime manager, so it keeps its own registry
+	// and serves it on a dedicated listener. A separate mux keeps /metrics off the
+	// default one used by the health probes above.
+	metricStorage := metricsstorage.NewMetricStorage(metricsstorage.WithNewRegistry())
+	if err = monitoring.Register(metricStorage); err != nil {
+		log.Error("unable to register the metrics", logger.Err(err))
+		os.Exit(1)
+	}
+	go func() {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", metricStorage.Handler())
+		if err := http.ListenAndServe(cfgParams.MetricsBindAddress, metricsMux); err != nil {
+			log.Error("unable to serve the metrics", logger.Err(err))
+		}
+	}()
+	log.Info("metrics registered", "address", cfgParams.MetricsBindAddress+"/metrics")
+
+	drv, err := driver.NewDriver(cfgParams.CsiAddress, cfgParams.DriverName, cfgParams.Address, &cfgParams.NodeName, log, monitoring.NewRecorder(metricStorage), cl)
 	if err != nil {
-		log.Error(err, "[main] create NewDriver")
+		log.Error("create NewDriver", logger.Err(err))
 	}
 
 	defer cancel()
@@ -121,6 +140,6 @@ func main() {
 	}()
 
 	if err := drv.Run(ctx); err != nil {
-		log.Error(err, "[dev.Run]")
+		log.Error("[dev.Run]", logger.Err(err))
 	}
 }

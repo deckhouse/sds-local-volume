@@ -31,7 +31,6 @@ import (
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/controller"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/internal"
-	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -55,7 +54,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 
 	var (
 		cl  client.Client
-		log = logger.NewLoggerFromLogr(GinkgoLogr)
+		log = NewTestLogger()
 
 		reclaimPolicyDelete = string(corev1.PersistentVolumeReclaimDelete)
 		reclaimPolicyRetain = string(corev1.PersistentVolumeReclaimRetain)

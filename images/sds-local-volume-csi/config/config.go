@@ -30,6 +30,8 @@ const (
 	LogLevel                             = "LOG_LEVEL"
 	DefaultHealthProbeBindAddressEnvName = "HEALTH_PROBE_BIND_ADDRESS"
 	DefaultHealthProbeBindAddress        = ":8081"
+	MetricsBindAddressEnvName            = "METRICS_BIND_ADDRESS"
+	DefaultMetricsBindAddress            = ":8080"
 )
 
 type Options struct {
@@ -37,6 +39,7 @@ type Options struct {
 	Version                string
 	Loglevel               logger.Verbosity
 	HealthProbeBindAddress string
+	MetricsBindAddress     string
 	CsiAddress             string
 	DriverName             string
 	Address                string
@@ -53,6 +56,11 @@ func NewConfig() (*Options, error) {
 	opts.HealthProbeBindAddress = os.Getenv(DefaultHealthProbeBindAddressEnvName)
 	if opts.HealthProbeBindAddress == "" {
 		opts.HealthProbeBindAddress = DefaultHealthProbeBindAddress
+	}
+
+	opts.MetricsBindAddress = os.Getenv(MetricsBindAddressEnvName)
+	if opts.MetricsBindAddress == "" {
+		opts.MetricsBindAddress = DefaultMetricsBindAddress
 	}
 
 	loglevel := os.Getenv(LogLevel)
