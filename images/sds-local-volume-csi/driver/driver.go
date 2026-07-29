@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -65,7 +66,7 @@ type Driver struct {
 
 	srv     *grpc.Server
 	httpSrv http.Server
-	log     *logger.Logger
+	log     logger.Logger
 	metrics monitoring.Recorder
 
 	readyMu      sync.Mutex // protects ready
@@ -82,7 +83,7 @@ type Driver struct {
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing  disks
-func NewDriver(csiAddress, driverName, address string, nodeName *string, log *logger.Logger, metrics monitoring.Recorder, cl client.Client) (*Driver, error) {
+func NewDriver(csiAddress, driverName, address string, nodeName *string, log logger.Logger, metrics monitoring.Recorder, cl client.Client) (*Driver, error) {
 	if driverName == "" {
 		driverName = DefaultDriverName
 	}
@@ -104,6 +105,8 @@ func NewDriver(csiAddress, driverName, address string, nodeName *string, log *lo
 }
 
 func (d *Driver) Run(ctx context.Context) error {
+	log := d.log.Named("Run")
+
 	u, err := url.Parse(d.csiAddress)
 	if err != nil {
 		return fmt.Errorf("unable to parse address: %q", err)
@@ -116,7 +119,7 @@ func (d *Driver) Run(ctx context.Context) error {
 
 	// These three values used to be dumped to stdout with fmt.Print, bypassing the
 	// logger and the configured level entirely.
-	d.log.Trace(fmt.Sprintf("[Run] csiAddress: %s, parsed URL: %s, grpcAddr: %s", d.csiAddress, u, grpcAddr))
+	log.Trace("resolved the listen addresses", "csiAddress", d.csiAddress, "parsedURL", u.String(), "grpcAddr", grpcAddr)
 
 	// CSI plugins talk only over UNIX sockets currently
 	if u.Scheme != "unix" {
@@ -125,7 +128,7 @@ func (d *Driver) Run(ctx context.Context) error {
 	// remove the socket if it's already there. This can happen if we
 	// deploy a new version and the socket was created from the old running
 	// plugin.
-	d.log.Info(fmt.Sprintf("socket %s removing socket", grpcAddr))
+	log.Info("removing a stale socket", "grpcAddr", grpcAddr)
 	if err := os.Remove(grpcAddr); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove unix domain socket file %s, error: %s", grpcAddr, err)
 	}
@@ -143,7 +146,7 @@ func (d *Driver) Run(ctx context.Context) error {
 		resp, err := handler(ctx, req)
 		d.metrics.ObserveOperation(info.FullMethod, start, err)
 		if err != nil {
-			d.log.Error(err, fmt.Sprintf("method %s method failed ", info.FullMethod))
+			log.Error("the CSI method failed", logger.Err(err), slog.String("method", info.FullMethod))
 		}
 		return resp, err
 	}
@@ -168,7 +171,7 @@ func (d *Driver) Run(ctx context.Context) error {
 	}
 
 	d.ready = true
-	d.log.Info(fmt.Sprintf("grpc_addr %s http_addr %s starting server", grpcAddr, d.address))
+	log.Info("starting the servers", "grpcAddr", grpcAddr, "httpAddr", d.address)
 
 	var eg errgroup.Group
 	eg.Go(func() error {
@@ -178,7 +181,7 @@ func (d *Driver) Run(ctx context.Context) error {
 	eg.Go(func() error {
 		go func() {
 			<-ctx.Done()
-			d.log.Info("server stopped")
+			log.Info("server stopped")
 			d.readyMu.Lock()
 			d.ready = false
 			d.readyMu.Unlock()

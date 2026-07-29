@@ -31,13 +31,12 @@ func (d *Driver) GetPluginInfo(_ context.Context, _ *csi.GetPluginInfoRequest) (
 		VendorVersion: version,
 	}
 
-	d.log.Info(fmt.Sprintf("response : %+v ", resp))
+	d.log.Named("GetPluginInfo").Info("called", "response", fmt.Sprintf("%+v", resp))
 	return resp, nil
 }
 
 // GetPluginCapabilities returns available capabilities of the plugin
 func (d *Driver) GetPluginCapabilities(_ context.Context, _ *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
-	d.log.Info("method GetPluginCapabilities")
 	resp := &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{
@@ -71,13 +70,13 @@ func (d *Driver) GetPluginCapabilities(_ context.Context, _ *csi.GetPluginCapabi
 		},
 	}
 
-	d.log.Info(fmt.Sprintf("response method get_plugin_capabilities get plugin capabitilies called : %+v", resp))
+	d.log.Named("GetPluginCapabilities").Info("called", "response", fmt.Sprintf("%+v", resp))
 	return resp, nil
 }
 
 // Probe returns the health and readiness of the plugin
 func (d *Driver) Probe(_ context.Context, _ *csi.ProbeRequest) (*csi.ProbeResponse, error) {
-	d.log.Info("method Probe")
+	d.log.Named("Probe").Info("called")
 	d.readyMu.Lock()
 	defer d.readyMu.Unlock()
 

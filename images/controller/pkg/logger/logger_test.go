@@ -19,6 +19,7 @@ package logger
 import (
 	"bytes"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -28,7 +29,7 @@ import (
 	"github.com/deckhouse/deckhouse/pkg/log"
 )
 
-func newBufLogger(t *testing.T, level Verbosity) (*Logger, *bytes.Buffer) {
+func newBufLogger(t *testing.T, level Verbosity) (Logger, *bytes.Buffer) {
 	t.Helper()
 
 	buf := &bytes.Buffer{}
@@ -112,8 +113,8 @@ func TestLevelThresholds(t *testing.T) {
 		t.Run(string(tt.level), func(t *testing.T) {
 			l, buf := newBufLogger(t, tt.level)
 
-			l.Error(errors.New("boom"), "an-error")
-			l.Warning("a-warning")
+			l.Error("an-error", Err(errors.New("boom")))
+			l.Warn("a-warning")
 			l.Info("an-info")
 			l.Debug("a-debug")
 			l.Trace("a-trace")
@@ -132,7 +133,7 @@ func TestLevelThresholds(t *testing.T) {
 func TestErrorAttachesErrorAndStackTrace(t *testing.T) {
 	l, buf := newBufLogger(t, TraceLevel)
 
-	l.Error(errors.New("disk on fire"), "unable to create volume", "volumeID", "pvc-123")
+	l.Error("unable to create volume", Err(errors.New("disk on fire")), slog.String("volumeID", "pvc-123"))
 
 	out := buf.String()
 	assert.Contains(t, out, "unable to create volume")
@@ -149,7 +150,7 @@ func TestErrorToleratesNilError(t *testing.T) {
 
 	// Call sites pass whatever they hold; a nil error must not panic.
 	assert.NotPanics(t, func() {
-		l.Error(nil, "something went wrong")
+		l.Error("something went wrong", Err(nil))
 	})
 	assert.Contains(t, buf.String(), "something went wrong")
 }
@@ -196,7 +197,7 @@ func TestSetLevelChangesLevelInPlace(t *testing.T) {
 
 	// Changing the level must affect the live logger, which is what lets the
 	// level be raised without restarting the pod.
-	require.NoError(t, l.SetLevel(DebugLevel))
+	require.NoError(t, l.SetVerbosity(DebugLevel))
 	l.Debug("after")
 	assert.Contains(t, buf.String(), "after")
 }
@@ -208,7 +209,7 @@ func TestSetLevelPropagatesToDerivedLoggers(t *testing.T) {
 	child.Debug("before")
 	require.NotContains(t, buf.String(), "before")
 
-	require.NoError(t, l.SetLevel(DebugLevel))
+	require.NoError(t, l.SetVerbosity(DebugLevel))
 
 	child.Debug("after")
 	assert.Contains(t, buf.String(), "after")
@@ -216,51 +217,51 @@ func TestSetLevelPropagatesToDerivedLoggers(t *testing.T) {
 
 func TestSetLevelRejectsInvalidValue(t *testing.T) {
 	l, _ := newBufLogger(t, InfoLevel)
-	assert.Error(t, l.SetLevel(Verbosity("nonsense")))
+	assert.Error(t, l.SetVerbosity(Verbosity("nonsense")))
 }
 
 func TestNopDiscardsEverything(t *testing.T) {
 	l := NewNop()
 
 	assert.NotPanics(t, func() {
-		l.Error(errors.New("boom"), "an-error")
+		l.Error("an-error", Err(errors.New("boom")))
 		l.Info("an-info")
 		l.Trace("a-trace")
 		l.Named("x").With("k", "v").Debug("a-debug")
 	})
 }
 
-// TestZeroLoggerIsANoOp guards the behaviour the previous logr-backed
-// implementation had: tests construct logger.Logger{} directly and must not
-// crash on it.
-func TestZeroLoggerIsANoOp(t *testing.T) {
-	var l Logger
+// TestNopIsUsableEverywhere covers what the zero value used to be relied on for.
+// Embedding *log.Logger means the zero Logger can no longer be a silent no-op, so
+// callers that want one ask for NewNop instead.
+func TestNopIsUsableEverywhere(t *testing.T) {
+	l := NewNop()
 
 	assert.NotPanics(t, func() {
-		l.Error(errors.New("boom"), "an-error")
-		l.Warning("a-warning")
+		l.Error("an-error", Err(errors.New("boom")))
+		l.Warn("a-warning")
 		l.Info("an-info")
 		l.Debug("a-debug")
 		l.Trace("a-trace")
 		l.Named("x").With("k", "v").Info("nested")
 		_ = l.GetLogger()
 		_ = l.GetSlogLogger()
-		_ = l.SetLevel(InfoLevel)
+		_ = l.SetVerbosity(InfoLevel)
 	})
 }
 
-// TestSourceNamesTheCallSite guards against the wrapper attributing every record
-// to itself. Without the manual record construction in emit, "source" would read
-// logger/logger.go for all 300-odd call sites in the module.
+// TestSourceNamesTheCallSite guards caller attribution. Info/Debug/Warn come
+// straight from the embedded logger so slog attributes them itself; Trace is a
+// method on this type and builds its record by hand to achieve the same.
 func TestSourceNamesTheCallSite(t *testing.T) {
 	tests := []struct {
 		name string
-		emit func(l *Logger)
+		emit func(l Logger)
 	}{
-		{name: "Warning", emit: func(l *Logger) { l.Warning("m") }},
-		{name: "Info", emit: func(l *Logger) { l.Info("m") }},
-		{name: "Debug", emit: func(l *Logger) { l.Debug("m") }},
-		{name: "Trace", emit: func(l *Logger) { l.Trace("m") }},
+		{name: "Warn", emit: func(l Logger) { l.Warn("m") }},
+		{name: "Info", emit: func(l Logger) { l.Info("m") }},
+		{name: "Debug", emit: func(l Logger) { l.Debug("m") }},
+		{name: "Trace", emit: func(l Logger) { l.Trace("m") }},
 	}
 
 	for _, tt := range tests {
@@ -282,7 +283,7 @@ func TestSourceNamesTheCallSite(t *testing.T) {
 func TestErrorReportsStackTraceInsteadOfSource(t *testing.T) {
 	l, buf := newBufLogger(t, TraceLevel)
 
-	l.Error(errors.New("boom"), "failed")
+	l.Error("failed", Err(errors.New("boom")))
 
 	out := buf.String()
 	assert.NotContains(t, out, `"source"`)

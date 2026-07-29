@@ -32,7 +32,7 @@ func newTestKubewebhookLogger(t *testing.T, level Verbosity) (kwhlog.Logger, *st
 	buf := &strings.Builder{}
 	l, err := NewLoggerToWriter(buf, level)
 	require.NoError(t, err)
-	return NewKubewebhookLogger(*l), buf
+	return NewKubewebhookLogger(l), buf
 }
 
 func TestKubewebhookAdapterFormatsMessages(t *testing.T) {

@@ -46,14 +46,13 @@ func (a kubewebhookAdapter) Infof(format string, args ...interface{}) {
 }
 
 func (a kubewebhookAdapter) Warningf(format string, args ...interface{}) {
-	a.log.Warning(fmt.Sprintf(format, args...), a.fields()...)
+	a.log.Warn(fmt.Sprintf(format, args...), a.fields()...)
 }
 
 // Errorf logs at error level. kubewebhook hands over a formatted string rather
-// than an error value, so there is nothing to pass to Logger.Error's error
-// parameter.
+// than an error value, so no error field is attached.
 func (a kubewebhookAdapter) Errorf(format string, args ...interface{}) {
-	a.log.Error(nil, fmt.Sprintf(format, args...), a.fields()...)
+	a.log.Error(fmt.Sprintf(format, args...), a.fields()...)
 }
 
 func (a kubewebhookAdapter) Debugf(format string, args ...interface{}) {

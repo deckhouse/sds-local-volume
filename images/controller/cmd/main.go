@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	goruntime "runtime"
 
@@ -64,28 +65,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info(fmt.Sprintf("[main] Go Version:%s ", goruntime.Version()))
-	log.Info(fmt.Sprintf("[main] OS/Arch:Go OS/Arch:%s/%s ", goruntime.GOOS, goruntime.GOARCH))
+	log.Info("starting the sds-local-volume controller", "goVersion", goruntime.Version(), "os", goruntime.GOOS, "arch", goruntime.GOARCH)
 
-	log.Info("[main] CfgParams has been successfully created")
-	log.Info(fmt.Sprintf("[main] %s = %s", config.LogLevel, cfgParams.Loglevel))
-	log.Info(fmt.Sprintf("[main] %s = %d", config.RequeueInterval, cfgParams.RequeueStorageClassInterval))
+	log.Info("configuration loaded", config.LogLevel, string(cfgParams.Loglevel), config.RequeueInterval, cfgParams.RequeueStorageClassInterval)
 
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {
-		log.Error(err, "[main] unable to KubernetesDefaultConfigCreate")
+		log.Error("unable to create the kubernetes config", logger.Err(err))
 	}
-	log.Info("[main] kubernetes config has been successfully created.")
+	log.Info("kubernetes config created")
 
 	scheme := apiruntime.NewScheme()
 	for _, f := range resourcesSchemeFuncs {
 		err := f(scheme)
 		if err != nil {
-			log.Error(err, "[main] unable to add scheme to func")
+			log.Error("unable to add a resource to the scheme", logger.Err(err))
 			os.Exit(1)
 		}
 	}
-	log.Info("[main] successfully read scheme CR")
+	log.Info("scheme built")
 
 	// The storage keeps its own registry and is then plugged into the
 	// controller-runtime registry as a collector, so that a single metrics
@@ -93,15 +91,15 @@ func main() {
 	// (workqueue depth, reconcile totals, client-go latency).
 	metricStorage := metricsstorage.NewMetricStorage(metricsstorage.WithNewRegistry())
 	if err = monitoring.Register(metricStorage); err != nil {
-		log.Error(err, "[main] unable to register metrics")
+		log.Error("unable to register the metrics", logger.Err(err))
 		os.Exit(1)
 	}
 	if err = ctrlmetrics.Registry.Register(metricStorage.Collector()); err != nil {
-		log.Error(err, "[main] unable to add metrics to the controller-runtime registry")
+		log.Error("unable to add the metrics to the controller-runtime registry", logger.Err(err))
 		os.Exit(1)
 	}
 	metrics := monitoring.NewRecorder(metricStorage)
-	log.Info(fmt.Sprintf("[main] metrics are registered and served on %s/metrics", cfgParams.MetricsBindAddress))
+	log.Info("metrics registered", "address", cfgParams.MetricsBindAddress+"/metrics")
 
 	cacheOpt := cache.Options{
 		DefaultNamespaces: map[string]cache.Config{
@@ -124,36 +122,35 @@ func main() {
 
 	mgr, err := manager.New(kConfig, managerOpts)
 	if err != nil {
-		log.Error(err, "[main] unable to manager.New")
+		log.Error("unable to create the manager", logger.Err(err))
 		os.Exit(1)
 	}
-	log.Info("[main] successfully created kubernetes manager")
+	log.Info("manager created")
 
-	if _, err = controller.RunLocalStorageClassWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
-		log.Error(err, fmt.Sprintf("[main] unable to run %s", controller.LocalStorageClassCtrlName))
+	if _, err = controller.RunLocalStorageClassWatcherController(mgr, *cfgParams, log, metrics); err != nil {
+		log.Error("unable to run the controller", logger.Err(err), slog.String("controller", controller.LocalStorageClassCtrlName))
 		os.Exit(1)
 	}
 
-	if _, err = controller.RunLocalCSINodeWatcherController(mgr, *cfgParams, *log, metrics); err != nil {
-		log.Error(err, fmt.Sprintf("[main] unable to run %s", controller.LocalCSINodeWatcherCtrl))
+	if _, err = controller.RunLocalCSINodeWatcherController(mgr, *cfgParams, log, metrics); err != nil {
+		log.Error("unable to run the controller", logger.Err(err), slog.String("controller", controller.LocalCSINodeWatcherCtrl))
 		os.Exit(1)
 	}
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		log.Error(err, "[main] unable to mgr.AddHealthzCheck")
+		log.Error("unable to add the healthz check", logger.Err(err))
 		os.Exit(1)
 	}
-	log.Info("[main] successfully AddHealthzCheck")
 
 	if err = mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		log.Error(err, "[main] unable to mgr.AddReadyzCheck")
+		log.Error("unable to add the readyz check", logger.Err(err))
 		os.Exit(1)
 	}
-	log.Info("[main] successfully AddReadyzCheck")
+	log.Info("health probes registered")
 
 	err = mgr.Start(ctx)
 	if err != nil {
-		log.Error(err, "[main] unable to mgr.Start")
+		log.Error("the manager stopped with an error", logger.Err(err))
 		os.Exit(1)
 	}
 }

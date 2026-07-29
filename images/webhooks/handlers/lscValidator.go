@@ -46,7 +46,7 @@ func LSCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 			// Returning the error fails this one admission request. The previous
 			// klog.Fatal exited the process, so a single transient failure here
 			// took the webhook down for every request until the pod restarted.
-			log.Error(err, "unable to build a kube client")
+			log.Error("unable to build a kube client", logger.Err(err))
 			return nil, err
 		}
 
@@ -67,7 +67,7 @@ func LSCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 		err = cl.List(ctx, listDevice)
 		if err != nil {
 			// As above: fail the request, do not exit the process.
-			log.Error(err, "unable to list LVMVolumeGroups")
+			log.Error("unable to list LVMVolumeGroups", logger.Err(err))
 			return nil, err
 		}
 
