@@ -5,6 +5,24 @@
 }}
 {{ include "helm_lib_module_webhook_certs_secret" (list . $secretConfig) }}
 
+{{- /*
+  The webhooks container takes its log level as a flag, because
+  helm_lib_module_controller_manifests injects no env into it but does allow the
+  command to be overridden. The value is the same numeric verbosity the
+  controller gets through LOG_LEVEL.
+
+  Overriding the command means restating the TLS flags, so the cert mount path is
+  set explicitly here and reused, rather than relying on the lib-helm default
+  matching the literal below.
+*/ -}}
+{{- $webhooksCertMountPath := "/etc/webhook/certs" }}
+{{- $webhooksCommand := list
+  "/webhooks"
+  (printf "-tls-cert-file=%s/tls.crt" $webhooksCertMountPath)
+  (printf "-tls-key-file=%s/tls.key" $webhooksCertMountPath)
+  (printf "-log-level=%s" (include "helm_lib_module_controller_log_level" (list . "sdsLocalVolume")))
+}}
+
 {{- /* Controller Deployment */ -}}
 {{- $config := dict
   "valuesKey" "sdsLocalVolume"
@@ -13,6 +31,8 @@
   "onMasterNode" true
   "podSecurityContext" "deckhouse"
   "controllerMetricsPort" 8080
+  "webhooksCertMountPath" $webhooksCertMountPath
+  "webhooksCommand" $webhooksCommand
 }}
 {{ include "helm_lib_module_controller_manifests" (list . $config) }}
 

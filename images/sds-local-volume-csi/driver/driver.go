@@ -109,15 +109,14 @@ func (d *Driver) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to parse address: %q", err)
 	}
 
-	fmt.Print("d.csiAddress", d.csiAddress)
-	fmt.Print("u", u)
-
 	grpcAddr := path.Join(u.Host, filepath.FromSlash(u.Path))
 	if u.Host == "" {
 		grpcAddr = filepath.FromSlash(u.Path)
 	}
 
-	fmt.Print("grpcAddr", grpcAddr)
+	// These three values used to be dumped to stdout with fmt.Print, bypassing the
+	// logger and the configured level entirely.
+	d.log.Trace(fmt.Sprintf("[Run] csiAddress: %s, parsed URL: %s, grpcAddr: %s", d.csiAddress, u, grpcAddr))
 
 	// CSI plugins talk only over UNIX sockets currently
 	if u.Scheme != "unix" {

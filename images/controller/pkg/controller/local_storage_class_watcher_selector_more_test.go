@@ -26,7 +26,6 @@ import (
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/controller"
-	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -44,7 +43,7 @@ var _ = Describe("local-storage-class-controller labelSelector (matchExpressions
 
 	var (
 		cl  client.Client
-		log = logger.NewLoggerFromLogr(GinkgoLogr)
+		log = NewTestLogger()
 
 		rp  = string(corev1.PersistentVolumeReclaimDelete)
 		vbm = string(v1.VolumeBindingWaitForFirstConsumer)

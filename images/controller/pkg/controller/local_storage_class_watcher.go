@@ -99,7 +99,7 @@ func RunLocalStorageClassWatcherController(
 		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (res reconcile.Result, err error) {
 			defer metrics.ObserveReconcile(LocalStorageClassCtrlName, time.Now(), &res, &err)
 
-			log.Info("[LocalStorageClassReconciler] starts Reconcile for the LocalStorageClass %s", request.Name)
+			log.Info(fmt.Sprintf("[LocalStorageClassReconciler] starts Reconcile for the LocalStorageClass %s", request.Name))
 			lsc := &slv.LocalStorageClass{}
 			err = cl.Get(ctx, request.NamespacedName, lsc)
 			if err != nil && !errors2.IsNotFound(err) {
@@ -152,7 +152,7 @@ func RunLocalStorageClassWatcherController(
 				}, nil
 			}
 
-			log.Info("[LocalStorageClassReconciler] ends Reconcile for the LocalStorageClass %q", request.Name)
+			log.Info(fmt.Sprintf("[LocalStorageClassReconciler] ends Reconcile for the LocalStorageClass %q", request.Name))
 			return reconcile.Result{}, nil
 		}),
 	})

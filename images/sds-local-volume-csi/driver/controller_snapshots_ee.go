@@ -155,7 +155,7 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, request *csi.DeleteSnapshot
 	}
 
 	d.log.Info(fmt.Sprintf("[Snapshot][traceID:%s][SnapshotId:%s] Snapshot deleted successfully", traceID, request.SnapshotId))
-	d.log.Info("[Snapshot][traceID:%s] ========== END Snapshot ============", traceID)
+	d.log.Info(fmt.Sprintf("[Snapshot][traceID:%s] ========== END Snapshot ============", traceID))
 	return &csi.DeleteSnapshotResponse{}, nil
 }
 

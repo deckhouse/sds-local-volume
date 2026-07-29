@@ -32,12 +32,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
+	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
 func TestController(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Controller Suite")
+}
+
+// NewTestLogger returns a logger writing into GinkgoWriter, so its output shows
+// up only for a failing spec.
+//
+// It panics rather than returning an error: the specs call it while Ginkgo is
+// still building the spec tree, before RegisterFailHandler has run, so Expect is
+// not usable here. TraceLevel is a constant, so the error is unreachable.
+func NewTestLogger() logger.Logger {
+	log, err := logger.NewLoggerToWriter(GinkgoWriter, logger.TraceLevel)
+	if err != nil {
+		panic(err)
+	}
+	return *log
 }
 
 func NewFakeClient() client.Client {

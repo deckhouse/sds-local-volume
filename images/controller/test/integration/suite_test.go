@@ -42,7 +42,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
@@ -71,7 +70,12 @@ func TestIntegration(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true), zap.WriteTo(GinkgoWriter)))
+	// Route controller-runtime's own logging through the module logger too, so the
+	// suite exercises the same stack the controller uses in production.
+	suiteLog, err := logger.NewLoggerToWriter(GinkgoWriter, logger.TraceLevel)
+	Expect(err).NotTo(HaveOccurred())
+	ctrl.SetLogger(suiteLog.GetLogger())
+
 	suiteCtx, suiteCancel = context.WithCancel(context.Background())
 
 	testEnv = &envtest.Environment{
@@ -85,7 +89,6 @@ var _ = BeforeSuite(func() {
 		ErrorIfCRDPathMissing: true,
 	}
 
-	var err error
 	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
@@ -109,7 +112,6 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	log := logger.NewLoggerFromLogr(GinkgoLogr)
 	cfgParams := config.Options{
 		ControllerNamespace:         controllerNamespace,
 		ConfigSecretName:            config.ConfigSecretName,
@@ -117,7 +119,7 @@ var _ = BeforeSuite(func() {
 	}
 	// The zero Recorder discards every observation, so the suite does not need a
 	// metrics registry to exercise the reconcile behaviour.
-	_, err = controller.RunLocalStorageClassWatcherController(mgr, cfgParams, log, monitoring.Recorder{})
+	_, err = controller.RunLocalStorageClassWatcherController(mgr, cfgParams, *suiteLog, monitoring.Recorder{})
 	Expect(err).NotTo(HaveOccurred())
 
 	go func() {

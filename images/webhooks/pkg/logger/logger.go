@@ -17,11 +17,9 @@ limitations under the License.
 // Package logger wraps github.com/deckhouse/deckhouse/pkg/log in the small API
 // this module uses.
 //
-// The method set (Error/Warning/Info/Debug/Trace) is kept from the previous
-// klog-based implementation so that existing call sites are unaffected, and so
-// is the Verbosity type: LOG_LEVEL is delivered as a number 0..4 both by
-// lib-helm's helm_lib_module_controller_log_level and by the module's own CSI
-// templates, and that contract must not change.
+// The method set (Error/Warning/Info/Debug/Trace) and the Verbosity type match
+// the controller and CSI copies of this package, so that all three components of
+// the module log in one format and take the same numeric 0..4 level.
 package logger
 
 import (

@@ -213,7 +213,7 @@ func GetLSCBeforeLLVDelete(ctx context.Context, cl client.Client, log logger.Log
 		return nil, status.Errorf(codes.Internal, "Failed to fetch PersistentVolume %s: %v", volumeID, err)
 	}
 
-	log.Info("[DeleteVolume][traceID:%s] PersistentVolume %s successfully fetched", traceID, volumeID)
+	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] PersistentVolume %s successfully fetched", traceID, volumeID))
 
 	storageClassName := pv.Spec.StorageClassName
 	if storageClassName == "" {
