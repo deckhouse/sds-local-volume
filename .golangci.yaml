@@ -10,10 +10,36 @@ linters:
     - ineffassign
     - misspell
     - revive
+    - sloglint
     - staticcheck
     - unconvert
     - unparam
     - whitespace
+  settings:
+    sloglint:
+      # Scope: sloglint and govet's slog analyzer recognise log/slog and types
+      # embedding *slog.Logger, which covers deckhouse/pkg/log. They do NOT see
+      # calls made through the module's own logger.Logger wrapper, so these rules
+      # guard the logger package and any direct pkg/log use, not the ~360
+      # wrapper call sites.
+      #
+      # no-mixed-args is on by default and is the rule that matters most here: it
+      # allows a pure-attribute call such as log.Error(msg, log.Err(err)) and a
+      # pure key-value call such as log.Info(msg, "volumeID", id), but rejects
+      # mixing the two forms in one call. kv-only is deliberately NOT set,
+      # because it would outlaw log.Err(err), which is the intended way to log an
+      # error with this library.
+      #
+      # static-msg and no-raw-keys are left off: most messages are still built
+      # with fmt.Sprintf, and converting them is a separate change.
+      args-on-same-line: true
+      forbidden-keys:
+        # Reserved by the handler; shadowing them silently drops the real value.
+        - level
+        - msg
+        - source
+        - stacktrace
+        - time
   exclusions:
     generated: lax
     presets:

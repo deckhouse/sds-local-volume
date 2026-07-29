@@ -9,7 +9,7 @@ package driver
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -20,6 +20,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 	"github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
@@ -27,12 +28,12 @@ import (
 func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	traceID := uuid.New().String()
 
-	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s] ========== CreateSnapshot ============", traceID))
-	d.log.Trace(request.String())
+	log := d.log.Named("CreateSnapshot").With("traceID", traceID, "sourceVolumeID", request.SourceVolumeId)
+	log.Trace("start", "request", request.String())
 
 	llv, err := utils.GetLVMLogicalVolume(ctx, d.cl, request.SourceVolumeId, "")
 	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMLogicalVolume", traceID, request.SourceVolumeId))
+		log.Error("unable to get the source LVMLogicalVolume", logger.Err(err))
 		return nil, status.Errorf(codes.Internal, "error getting LVMLogicalVolume %s: %s", request.SourceVolumeId, err.Error())
 	}
 
@@ -46,15 +47,7 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 
 	lvg, err := utils.GetLVMVolumeGroup(ctx, d.cl, llv.Spec.LVMVolumeGroupName)
 	if err != nil {
-		d.log.Error(
-			err,
-			fmt.Sprintf(
-				"[CreateSnapshot][traceID:%s][volumeID:%s] error getting LVMVolumeGroup %s",
-				traceID,
-				request.SourceVolumeId,
-				llv.Spec.LVMVolumeGroupName,
-			),
-		)
+		log.Error("unable to get the LVMVolumeGroup", logger.Err(err), slog.String("lvgName", llv.Spec.LVMVolumeGroupName))
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup %s: %s", llv.Spec.LVMVolumeGroupName, err.Error())
 	}
 
@@ -89,7 +82,6 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 		ctx,
 		d.cl,
 		d.log,
-		traceID,
 		name,
 		v1alpha1.LVMLogicalVolumeSnapshotSpec{
 			ActualSnapshotNameOnTheNode: actualNameOnTheNode,
@@ -98,26 +90,26 @@ func (d *Driver) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshot
 	)
 	if err != nil {
 		if kerrors.IsAlreadyExists(err) {
-			d.log.Info(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] LVMLogicalVolumeSnapshot %s already exists. Skip creating", traceID, name, name))
+			log.Info("the LVMLogicalVolumeSnapshot already exists, skipping creation", "llvsName", name)
 		} else {
-			d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error CreateLVMLogicalVolume", traceID, name))
+			log.Error("unable to create the LVMLogicalVolumeSnapshot", logger.Err(err), slog.String("llvsName", name))
 			return nil, err
 		}
 	}
 
-	attemptCounter, err := utils.WaitForLLVSStatusUpdate(ctx, d.cl, d.log, traceID, name)
+	attemptCounter, err := utils.WaitForLLVSStatusUpdate(ctx, d.cl, log, name)
 	if err != nil {
-		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error WaitForStatusUpdate. DeleteLVMLogicalVolumeSnapshot %s", traceID, name, request.Name))
+		log.Error("the LVMLogicalVolumeSnapshot did not become ready, deleting it", logger.Err(err), slog.String("llvsName", request.Name))
 
-		deleteErr := utils.DeleteLVMLogicalVolumeSnapshot(ctx, d.cl, d.log, traceID, request.Name)
+		deleteErr := utils.DeleteLVMLogicalVolumeSnapshot(ctx, d.cl, log, request.Name)
 		if deleteErr != nil {
-			d.log.Error(deleteErr, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error DeleteLVMLogicalVolumeSnapshot", traceID, name))
+			log.Error("unable to delete the LVMLogicalVolumeSnapshot after a failed wait", logger.Err(deleteErr), slog.String("llvsName", request.Name))
 		}
 
-		d.log.Error(err, fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] error creating LVMLogicalVolumeSnapshot", traceID, name))
+		log.Error("unable to create the snapshot", logger.Err(err))
 		return nil, err
 	}
-	d.log.Trace(fmt.Sprintf("[CreateSnapshot][traceID:%s][volumeID:%s] finish wait CreateLVMLogicalVolume, attempt counter = %d", traceID, name, attemptCounter))
+	log.Trace("the LVMLogicalVolumeSnapshot became ready", "attempts", attemptCounter)
 
 	// Reported from the status, not from Spec.Size: the node rounds the LV up to the
 	// extent boundary, and volumes provisioned before the CSI side started aligning
@@ -147,19 +139,19 @@ func (d *Driver) DeleteSnapshot(ctx context.Context, request *csi.DeleteSnapshot
 	}
 
 	traceID := uuid.New().String()
-	d.log.Trace(fmt.Sprintf("[DeleteSnapshot][traceID:%s] ========== DeleteSnapshot ============", traceID))
-	d.log.Trace(request.String())
+	log := d.log.Named("DeleteSnapshot").With("traceID", traceID, "snapshotID", request.SnapshotId)
+	log.Trace("start", "request", request.String())
 
-	if err := utils.DeleteLVMLogicalVolumeSnapshot(ctx, d.cl, d.log, traceID, request.SnapshotId); err != nil {
-		d.log.Error(err, "error DeleteLVMLogicalVolume")
+	if err := utils.DeleteLVMLogicalVolumeSnapshot(ctx, d.cl, log, request.SnapshotId); err != nil {
+		log.Error("unable to delete the LVMLogicalVolumeSnapshot", logger.Err(err))
 	}
 
-	d.log.Info(fmt.Sprintf("[Snapshot][traceID:%s][SnapshotId:%s] Snapshot deleted successfully", traceID, request.SnapshotId))
-	d.log.Info("[Snapshot][traceID:%s] ========== END Snapshot ============", traceID)
+	log.Info("snapshot deleted successfully")
+
 	return &csi.DeleteSnapshotResponse{}, nil
 }
 
 func (d *Driver) ListSnapshots(_ context.Context, _ *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
-	d.log.Info("call method ListSnapshots")
+	d.log.Named("ListSnapshots").Info("called")
 	return nil, nil
 }

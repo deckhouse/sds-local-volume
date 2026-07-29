@@ -26,7 +26,6 @@ import (
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/controller"
-	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 )
 
 var _ = Describe("local-storage-class-controller lvmVolumeGroups labelSelector", func() {
@@ -45,7 +44,7 @@ var _ = Describe("local-storage-class-controller lvmVolumeGroups labelSelector",
 
 	var (
 		cl  client.Client
-		log = logger.NewLoggerFromLogr(GinkgoLogr)
+		log = NewTestLogger()
 
 		reclaimPolicyDelete   = string(corev1.PersistentVolumeReclaimDelete)
 		volumeBindingModeWFFC = string(v1.VolumeBindingWaitForFirstConsumer)

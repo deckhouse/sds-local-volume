@@ -1,0 +1,60 @@
+{{- if (.Values.global.enabledModules | has "operator-prometheus-crd") }}
+{{- /*
+  Both CSI workloads are scraped with a PodMonitor rather than a ServiceMonitor:
+  helm_lib_csi_controller_manifests and helm_lib_csi_node_manifests create no
+  Service, and a DaemonSet has to be scraped per pod anyway.
+
+  The node DaemonSet is matched by port number because
+  helm_lib_csi_node_manifests exposes no way to declare a named containerPort.
+*/ -}}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: sds-local-volume-csi-controller
+  namespace: d8-monitoring
+  {{- include "helm_lib_module_labels" (list $ (dict "prometheus" "main")) | nindent 2 }}
+spec:
+  podMetricsEndpoints:
+  - port: metrics
+    scheme: http
+    path: /metrics
+    relabelings:
+    - regex: endpoint|namespace|pod|container
+      action: labeldrop
+    - targetLabel: job
+      replacement: sds-local-volume-csi-controller
+    - targetLabel: tier
+      replacement: cluster
+  selector:
+    matchLabels:
+      app: csi-controller
+  namespaceSelector:
+    matchNames:
+    - d8-{{ .Chart.Name }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: sds-local-volume-csi-node
+  namespace: d8-monitoring
+  {{- include "helm_lib_module_labels" (list $ (dict "prometheus" "main")) | nindent 2 }}
+spec:
+  podMetricsEndpoints:
+  - targetPort: 8080
+    scheme: http
+    path: /metrics
+    relabelings:
+    - regex: endpoint|namespace|pod|container
+      action: labeldrop
+    - targetLabel: job
+      replacement: sds-local-volume-csi-node
+    - sourceLabels: [__meta_kubernetes_pod_node_name]
+      targetLabel: node
+  selector:
+    matchLabels:
+      app: csi-node
+  namespaceSelector:
+    matchNames:
+    - d8-{{ .Chart.Name }}
+{{- end }}

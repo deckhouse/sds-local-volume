@@ -26,9 +26,8 @@ limitations under the License.
 // numeric LOG_LEVEL contract, a Trace level, and Named/With overridden to return
 // this type.
 //
-// LOG_LEVEL is delivered as a number 0..4 both by lib-helm's
-// helm_lib_module_controller_log_level and by the module's own CSI templates, and
-// that contract must not change.
+// The numeric 0..4 level is the same one the controller and CSI components take,
+// so all three log identically; webhooks receives it as a -log-level flag.
 package logger
 
 import (
