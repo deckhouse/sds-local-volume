@@ -98,19 +98,19 @@ func main() {
 
 	podSchedulerMutatingWebHookHandler, err := handlers.GetMutatingWebhookHandler(handlers.PodSchedulerMutate, PodSchedulerMutatorID, &corev1.Pod{}, kwhLogger)
 	if err != nil {
-		log.Error(err, "unable to create the pod scheduler mutating webhook handler")
+		log.Error("unable to create the pod scheduler mutating webhook handler", logger.Err(err))
 		os.Exit(1)
 	}
 
 	lscValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LSCValidate(log), LSCValidatorID, &slv.LocalStorageClass{}, kwhLogger)
 	if err != nil {
-		log.Error(err, "unable to create the LocalStorageClass validating webhook handler")
+		log.Error("unable to create the LocalStorageClass validating webhook handler", logger.Err(err))
 		os.Exit(1)
 	}
 
 	scValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.SCValidate(log), SCValidatorID, &storagev1.StorageClass{}, kwhLogger)
 	if err != nil {
-		log.Error(err, "unable to create the StorageClass validating webhook handler")
+		log.Error("unable to create the StorageClass validating webhook handler", logger.Err(err))
 		os.Exit(1)
 	}
 
@@ -120,9 +120,9 @@ func main() {
 	mux.Handle("/sc-validate", scValidatingWebhookHandler)
 	mux.HandleFunc("/healthz", httpHandlerHealthz)
 
-	log.Info(fmt.Sprintf("listening on %s", port))
+	log.Info("listening", "port", port)
 	if err = http.ListenAndServeTLS(port, cfg.certFile, cfg.keyFile, mux); err != nil {
-		log.Error(err, "unable to serve the webhook")
+		log.Error("unable to serve the webhook", logger.Err(err))
 		os.Exit(1)
 	}
 }

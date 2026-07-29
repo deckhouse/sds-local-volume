@@ -14,12 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package logger wraps github.com/deckhouse/deckhouse/pkg/log in the small API
-// this module uses.
+// Package logger adapts github.com/deckhouse/deckhouse/pkg/log to this module.
 //
-// The method set (Error/Warning/Info/Debug/Trace) and the Verbosity type match
-// the controller and CSI copies of this package, so that all three components of
-// the module log in one format and take the same numeric 0..4 level.
+// Logger embeds *log.Logger rather than wrapping it, so Info/Debug/Warn/Error are
+// the library's own methods. That is deliberate: sloglint and govet's slog
+// analyzer only recognise log/slog and types embedding *slog.Logger, so
+// embedding is what puts every call site in the module under those checks. A
+// hand-written forwarding method would hide them again.
+//
+// Only what the library does not provide is added here: Verbosity parsing for the
+// numeric LOG_LEVEL contract, a Trace level, and Named/With overridden to return
+// this type.
+//
+// The numeric 0..4 level is the same one the controller and CSI components take,
+// so all three log identically; webhooks receives it as a -log-level flag.
 package logger
 
 import (
@@ -79,55 +87,53 @@ func (v Verbosity) Level() (log.Level, error) {
 	}
 }
 
+// Logger is the module logger.
+//
+// The embedded pointer is what exposes Info, Debug, Warn and Error directly from
+// the library, and what makes those calls visible to the slog linters. Build one
+// with NewLogger, NewLoggerToWriter or NewNop; the zero value has no embedded
+// logger and panics on use.
 type Logger struct {
-	log *log.Logger
+	*log.Logger
 }
 
-// nop backs the zero Logger. The previous logr-based implementation held a
-// logr.Logger by value, whose zero value discards silently, and callers rely on
-// that: a zero Logger must stay a no-op rather than panic.
-var nop = log.NewNop()
-
-// unwrap returns the underlying logger, substituting the discard logger for a
-// zero Logger.
-func (l Logger) unwrap() *log.Logger {
-	if l.log == nil {
-		return nop
-	}
-	return l.log
-}
+// Err wraps an error into the field the library uses for it. Re-exported so that
+// a call site does not have to import pkg/log next to its own log variable:
+//
+//	log.Error("unable to create the volume", logger.Err(err))
+var Err = log.Err
 
 // NewLogger returns a logger emitting at the given verbosity.
-func NewLogger(level Verbosity) (*Logger, error) {
+func NewLogger(level Verbosity) (Logger, error) {
 	lvl, err := level.Level()
 	if err != nil {
-		return nil, err
+		return Logger{}, err
 	}
 
-	return &Logger{log: log.NewLogger(log.WithLevel(lvl.Level()))}, nil
+	return Logger{log.NewLogger(log.WithLevel(lvl.Level()))}, nil
 }
 
 // NewLoggerToWriter returns a logger writing to w, for tests that want the
 // output attached to their own reporter.
-func NewLoggerToWriter(w io.Writer, level Verbosity) (*Logger, error) {
+func NewLoggerToWriter(w io.Writer, level Verbosity) (Logger, error) {
 	lvl, err := level.Level()
 	if err != nil {
-		return nil, err
+		return Logger{}, err
 	}
 
-	return &Logger{log: log.NewLogger(log.WithLevel(lvl.Level()), log.WithOutput(w))}, nil
+	return Logger{log.NewLogger(log.WithLevel(lvl.Level()), log.WithOutput(w))}, nil
 }
 
 // NewNop returns a logger that discards everything, for tests that do not care
 // about log output.
-func NewNop() *Logger {
-	return &Logger{log: log.NewNop()}
+func NewNop() Logger {
+	return Logger{log.NewNop()}
 }
 
 // NewLoggerFromSlog adapts an existing pkg/log logger, so that a caller which
 // already built one does not have to reconfigure it.
 func NewLoggerFromSlog(l *log.Logger) Logger {
-	return Logger{log: l}
+	return Logger{l}
 }
 
 // Named appends name to the logger's dotted trace path, e.g. a logger named
@@ -135,92 +141,65 @@ func NewLoggerFromSlog(l *log.Logger) Logger {
 // "local-storage-class-controller.reconcile". Use it instead of hand-writing a
 // "[Component]" prefix into the message.
 func (l Logger) Named(name string) Logger {
-	return Logger{log: l.unwrap().Named(name)}
+	return Logger{l.Logger.Named(name)}
 }
 
 // With returns a logger that attaches the given key/value pairs to every
 // record. Use it for values that are constant for a unit of work, such as a
 // traceID or a volumeID, instead of interpolating them into each message.
 func (l Logger) With(args ...any) Logger {
-	return Logger{log: l.unwrap().With(args...)}
+	return Logger{l.Logger.With(args...)}
 }
 
-// SetLevel changes the emitted level in place, on every logger derived from this
-// one, without recreating it.
-func (l Logger) SetLevel(level Verbosity) error {
+// SetVerbosity changes the emitted level in place, on every logger derived from
+// this one, without recreating it.
+//
+// Named SetVerbosity rather than SetLevel so that it does not shadow the embedded
+// SetLevel, which takes a log.Level instead of the numeric Verbosity.
+func (l Logger) SetVerbosity(level Verbosity) error {
 	lvl, err := level.Level()
 	if err != nil {
 		return err
 	}
 
-	l.unwrap().SetLevel(lvl)
+	l.SetLevel(lvl)
 	return nil
 }
 
 // GetSlogLogger returns the underlying logger, for the few APIs that take one
 // directly.
 func (l Logger) GetSlogLogger() *log.Logger {
-	return l.unwrap()
+	return l.Logger
 }
 
 // GetLogger returns a logr view of this logger, for libraries that accept only
 // logr — controller-runtime's manager.Options.Logger in particular.
 func (l Logger) GetLogger() logr.Logger {
-	return logr.FromSlogHandler(l.unwrap().Handler())
-}
-
-// Error logs at error level. The error is attached as a structured field via
-// log.Err, and the underlying logger appends a full stack trace.
-//
-// This one delegates to the library instead of going through emit, because the
-// stack trace is injected by log.Logger.Error itself. The trace supersedes the
-// "source" field, which the handler drops when a trace is present, so nothing is
-// lost by not fixing up the caller frame here.
-func (l Logger) Error(err error, message string, keysAndValues ...interface{}) {
-	l.unwrap().Error(message, append([]any{log.Err(err)}, keysAndValues...)...)
-}
-
-func (l Logger) Warning(message string, keysAndValues ...interface{}) {
-	l.emit(log.LevelWarn, message, keysAndValues)
-}
-
-func (l Logger) Info(message string, keysAndValues ...interface{}) {
-	l.emit(log.LevelInfo, message, keysAndValues)
-}
-
-func (l Logger) Debug(message string, keysAndValues ...interface{}) {
-	l.emit(log.LevelDebug, message, keysAndValues)
+	return logr.FromSlogHandler(l.Handler())
 }
 
 // Trace logs at the trace level, which plain slog does not provide.
-func (l Logger) Trace(message string, keysAndValues ...interface{}) {
-	l.emit(log.LevelTrace, message, keysAndValues)
-}
-
-// emit builds the record by hand so that the "source" field names the call site
-// rather than this file.
 //
-// Calling log.Logger.Info and friends directly would make slog capture the
-// program counter of the wrapper, so every line would report
-// logger/logger.go. The previous klog-based logger avoided that with
-// WithCallDepth(1); this is the slog equivalent.
-func (l Logger) emit(level log.Level, message string, keysAndValues []any) {
-	lg := l.unwrap()
+// Info, Debug, Warn and Error come from the embedded logger, so slog attributes
+// them to their call site by itself. Trace is a method on this type, so the
+// record is built by hand to keep "source" pointing at the caller instead of this
+// file.
+func (l Logger) Trace(message string, args ...any) {
 	ctx := context.Background()
-	slevel := slog.Level(level)
+	level := slog.Level(log.LevelTrace)
 
-	if !lg.Enabled(ctx, slevel) {
+	if !l.Enabled(ctx, level) {
 		return
 	}
 
-	// Skip runtime.Callers, emit itself, and the exported method that called it.
+	// Skip runtime.Callers, Trace itself, and land on the caller.
 	var pcs [1]uintptr
-	runtime.Callers(3, pcs[:])
+	runtime.Callers(2, pcs[:])
 
-	record := slog.NewRecord(time.Now(), slevel, message, pcs[0])
-	record.Add(keysAndValues...)
+	record := slog.NewRecord(time.Now(), level, message, pcs[0])
+	record.Add(args...)
 
 	// The error is not actionable: the handler only fails if the record cannot be
 	// serialised, and there is nowhere left to report that.
-	_ = lg.Handler().Handle(ctx, record)
+	_ = l.Handler().Handle(ctx, record)
 }

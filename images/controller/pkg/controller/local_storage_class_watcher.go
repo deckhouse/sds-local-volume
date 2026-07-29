@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"time"
 
@@ -94,21 +95,24 @@ func RunLocalStorageClassWatcherController(
 	metrics monitoring.Recorder,
 ) (controller.Controller, error) {
 	cl := mgr.GetClient()
+	log = log.Named(LocalStorageClassCtrlName)
 
 	c, err := controller.New(LocalStorageClassCtrlName, mgr, controller.Options{
 		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (res reconcile.Result, err error) {
 			defer metrics.ObserveReconcile(LocalStorageClassCtrlName, time.Now(), &res, &err)
 
-			log.Info(fmt.Sprintf("[LocalStorageClassReconciler] starts Reconcile for the LocalStorageClass %s", request.Name))
+			log := log.Named("reconcile").With("localStorageClass", request.Name)
+
+			log.Info("start")
 			lsc := &slv.LocalStorageClass{}
 			err = cl.Get(ctx, request.NamespacedName, lsc)
 			if err != nil && !errors2.IsNotFound(err) {
-				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] unable to get LocalStorageClass, name: %s", request.Name))
+				log.Error("unable to get the LocalStorageClass", logger.Err(err))
 				return reconcile.Result{}, err
 			}
 
 			if lsc.Name == "" {
-				log.Info(fmt.Sprintf("[LocalStorageClassReconciler] seems like the LocalStorageClass for the request %s was deleted. Reconcile retrying will stop.", request.Name))
+				log.Info("the LocalStorageClass was deleted, stopping the reconcile")
 				// The resource is gone, so stop exporting its phase gauge.
 				metrics.ForgetLocalStorageClass(request.Name)
 				return reconcile.Result{}, nil
@@ -117,7 +121,7 @@ func RunLocalStorageClassWatcherController(
 			scList := &v1.StorageClassList{}
 			err = cl.List(ctx, scList)
 			if err != nil {
-				log.Error(err, "[LocalStorageClassReconciler] unable to list Storage Classes")
+				log.Error("unable to list the StorageClasses", logger.Err(err))
 				return reconcile.Result{}, err
 			}
 
@@ -127,7 +131,7 @@ func RunLocalStorageClassWatcherController(
 			// which is exactly the bug this controller is meant to prevent.
 			ignoredLabelPrefixes, err := getStorageClassLabelIgnoredPrefixes(ctx, cl, cfg.ControllerNamespace, cfg.ConfigSecretName)
 			if err != nil {
-				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] unable to load storage class label ignored prefixes from secret %s/%s; requeueing without applying reconcile", cfg.ControllerNamespace, cfg.ConfigSecretName))
+				log.Error("unable to load the ignored storage class label prefixes, requeueing without reconciling", logger.Err(err), slog.String("secretNamespace", cfg.ControllerNamespace), slog.String("secretName", cfg.ConfigSecretName))
 				return reconcile.Result{
 					RequeueAfter: cfg.RequeueStorageClassInterval * time.Second,
 				}, nil
@@ -135,7 +139,7 @@ func RunLocalStorageClassWatcherController(
 
 			shouldRequeue, err := RunEventReconcile(ctx, cl, log, scList, lsc, ignoredLabelPrefixes)
 			if err != nil {
-				log.Error(err, fmt.Sprintf("[LocalStorageClassReconciler] an error occurred while reconciles the LocalStorageClass, name: %s", lsc.Name))
+				log.Error("unable to reconcile the LocalStorageClass", logger.Err(err))
 			}
 
 			// RunEventReconcile updates lsc.Status.Phase in place, so this reads
@@ -146,29 +150,29 @@ func RunLocalStorageClassWatcherController(
 			}
 
 			if shouldRequeue {
-				log.Warning(fmt.Sprintf("[LocalStorageClassReconciler] Reconciler will requeue the request, name: %s", request.Name))
+				log.Warn("requeueing the request")
 				return reconcile.Result{
 					RequeueAfter: cfg.RequeueStorageClassInterval * time.Second,
 				}, nil
 			}
 
-			log.Info(fmt.Sprintf("[LocalStorageClassReconciler] ends Reconcile for the LocalStorageClass %q", request.Name))
+			log.Info("done")
 			return reconcile.Result{}, nil
 		}),
 	})
 	if err != nil {
-		log.Error(err, "[RunLocalStorageClassWatcherController] unable to create controller")
+		log.Error("unable to create the controller", logger.Err(err))
 		return nil, err
 	}
 
 	err = c.Watch(source.Kind(mgr.GetCache(), &slv.LocalStorageClass{}, handler.TypedFuncs[*slv.LocalStorageClass, reconcile.Request]{
 		CreateFunc: func(_ context.Context, e event.TypedCreateEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-			log.Info(fmt.Sprintf("[CreateFunc] get event for LocalStorageClass %q. Add to the queue", e.Object.GetName()))
+			log.Named("create-event").Info("enqueueing the LocalStorageClass", "localStorageClass", e.Object.GetName())
 			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: e.Object.GetNamespace(), Name: e.Object.GetName()}}
 			q.Add(request)
 		},
 		UpdateFunc: func(_ context.Context, e event.TypedUpdateEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-			log.Info(fmt.Sprintf("[UpdateFunc] get event for LocalStorageClass %q. Check if it should be reconciled", e.ObjectNew.GetName()))
+			log.Named("update-event").Info("checking whether the LocalStorageClass should be reconciled", "localStorageClass", e.ObjectNew.GetName())
 
 			oldLsc := e.ObjectOld
 			newLsc := e.ObjectNew
@@ -176,11 +180,11 @@ func RunLocalStorageClassWatcherController(
 			if reflect.DeepEqual(oldLsc.Spec, newLsc.Spec) &&
 				reflect.DeepEqual(oldLsc.Labels, newLsc.Labels) &&
 				newLsc.DeletionTimestamp == nil {
-				log.Info(fmt.Sprintf("[UpdateFunc] an update event for the LocalStorageClass %s has no Spec or Labels updates. It will not be reconciled", newLsc.Name))
+				log.Named("update-event").Info("the update touched neither spec nor labels, not reconciling", "localStorageClass", newLsc.Name)
 				return
 			}
 
-			log.Info(fmt.Sprintf("[UpdateFunc] the LocalStorageClass %q will be reconciled. Add to the queue", newLsc.Name))
+			log.Named("update-event").Info("enqueueing the LocalStorageClass", "localStorageClass", newLsc.Name)
 			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: newLsc.Namespace, Name: newLsc.Name}}
 			q.Add(request)
 		},
@@ -188,7 +192,7 @@ func RunLocalStorageClassWatcherController(
 	),
 	)
 	if err != nil {
-		log.Error(err, "[RunLocalStorageClassWatcherController] unable to watch the events")
+		log.Error("unable to watch LocalStorageClass events", logger.Err(err))
 		return nil, err
 	}
 
@@ -204,10 +208,10 @@ func RunLocalStorageClassWatcherController(
 				if s == nil || s.Namespace != cfg.ControllerNamespace || s.Name != cfg.ConfigSecretName {
 					return nil
 				}
-				log.Info(fmt.Sprintf("[SecretWatcher] controller-config Secret %s/%s changed; enqueueing all LocalStorageClasses", s.Namespace, s.Name))
+				log.Named("secret-watcher").Info("the controller-config Secret changed, enqueueing all LocalStorageClasses", "secretNamespace", s.Namespace, "secretName", s.Name)
 				lscList := &slv.LocalStorageClassList{}
 				if err := cl.List(ctx, lscList); err != nil {
-					log.Error(err, "[SecretWatcher] unable to list LocalStorageClasses for re-reconcile after config Secret change")
+					log.Named("secret-watcher").Error("unable to list the LocalStorageClasses after a config Secret change", logger.Err(err))
 					return nil
 				}
 				reqs := make([]reconcile.Request, 0, len(lscList.Items))
@@ -221,7 +225,7 @@ func RunLocalStorageClassWatcherController(
 		),
 	))
 	if err != nil {
-		log.Error(err, "[RunLocalStorageClassWatcherController] unable to watch the controller-config Secret")
+		log.Error("unable to watch the controller-config Secret", logger.Err(err))
 		return nil, err
 	}
 
@@ -237,7 +241,7 @@ func RunLocalStorageClassWatcherController(
 			func(ctx context.Context, _ *snc.LVMVolumeGroup) []reconcile.Request {
 				lscList := &slv.LocalStorageClassList{}
 				if err := cl.List(ctx, lscList); err != nil {
-					log.Error(err, "[LVGWatcher] unable to list LocalStorageClasses for re-reconcile after LVMVolumeGroup change")
+					log.Named("lvg-watcher").Error("unable to list the LocalStorageClasses after an LVMVolumeGroup change", logger.Err(err))
 					return nil
 				}
 				reqs := make([]reconcile.Request, 0, len(lscList.Items))
@@ -267,7 +271,7 @@ func RunLocalStorageClassWatcherController(
 		},
 	))
 	if err != nil {
-		log.Error(err, "[RunLocalStorageClassWatcherController] unable to watch LVMVolumeGroups")
+		log.Error("unable to watch the LVMVolumeGroups", logger.Err(err))
 		return nil, err
 	}
 
@@ -282,7 +286,7 @@ func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger,
 	lvgList := &snc.LVMVolumeGroupList{}
 	if lsc.DeletionTimestamp == nil {
 		if err := cl.List(ctx, lvgList); err != nil {
-			log.Error(err, fmt.Sprintf("[runEventReconcile] unable to list LVMVolumeGroups for the LocalStorageClass %s", lsc.Name))
+			log.Error("unable to list the LVMVolumeGroups for the LocalStorageClass", logger.Err(err), slog.String("localStorageClass", lsc.Name))
 			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
 			if upError != nil {
 				err = errors.Join(err, fmt.Errorf("[runEventReconcile] unable to update the LocalStorageClass %s status: %w", lsc.Name, upError))
@@ -293,7 +297,7 @@ func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger,
 
 	effectiveLVGs, err := resolveEffectiveLVGs(lsc, lvgList)
 	if err != nil && lsc.DeletionTimestamp == nil {
-		log.Error(err, fmt.Sprintf("[runEventReconcile] unable to resolve LVMVolumeGroups for the LocalStorageClass %s", lsc.Name))
+		log.Error("unable to resolve the LVMVolumeGroups for the LocalStorageClass", logger.Err(err), slog.String("localStorageClass", lsc.Name))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
 		if upError != nil {
 			err = errors.Join(err, fmt.Errorf("[runEventReconcile] unable to update the LocalStorageClass %s status: %w", lsc.Name, upError))
@@ -311,19 +315,19 @@ func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger,
 		return true, err
 	}
 
-	log.Debug(fmt.Sprintf("[runEventReconcile] reconcile operation: %s", recType))
+	log.Debug("resolved the reconcile type", "reconcileType", recType)
 	switch recType {
 	case CreateReconcile:
-		log.Debug(fmt.Sprintf("[runEventReconcile] CreateReconcile starts reconciliataion for the LocalStorageClass, name: %s", lsc.Name))
+		log.Debug("running the create reconcile", "localStorageClass", lsc.Name)
 		return reconcileLSCCreateFunc(ctx, cl, log, scList, lsc, lvgList, effectiveLVGs, ignoredLabelPrefixes)
 	case UpdateReconcile:
-		log.Debug(fmt.Sprintf("[runEventReconcile] UpdateReconcile starts reconciliataion for the LocalStorageClass, name: %s", lsc.Name))
+		log.Debug("running the update reconcile", "localStorageClass", lsc.Name)
 		return reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc, lvgList, effectiveLVGs, ignoredLabelPrefixes)
 	case DeleteReconcile:
-		log.Debug(fmt.Sprintf("[runEventReconcile] DeleteReconcile starts reconciliataion for the LocalStorageClass, name: %s", lsc.Name))
+		log.Debug("running the delete reconcile", "localStorageClass", lsc.Name)
 		return reconcileLSCDeleteFunc(ctx, cl, log, scList, lsc)
 	default:
-		log.Debug(fmt.Sprintf("[runEventReconcile] the LocalStorageClass %s should not be reconciled", lsc.Name))
+		log.Debug("the LocalStorageClass should not be reconciled", "localStorageClass", lsc.Name)
 	}
 
 	return false, nil

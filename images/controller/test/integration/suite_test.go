@@ -119,7 +119,7 @@ var _ = BeforeSuite(func() {
 	}
 	// The zero Recorder discards every observation, so the suite does not need a
 	// metrics registry to exercise the reconcile behaviour.
-	_, err = controller.RunLocalStorageClassWatcherController(mgr, cfgParams, *suiteLog, monitoring.Recorder{})
+	_, err = controller.RunLocalStorageClassWatcherController(mgr, cfgParams, suiteLog, monitoring.Recorder{})
 	Expect(err).NotTo(HaveOccurred())
 
 	go func() {

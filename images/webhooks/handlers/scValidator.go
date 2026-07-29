@@ -48,7 +48,7 @@ func SCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 
 		if sc.Provisioner == localCSIProvisioner {
 			if arReview.UserInfo.Username == allowedUserName {
-				log.Info(fmt.Sprintf("User %s is allowed to manage storage classes with provisioner %s", arReview.UserInfo.Username, localCSIProvisioner))
+				log.Info("the user is allowed to manage StorageClasses of this provisioner", "user", arReview.UserInfo.Username, "provisioner", localCSIProvisioner)
 				return &kwhvalidating.ValidatorResult{Valid: true}, nil
 			}
 			if arReview.Operation == model.OperationUpdate {
@@ -58,12 +58,12 @@ func SCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 				}
 
 				if !changed {
-					log.Info(fmt.Sprintf("User %s is allowed to change annotations for storage classes with provisioner %s", arReview.UserInfo.Username, localCSIProvisioner))
+					log.Info("the user is allowed to change annotations of StorageClasses of this provisioner", "user", arReview.UserInfo.Username, "provisioner", localCSIProvisioner)
 					return &kwhvalidating.ValidatorResult{Valid: true}, nil
 				}
 			}
 
-			log.Info(fmt.Sprintf("User %s is not allowed to manage storage classes with provisioner %s", arReview.UserInfo.Username, localCSIProvisioner))
+			log.Info("the user is not allowed to manage StorageClasses of this provisioner", "user", arReview.UserInfo.Username, "provisioner", localCSIProvisioner)
 			return &kwhvalidating.ValidatorResult{
 				Valid:   false,
 				Message: fmt.Sprintf("Direct modifications to the StorageClass (other than annotations) with the provisioner %s are not allowed. Please use LocalStorageClass for such operations.", localCSIProvisioner),
@@ -88,43 +88,43 @@ func isStorageClassChangedExceptAnnotations(log logger.Logger, oldObjectRaw, new
 	}
 
 	log.Info("=====================================")
-	log.Info(fmt.Sprintf("Comparing old object: %+v", oldSC))
+	log.Debug("comparing the StorageClass revisions", "old", fmt.Sprintf("%+v", oldSC), "new", fmt.Sprintf("%+v", newSC))
 	log.Info("=====================================")
-	log.Info(fmt.Sprintf("Comparing new object: %+v", newSC))
+
 	log.Info("=====================================")
 
 	if oldSC.Provisioner != newSC.Provisioner {
-		log.Info(fmt.Sprintf("Provisioner changed from %s to %s", oldSC.Provisioner, newSC.Provisioner))
+		log.Info("the provisioner changed", "field", "provisioner", "old", oldSC.Provisioner, "new", newSC.Provisioner)
 		return true, nil
 	}
 
 	if *oldSC.VolumeBindingMode != *newSC.VolumeBindingMode {
-		log.Info(fmt.Sprintf("VolumeBindingMode changed from %s to %s", *oldSC.VolumeBindingMode, *newSC.VolumeBindingMode))
+		log.Info("the volume binding mode changed", "field", "volumeBindingMode", "old", *oldSC.VolumeBindingMode, "new", *newSC.VolumeBindingMode)
 		return true, nil
 	}
 
 	if *oldSC.ReclaimPolicy != *newSC.ReclaimPolicy {
-		log.Info(fmt.Sprintf("ReclaimPolicy changed from %s to %s", *oldSC.ReclaimPolicy, *newSC.ReclaimPolicy))
+		log.Info("the reclaim policy changed", "field", "reclaimPolicy", "old", *oldSC.ReclaimPolicy, "new", *newSC.ReclaimPolicy)
 		return true, nil
 	}
 
 	if !reflect.DeepEqual(oldSC.Parameters, newSC.Parameters) {
-		log.Info(fmt.Sprintf("Parameters changed from %v to %v", oldSC.Parameters, newSC.Parameters))
+		log.Info("the parameters changed", "field", "parameters", "old", fmt.Sprintf("%v", oldSC.Parameters), "new", fmt.Sprintf("%v", newSC.Parameters))
 		return true, nil
 	}
 
 	if *oldSC.AllowVolumeExpansion != *newSC.AllowVolumeExpansion {
-		log.Info(fmt.Sprintf("AllowVolumeExpansion changed from %v to %v", *oldSC.AllowVolumeExpansion, *newSC.AllowVolumeExpansion))
+		log.Info("allowVolumeExpansion changed", "field", "allowVolumeExpansion", "old", *oldSC.AllowVolumeExpansion, "new", *newSC.AllowVolumeExpansion)
 		return true, nil
 	}
 
 	if !reflect.DeepEqual(oldSC.MountOptions, newSC.MountOptions) {
-		log.Info(fmt.Sprintf("MountOptions changed from %v to %v", oldSC.MountOptions, newSC.MountOptions))
+		log.Info("the mount options changed", "field", "mountOptions", "old", fmt.Sprintf("%v", oldSC.MountOptions), "new", fmt.Sprintf("%v", newSC.MountOptions))
 		return true, nil
 	}
 
 	if !reflect.DeepEqual(oldSC.AllowedTopologies, newSC.AllowedTopologies) {
-		log.Info(fmt.Sprintf("AllowedTopologies changed from %v to %v", oldSC.AllowedTopologies, newSC.AllowedTopologies))
+		log.Info("the allowed topologies changed", "field", "allowedTopologies", "old", fmt.Sprintf("%v", oldSC.AllowedTopologies), "new", fmt.Sprintf("%v", newSC.AllowedTopologies))
 		return true, nil
 	}
 
@@ -135,7 +135,7 @@ func isStorageClassChangedExceptAnnotations(log logger.Logger, oldObjectRaw, new
 	oldSC.ManagedFields = nil
 
 	if !reflect.DeepEqual(oldSC.ObjectMeta, newSC.ObjectMeta) {
-		log.Info(fmt.Sprintf("ObjectMeta changed from %+v to %+v", oldSC.ObjectMeta, newSC.ObjectMeta))
+		log.Info("the object metadata changed", "field", "objectMeta", "old", fmt.Sprintf("%+v", oldSC.ObjectMeta), "new", fmt.Sprintf("%+v", newSC.ObjectMeta))
 		return true, nil
 	}
 

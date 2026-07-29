@@ -35,7 +35,7 @@ import (
 func TestRunLocalCSINodeWatcherController(t *testing.T) {
 	cl := NewFakeClient()
 	ctx := context.Background()
-	log := logger.Logger{}
+	log := logger.NewNop()
 
 	t.Run("getSecret_returns_secret", func(t *testing.T) {
 		secretName := "test-name"

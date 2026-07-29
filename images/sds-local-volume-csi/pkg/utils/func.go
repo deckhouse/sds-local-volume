@@ -19,6 +19,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
@@ -52,8 +53,8 @@ const (
 func CreateLVMLogicalVolumeSnapshot(
 	ctx context.Context,
 	kc client.Client,
-	log *logger.Logger,
-	traceID, name string,
+	log logger.Logger,
+	name string,
 	lvmLogicalVolumeSnapshotSpec snc.LVMLogicalVolumeSnapshotSpec,
 ) (*snc.LVMLogicalVolumeSnapshot, error) {
 	llvs := &snc.LVMLogicalVolumeSnapshot{
@@ -65,39 +66,39 @@ func CreateLVMLogicalVolumeSnapshot(
 		Spec: lvmLogicalVolumeSnapshotSpec,
 	}
 
-	log.Trace(fmt.Sprintf("[CreateLVMLogicalVolumeSnapshot][traceID:%s][volumeID:%s] LVMLogicalVolumeSnapshot: %+v", traceID, name, llvs))
+	log.Trace("built the LVMLogicalVolumeSnapshot", "llvs", fmt.Sprintf("%+v", llvs))
 
 	return llvs, kc.Create(ctx, llvs)
 }
 
-func DeleteLVMLogicalVolumeSnapshot(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeSnapshotName string) error {
+func DeleteLVMLogicalVolumeSnapshot(ctx context.Context, kc client.Client, log logger.Logger, lvmLogicalVolumeSnapshotName string) error {
 	var err error
 
-	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolumeSnapshot][traceID:%s][volumeID:%s] Trying to find LVMLogicalVolumeSnapshot", traceID, lvmLogicalVolumeSnapshotName))
+	log.Trace("Trying to find LVMLogicalVolumeSnapshot")
 	llvs, err := GetLVMLogicalVolumeSnapshot(ctx, kc, lvmLogicalVolumeSnapshotName, "")
 	if err != nil {
 		return fmt.Errorf("get LVMLogicalVolumeSnapshot %s: %w", lvmLogicalVolumeSnapshotName, err)
 	}
 
-	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolumeSnapshot][traceID:%s][volumeID:%s] LVMLogicalVolumeSnapshot found: %+v (status: %+v)", traceID, lvmLogicalVolumeSnapshotName, llvs, llvs.Status))
-	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolumeSnapshot][traceID:%s][volumeID:%s] Removing finalizer %s if exists", traceID, lvmLogicalVolumeSnapshotName, SDSLocalVolumeCSIFinalizer))
+	log.Trace("found the LVMLogicalVolumeSnapshot", "llvs", fmt.Sprintf("%+v", llvs), "status", fmt.Sprintf("%+v", llvs.Status))
+	log.Trace("removing the finalizer if present", "finalizer", SDSLocalVolumeCSIFinalizer)
 
 	removed, err := removeLLVSFinalizerIfExist(ctx, kc, log, llvs, SDSLocalVolumeCSIFinalizer)
 	if err != nil {
 		return fmt.Errorf("remove finalizers from DeleteLVMLogicalVolumeSnapshot %s: %w", lvmLogicalVolumeSnapshotName, err)
 	}
 	if removed {
-		log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolumeSnapshot][traceID:%s][volumeID:%s] finalizer %s removed from LVMLogicalVolumeSnapshot %s", traceID, lvmLogicalVolumeSnapshotName, SDSLocalVolumeCSIFinalizer, lvmLogicalVolumeSnapshotName))
+		log.Trace("removed the finalizer from the LVMLogicalVolumeSnapshot", "finalizer", SDSLocalVolumeCSIFinalizer, "llvsName", lvmLogicalVolumeSnapshotName)
 	} else {
-		log.Warning(fmt.Sprintf("[DeleteLVMLogicalVolumeSnapshot][traceID:%s][volumeID:%s] finalizer %s not found in LVMLogicalVolumeSnapshot %s", traceID, lvmLogicalVolumeSnapshotName, SDSLocalVolumeCSIFinalizer, lvmLogicalVolumeSnapshotName))
+		log.Warn("the finalizer was not present on the LVMLogicalVolumeSnapshot", "finalizer", SDSLocalVolumeCSIFinalizer, "llvsName", lvmLogicalVolumeSnapshotName)
 	}
 
-	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolumeSnapshot][traceID:%s][volumeID:%s] Trying to delete LVMLogicalVolumeSnapshot", traceID, lvmLogicalVolumeSnapshotName))
+	log.Trace("Trying to delete LVMLogicalVolumeSnapshot")
 	err = kc.Delete(ctx, llvs)
 	return err
 }
 
-func removeLLVSFinalizerIfExist(ctx context.Context, kc client.Client, log *logger.Logger, llvs *snc.LVMLogicalVolumeSnapshot, finalizer string) (bool, error) {
+func removeLLVSFinalizerIfExist(ctx context.Context, kc client.Client, log logger.Logger, llvs *snc.LVMLogicalVolumeSnapshot, finalizer string) (bool, error) {
 	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
 		removed := false
 		for i, val := range llvs.Finalizers {
@@ -112,7 +113,7 @@ func removeLLVSFinalizerIfExist(ctx context.Context, kc client.Client, log *logg
 			return false, nil
 		}
 
-		log.Trace(fmt.Sprintf("[removeLLVSFinalizerIfExist] removing finalizer %s from LVMLogicalVolumeSnapshot %s", finalizer, llvs.Name))
+		log.Trace("removing the finalizer from the LVMLogicalVolumeSnapshot", "finalizer", finalizer, "llvsName", llvs.Name)
 		err := kc.Update(ctx, llvs)
 		if err == nil {
 			return true, nil
@@ -123,7 +124,7 @@ func removeLLVSFinalizerIfExist(ctx context.Context, kc client.Client, log *logg
 		}
 
 		if attempt < KubernetesAPIRequestLimit-1 {
-			log.Trace(fmt.Sprintf("[removeLLVSFinalizerIfExist] conflict while updating LVMLogicalVolumeSnapshot %s, retrying...", llvs.Name))
+			log.Trace("conflict while updating the LVMLogicalVolumeSnapshot, retrying", "llvsName", llvs.Name)
 			select {
 			case <-ctx.Done():
 				return false, ctx.Err()
@@ -145,17 +146,16 @@ func removeLLVSFinalizerIfExist(ctx context.Context, kc client.Client, log *logg
 func WaitForLLVSStatusUpdate(
 	ctx context.Context,
 	kc client.Client,
-	log *logger.Logger,
-	traceID string,
+	log logger.Logger,
 	lvmLogicalVolumeSnapshotName string,
 ) (int, error) {
 	var attemptCounter int
-	log.Info(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Waiting for LVM Logical Volume Snapshot status update", traceID, lvmLogicalVolumeSnapshotName))
+	log.Info("Waiting for LVM Logical Volume Snapshot status update")
 	for {
 		attemptCounter++
 		select {
 		case <-ctx.Done():
-			log.Warning(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] context done. Failed to wait for LVM Logical Volume Snapshot status update", traceID, lvmLogicalVolumeSnapshotName))
+			log.Warn("context done. Failed to wait for LVM Logical Volume Snapshot status update")
 			return attemptCounter, ctx.Err()
 		default:
 			time.Sleep(500 * time.Millisecond)
@@ -167,11 +167,11 @@ func WaitForLLVSStatusUpdate(
 		}
 
 		if attemptCounter%10 == 0 {
-			log.Info(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt: %d,LVM Logical Volume Snapshot: %+v", traceID, lvmLogicalVolumeSnapshotName, attemptCounter, llvs))
+			log.Info("polling the LVMLogicalVolumeSnapshot", "attempt", attemptCounter, "llvs", fmt.Sprintf("%+v", llvs))
 		}
 
 		if llvs.Status != nil {
-			log.Trace(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot status: %+v, full LVMLogicalVolumeSnapshot resource: %+v", traceID, lvmLogicalVolumeSnapshotName, attemptCounter, llvs.Status, llvs))
+			log.Trace("polled the LVMLogicalVolumeSnapshot", "attempt", attemptCounter, "status", fmt.Sprintf("%+v", llvs.Status), "llvs", fmt.Sprintf("%+v", llvs))
 
 			if llvs.DeletionTimestamp != nil {
 				return attemptCounter, fmt.Errorf("failed to create LVM logical volume snapshot on node for LVMLogicalVolumeSnapshot %s, reason: LVMLogicalVolumeSnapshot is being deleted", lvmLogicalVolumeSnapshotName)
@@ -182,10 +182,10 @@ func WaitForLLVSStatusUpdate(
 			}
 
 			if llvs.Status.Phase == LLVSStatusCreated {
-				log.Trace(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot created but size does not match the requested size yet. Waiting...", traceID, lvmLogicalVolumeSnapshotName, attemptCounter))
+				log.Trace("the LVMLogicalVolumeSnapshot is created but its size does not match the request yet, waiting", "attempt", attemptCounter)
 				return attemptCounter, nil
 			}
-			log.Trace(fmt.Sprintf("[WaitForLLVSStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume Snapshot status is not 'Created' yet. Waiting...", traceID, lvmLogicalVolumeSnapshotName, attemptCounter))
+			log.Trace("the LVMLogicalVolumeSnapshot is not in the Created phase yet, waiting", "attempt", attemptCounter)
 		}
 	}
 }
@@ -201,47 +201,47 @@ func GetLVMLogicalVolumeSnapshot(ctx context.Context, kc client.Client, lvmLogic
 	return &llvs, err
 }
 
-func GetLSCBeforeLLVDelete(ctx context.Context, cl client.Client, log logger.Logger, volumeID, traceID string) (*slv.LocalStorageClass, error) {
-	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] Fetching PersistentVolume with VolumeId: %s", traceID, volumeID))
+func GetLSCBeforeLLVDelete(ctx context.Context, cl client.Client, log logger.Logger, volumeID string) (*slv.LocalStorageClass, error) {
+	log.Info("fetching the PersistentVolume", "volumeID", volumeID)
 	var pv corev1.PersistentVolume
 	if err := cl.Get(ctx, client.ObjectKey{Name: volumeID}, &pv); err != nil {
 		if kerrors.IsNotFound(err) {
-			log.Error(err, fmt.Sprintf("[DeleteVolume][traceID:%s] PersistentVolume %s not found: %v", traceID, volumeID, err))
+			log.Error("the PersistentVolume was not found", logger.Err(err), slog.String("volumeID", volumeID))
 			return nil, status.Errorf(codes.NotFound, "PersistentVolume %s not found: %v", volumeID, err)
 		}
-		log.Error(err, "[DeleteVolume][traceID:%s] Failed to fetch PersistentVolume: %v", traceID, err)
+		log.Error("unable to fetch the PersistentVolume", logger.Err(err), slog.String("volumeID", volumeID))
 		return nil, status.Errorf(codes.Internal, "Failed to fetch PersistentVolume %s: %v", volumeID, err)
 	}
 
-	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] PersistentVolume %s successfully fetched", traceID, volumeID))
+	log.Info("fetched the PersistentVolume", "volumeID", volumeID)
 
 	storageClassName := pv.Spec.StorageClassName
 	if storageClassName == "" {
-		log.Error(nil, "[DeleteVolume][traceID:%s] PersistentVolume %s does not have a StorageClassName defined", traceID, volumeID)
+		log.Error("the PersistentVolume has no StorageClassName defined", slog.String("volumeID", volumeID))
 		return nil, status.Error(codes.InvalidArgument, "PersistentVolume does not have a StorageClassName defined")
 	}
-	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] StorageClassName for PersistentVolume %s: %s", traceID, volumeID, storageClassName))
+	log.Info("resolved the PersistentVolume storage class", "volumeID", volumeID, "storageClassName", storageClassName)
 
-	log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] Fetching LocalStorageClass with name: %s", traceID, storageClassName))
+	log.Info("fetching the LocalStorageClass", "storageClassName", storageClassName)
 
 	var localStorageClass slv.LocalStorageClass
 
 	err := cl.Get(ctx, client.ObjectKey{Name: storageClassName}, &localStorageClass)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			log.Error(err, fmt.Sprintf("[DeleteVolume][traceID:%s] LocalStorageClass %s not found: %v", traceID, storageClassName, err))
+			log.Error("the LocalStorageClass was not found", logger.Err(err), slog.String("storageClassName", storageClassName))
 		} else {
-			log.Error(err, fmt.Sprintf("[DeleteVolume][traceID:%s] Error fetching LocalStorageClass %s: %v", traceID, storageClassName, err))
+			log.Error("unable to fetch the LocalStorageClass", logger.Err(err), slog.String("storageClassName", storageClassName))
 			return nil, status.Errorf(codes.Internal, "Failed to fetch LocalStorageClass: %v", err)
 		}
 	} else {
-		log.Info(fmt.Sprintf("[DeleteVolume][traceID:%s] Successfully fetched LocalStorageClass: %s", traceID, storageClassName))
+		log.Info("fetched the LocalStorageClass", "storageClassName", storageClassName)
 	}
 
 	return &localStorageClass, nil
 }
 
-func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, traceID, name string, lvmLogicalVolumeSpec snc.LVMLogicalVolumeSpec) (*snc.LVMLogicalVolume, error) {
+func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, log logger.Logger, name string, lvmLogicalVolumeSpec snc.LVMLogicalVolumeSpec) (*snc.LVMLogicalVolume, error) {
 	var err error
 	llv := &snc.LVMLogicalVolume{
 		ObjectMeta: metav1.ObjectMeta{
@@ -252,16 +252,16 @@ func CreateLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 		Spec: lvmLogicalVolumeSpec,
 	}
 
-	log.Trace(fmt.Sprintf("[CreateLVMLogicalVolume][traceID:%s][volumeID:%s] LVMLogicalVolume: %+v", traceID, name, llv))
+	log.Trace("built the LVMLogicalVolume", "llv", fmt.Sprintf("%+v", llv))
 
 	err = kc.Create(ctx, llv)
 	return llv, err
 }
 
-func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, volumeCleanup string) error {
+func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log logger.Logger, lvmLogicalVolumeName, volumeCleanup string) error {
 	var err error
 
-	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Trying to find LVMLogicalVolume", traceID, lvmLogicalVolumeName))
+	log.Trace("Trying to find LVMLogicalVolume")
 	llv, err := GetLVMLogicalVolume(ctx, kc, lvmLogicalVolumeName, "")
 	if err != nil {
 		return fmt.Errorf("get LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
@@ -277,20 +277,20 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 		return fmt.Errorf("update LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
 	}
 
-	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] LVMLogicalVolume found: %+v (status: %+v)", traceID, lvmLogicalVolumeName, llv, llv.Status))
-	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Removing finalizer %s if exists", traceID, lvmLogicalVolumeName, SDSLocalVolumeCSIFinalizer))
+	log.Trace("found the LVMLogicalVolume", "llv", fmt.Sprintf("%+v", llv), "status", fmt.Sprintf("%+v", llv.Status))
+	log.Trace("removing the finalizer if present", "finalizer", SDSLocalVolumeCSIFinalizer)
 
 	removed, err := removeLLVFinalizerIfExist(ctx, kc, log, llv, SDSLocalVolumeCSIFinalizer)
 	if err != nil {
 		return fmt.Errorf("remove finalizers from LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
 	}
 	if removed {
-		log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] finalizer %s removed from LVMLogicalVolume %s", traceID, lvmLogicalVolumeName, SDSLocalVolumeCSIFinalizer, lvmLogicalVolumeName))
+		log.Trace("removed the finalizer from the LVMLogicalVolume", "finalizer", SDSLocalVolumeCSIFinalizer, "llvName", lvmLogicalVolumeName)
 	} else {
-		log.Warning(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] finalizer %s not found in LVMLogicalVolume %s", traceID, lvmLogicalVolumeName, SDSLocalVolumeCSIFinalizer, lvmLogicalVolumeName))
+		log.Warn("the finalizer was not present on the LVMLogicalVolume", "finalizer", SDSLocalVolumeCSIFinalizer, "llvName", lvmLogicalVolumeName)
 	}
 
-	log.Trace(fmt.Sprintf("[DeleteLVMLogicalVolume][traceID:%s][volumeID:%s] Trying to delete LVMLogicalVolume", traceID, lvmLogicalVolumeName))
+	log.Trace("Trying to delete LVMLogicalVolume")
 	err = kc.Delete(ctx, llv)
 	return err
 }
@@ -300,9 +300,9 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log *logger.L
 // that very object. Callers need the resulting size, so returning the resource
 // they waited for saves them a second GET and closes the window in which the
 // status could change between the wait and the re-read.
-func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logger, traceID, lvmLogicalVolumeName, namespace string, llvSize, extentSize resource.Quantity) (*snc.LVMLogicalVolume, int, error) {
+func WaitForStatusUpdate(ctx context.Context, kc client.Client, log logger.Logger, lvmLogicalVolumeName, namespace string, llvSize, extentSize resource.Quantity) (*snc.LVMLogicalVolume, int, error) {
 	var attemptCounter int
-	log.Info(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Waiting for LVM Logical Volume status update", traceID, lvmLogicalVolumeName))
+	log.Info("Waiting for LVM Logical Volume status update")
 
 	alignedSize, err := AlignSizeToExtent(llvSize, extentSize)
 	if err != nil {
@@ -313,7 +313,7 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 		attemptCounter++
 		select {
 		case <-ctx.Done():
-			log.Warning(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] context done. Failed to wait for LVM Logical Volume status update", traceID, lvmLogicalVolumeName))
+			log.Warn("context done. Failed to wait for LVM Logical Volume status update")
 			return nil, attemptCounter, ctx.Err()
 		default:
 			time.Sleep(500 * time.Millisecond)
@@ -325,11 +325,11 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 		}
 
 		if attemptCounter%10 == 0 {
-			log.Info(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt: %d, LVM Logical Volume: %+v; alignedSize=%s", traceID, lvmLogicalVolumeName, attemptCounter, llv, alignedSize.String()))
+			log.Info("polling the LVMLogicalVolume", "attempt", attemptCounter, "llv", fmt.Sprintf("%+v", llv), "alignedSize", alignedSize.String())
 		}
 
 		if llv.Status != nil {
-			log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume status: %+v, full LVMLogicalVolume resource: %+v", traceID, lvmLogicalVolumeName, attemptCounter, llv.Status, llv))
+			log.Trace("polled the LVMLogicalVolume", "attempt", attemptCounter, "status", fmt.Sprintf("%+v", llv.Status), "llv", fmt.Sprintf("%+v", llv))
 
 			if llv.DeletionTimestamp != nil {
 				return nil, attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: LVMLogicalVolume is being deleted", lvmLogicalVolumeName)
@@ -343,9 +343,9 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log *logger.Logg
 				if llv.Status.ActualSize.Value() >= alignedSize.Value() {
 					return llv, attemptCounter, nil
 				}
-				log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume created but size does not match the requested size yet. Waiting...", traceID, lvmLogicalVolumeName, attemptCounter))
+				log.Trace("the LVMLogicalVolume is created but its size does not match the request yet, waiting", "attempt", attemptCounter)
 			} else {
-				log.Trace(fmt.Sprintf("[WaitForStatusUpdate][traceID:%s][volumeID:%s] Attempt %d, LVM Logical Volume status is not 'Created' yet. Waiting...", traceID, lvmLogicalVolumeName, attemptCounter))
+				log.Trace("the LVMLogicalVolume is not in the Created phase yet, waiting", "attempt", attemptCounter)
 			}
 		}
 	}
@@ -455,13 +455,13 @@ func ExpandLVMLogicalVolume(ctx context.Context, kc client.Client, llv *snc.LVML
 func GetStorageClassLVGsAndParameters(
 	ctx context.Context,
 	kc client.Client,
-	log *logger.Logger,
+	log logger.Logger,
 	storageClassLVGParametersString string,
 ) (storageClassLVGs []snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, err error) {
 	var storageClassLVGParametersList LVMVolumeGroups
 	err = yaml.Unmarshal([]byte(storageClassLVGParametersString), &storageClassLVGParametersList)
 	if err != nil {
-		log.Error(err, "unmarshal yaml lvmVolumeGroup")
+		log.Error("unmarshal yaml lvmVolumeGroup", logger.Err(err))
 		return nil, nil, err
 	}
 
@@ -469,7 +469,7 @@ func GetStorageClassLVGsAndParameters(
 	for _, v := range storageClassLVGParametersList {
 		storageClassLVGParametersMap[v.Name] = v.Thin.PoolName
 	}
-	log.Info(fmt.Sprintf("[GetStorageClassLVGs] StorageClass LVM volume groups parameters map: %+v", storageClassLVGParametersMap))
+	log.Info("parsed the storage class LVMVolumeGroup parameters", "parameters", fmt.Sprintf("%+v", storageClassLVGParametersMap))
 
 	lvgs, err := GetLVGList(ctx, kc)
 	if err != nil {
@@ -477,17 +477,17 @@ func GetStorageClassLVGsAndParameters(
 	}
 
 	for _, lvg := range lvgs.Items {
-		log.Trace(fmt.Sprintf("[GetStorageClassLVGs] process lvg: %+v", lvg))
+		log.Trace("processing an LVMVolumeGroup", "lvg", fmt.Sprintf("%+v", lvg))
 
 		_, ok := storageClassLVGParametersMap[lvg.Name]
 		if ok {
-			log.Info(fmt.Sprintf("[GetStorageClassLVGs] found lvg from storage class: %s", lvg.Name))
+			log.Info("matched an LVMVolumeGroup from the storage class", "lvgName", lvg.Name)
 			if len(lvg.Status.Nodes) > 0 {
-				log.Info(fmt.Sprintf("[GetStorageClassLVGs] lvg.Status.Nodes[0].Name: %s", lvg.Status.Nodes[0].Name))
+				log.Info("resolved the LVMVolumeGroup node", "nodeName", lvg.Status.Nodes[0].Name)
 			}
 			storageClassLVGs = append(storageClassLVGs, lvg)
 		} else {
-			log.Trace(fmt.Sprintf("[GetStorageClassLVGs] skip lvg: %s", lvg.Name))
+			log.Trace("skipping an LVMVolumeGroup that is not in the storage class", "lvgName", lvg.Name)
 		}
 	}
 
@@ -500,7 +500,7 @@ func GetLVGList(ctx context.Context, kc client.Client) (*snc.LVMVolumeGroupList,
 }
 
 func GetLLVSpec(
-	log *logger.Logger,
+	log logger.Logger,
 	lvName string,
 	selectedLVG snc.LVMVolumeGroup,
 	storageClassLVGParametersMap map[string]string,
@@ -523,7 +523,7 @@ func GetLLVSpec(
 		lvmLogicalVolumeSpec.Thin = &snc.LVMLogicalVolumeThinSpec{
 			PoolName: storageClassLVGParametersMap[selectedLVG.Name],
 		}
-		log.Info(fmt.Sprintf("[GetLLVSpec] Thin pool name: %s", lvmLogicalVolumeSpec.Thin.PoolName))
+		log.Info("resolved the thin pool", "thinPoolName", lvmLogicalVolumeSpec.Thin.PoolName)
 	case internal.LVMTypeThick:
 		if contiguous {
 			lvmLogicalVolumeSpec.Thick = &snc.LVMLogicalVolumeThickSpec{
@@ -531,14 +531,14 @@ func GetLLVSpec(
 			}
 		}
 
-		log.Info(fmt.Sprintf("[GetLLVSpec] Thick contiguous: %t", contiguous))
+		log.Info("resolved thick contiguous", "contiguous", contiguous)
 	}
 
 	if volumeCleanup != "" {
 		lvmLogicalVolumeSpec.VolumeCleanup = &volumeCleanup
 	}
 
-	log.Info(fmt.Sprintf("[GetLLVSpec] volumeCleanup: %s", volumeCleanup))
+	log.Info("resolved volume cleanup", "volumeCleanup", volumeCleanup)
 
 	return lvmLogicalVolumeSpec
 }
@@ -574,7 +574,7 @@ func SelectLVGByActualNameOnTheNode(storageClassLVGs []snc.LVMVolumeGroup, nodeN
 	return nil, fmt.Errorf("[SelectLVG] no LVMVolumeGroup found with actualNameOnTheNode %s on node %s", actualNameOnTheNode, nodeName)
 }
 
-func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logger.Logger, llv *snc.LVMLogicalVolume, finalizer string) (bool, error) {
+func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log logger.Logger, llv *snc.LVMLogicalVolume, finalizer string) (bool, error) {
 	for attempt := 0; attempt < KubernetesAPIRequestLimit; attempt++ {
 		removed := false
 		for i, val := range llv.Finalizers {
@@ -589,7 +589,7 @@ func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logge
 			return false, nil
 		}
 
-		log.Trace(fmt.Sprintf("[removeLLVFinalizerIfExist] removing finalizer %s from LVMLogicalVolume %s", finalizer, llv.Name))
+		log.Trace("removing the finalizer from the LVMLogicalVolume", "finalizer", finalizer, "llvName", llv.Name)
 		err := kc.Update(ctx, llv)
 		if err == nil {
 			return true, nil
@@ -600,7 +600,7 @@ func removeLLVFinalizerIfExist(ctx context.Context, kc client.Client, log *logge
 		}
 
 		if attempt < KubernetesAPIRequestLimit-1 {
-			log.Trace(fmt.Sprintf("[removeLLVFinalizerIfExist] conflict while updating LVMLogicalVolume %s, retrying...", llv.Name))
+			log.Trace("conflict while updating the LVMLogicalVolume, retrying", "llvName", llv.Name)
 			select {
 			case <-ctx.Done():
 				return false, ctx.Err()

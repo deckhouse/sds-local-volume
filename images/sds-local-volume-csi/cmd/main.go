@@ -76,24 +76,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info("version = ", cfgParams.Version)
+	log.Info("starting sds-local-volume-csi", "version", cfgParams.Version)
 
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {
-		log.Error(err, "[main] unable to KubernetesDefaultConfigCreate")
+		log.Error("unable to KubernetesDefaultConfigCreate", logger.Err(err))
 		os.Exit(1)
 	}
-	log.Info("[main] kubernetes config has been successfully created.")
+	log.Info("kubernetes config has been successfully created.")
 
 	scheme := apiruntime.NewScheme()
 	for _, f := range resourcesSchemeFuncs {
 		err := f(scheme)
 		if err != nil {
-			log.Error(err, "[main] unable to add scheme to func")
+			log.Error("unable to add scheme to func", logger.Err(err))
 			os.Exit(1)
 		}
 	}
-	log.Info("[main] successfully read scheme CR")
+	log.Info("successfully read scheme CR")
 
 	cl, err := client.New(kConfig, client.Options{
 		Scheme: scheme,
@@ -104,7 +104,7 @@ func main() {
 	go func() {
 		err = http.ListenAndServe(cfgParams.HealthProbeBindAddress, nil)
 		if err != nil {
-			log.Error(err, "[main] create probes")
+			log.Error("create probes", logger.Err(err))
 		}
 	}()
 
@@ -113,21 +113,21 @@ func main() {
 	// default one used by the health probes above.
 	metricStorage := metricsstorage.NewMetricStorage(metricsstorage.WithNewRegistry())
 	if err = monitoring.Register(metricStorage); err != nil {
-		log.Error(err, "[main] unable to register metrics")
+		log.Error("unable to register the metrics", logger.Err(err))
 		os.Exit(1)
 	}
 	go func() {
 		metricsMux := http.NewServeMux()
 		metricsMux.Handle("/metrics", metricStorage.Handler())
 		if err := http.ListenAndServe(cfgParams.MetricsBindAddress, metricsMux); err != nil {
-			log.Error(err, "[main] serve metrics")
+			log.Error("unable to serve the metrics", logger.Err(err))
 		}
 	}()
-	log.Info(fmt.Sprintf("[main] metrics are registered and served on %s/metrics", cfgParams.MetricsBindAddress))
+	log.Info("metrics registered", "address", cfgParams.MetricsBindAddress+"/metrics")
 
 	drv, err := driver.NewDriver(cfgParams.CsiAddress, cfgParams.DriverName, cfgParams.Address, &cfgParams.NodeName, log, monitoring.NewRecorder(metricStorage), cl)
 	if err != nil {
-		log.Error(err, "[main] create NewDriver")
+		log.Error("create NewDriver", logger.Err(err))
 	}
 
 	defer cancel()
@@ -140,6 +140,6 @@ func main() {
 	}()
 
 	if err := drv.Run(ctx); err != nil {
-		log.Error(err, "[dev.Run]")
+		log.Error("[dev.Run]", logger.Err(err))
 	}
 }

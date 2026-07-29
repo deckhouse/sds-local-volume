@@ -53,7 +53,7 @@ func TestNodeStoreManager(t *testing.T) {
 				},
 			}
 			store := &Store{
-				Log: &logger.Logger{},
+				Log: logger.NewNop(),
 				NodeStorage: mountutils.SafeFormatAndMount{
 					Interface: f,
 				},
@@ -76,7 +76,7 @@ func TestNodeStoreManager(t *testing.T) {
 				},
 			}
 			store := &Store{
-				Log: &logger.Logger{},
+				Log: logger.NewNop(),
 				NodeStorage: mountutils.SafeFormatAndMount{
 					Interface: f,
 				},
@@ -99,7 +99,7 @@ func TestNodeStoreManager(t *testing.T) {
 				},
 			}
 			store := &Store{
-				Log: &logger.Logger{},
+				Log: logger.NewNop(),
 				NodeStorage: mountutils.SafeFormatAndMount{
 					Interface: f,
 				},

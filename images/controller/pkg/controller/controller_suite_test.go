@@ -52,7 +52,7 @@ func NewTestLogger() logger.Logger {
 	if err != nil {
 		panic(err)
 	}
-	return *log
+	return log
 }
 
 func NewFakeClient() client.Client {
