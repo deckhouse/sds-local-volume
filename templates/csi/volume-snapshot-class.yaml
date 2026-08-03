@@ -1,4 +1,4 @@
-{{- if (.Values.global.enabledModules | has "snapshot-controller") }}
+{{- if .Capabilities.APIVersions.Has "snapshot.storage.k8s.io/v1/VolumeSnapshotClass" }}
 ---
 apiVersion: snapshot.storage.k8s.io/v1
 kind: VolumeSnapshotClass

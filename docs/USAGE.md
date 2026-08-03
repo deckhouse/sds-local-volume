@@ -124,7 +124,7 @@ echo "Data migration completed"
 {{< alert level="warning" >}}
 The ability to work with volume snapshots is available only in commercial editions of Deckhouse Kubernetes Platform and only when using LVM-thin volumes.
 
-The [snapshot-controller](/modules/snapshot-controller/) module must be connected for this module to operate.
+A module that provides the `snapshot.storage.k8s.io` CRDs, for example [snapshot-controller](/modules/snapshot-controller/), must be connected for snapshots to work.
 {{< /alert >}}
 
 For detailed information about snapshots, see the [Kubernetes documentation](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).

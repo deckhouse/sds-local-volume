@@ -13,7 +13,7 @@ weight: 1
 {{< /alert >}}
 
 {{< alert level="warning" >}}
-Для работы модуля требуется подключенный модуль [snapshot-controller](/modules/snapshot-controller/). Возможность работы со снимками томов доступна только в коммерческих редакциях Deckhouse Kubernetes Platform и только при использовании LVM-thin томов.
+Для снимков томов требуется модуль, поставляющий CRD группы `snapshot.storage.k8s.io`, — например [snapshot-controller](/modules/snapshot-controller/). Возможность работы со снимками томов доступна только в коммерческих редакциях Deckhouse Kubernetes Platform и только при использовании LVM-thin томов.
 {{< /alert >}}
 
 ## Как работает модуль
