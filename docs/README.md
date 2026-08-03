@@ -13,7 +13,7 @@ Available access modes for the module: RWO.
 {{< /alert >}}
 
 {{< alert level="warning" >}}
-The [snapshot-controller](/modules/snapshot-controller/) module must be connected for this module to operate. The ability to work with volume snapshots is available only in commercial editions of Deckhouse Kubernetes Platform and only when using LVM-thin volumes.
+Volume snapshots require a module that provides the `snapshot.storage.k8s.io` CRDs, for example [snapshot-controller](/modules/snapshot-controller/). The ability to work with volume snapshots is available only in commercial editions of Deckhouse Kubernetes Platform and only when using LVM-thin volumes.
 {{< /alert >}}
 
 ## How the module works

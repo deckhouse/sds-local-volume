@@ -124,7 +124,7 @@ echo "Data migration completed"
 {{< alert level="warning" >}}
 Возможность работы со снимками томов доступна только в коммерческих редакциях Deckhouse Kubernetes Platform и только при использовании LVM-thin томов.
 
-Для работы модуля требуется подключенный модуль [snapshot-controller](/modules/snapshot-controller/).
+Для работы снимков требуется подключенный модуль, поставляющий CRD группы `snapshot.storage.k8s.io`, — например [snapshot-controller](/modules/snapshot-controller/).
 {{< /alert >}}
 
 Подробную информацию о снимках см. в [документации Kubernetes](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).
