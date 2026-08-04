@@ -1,0 +1,16 @@
+Changes:
+- The snapshot-controller module is no longer a required dependency: VolumeSnapshotClass
+    is created only if the snapshot.storage.k8s.io API is available
+- Added controller and CSI driver metrics (previously the module did not export anything),
+  logging transferred to common Deckhouse libraries
+- Correction: the volume size during normal creation is aligned to the LVM extent
+    boundary, the volume capacity and restoreSize of the snapshot are reported according
+    to the actual size of the LV - previously a request for 35Mi gave an LV of 36Mi,
+    described as 35Mi
+- Correction: restoring a snapshot or cloning to a StorageClass of type Thick is now
+    rejected - previously the result was Bound PVC without data
+- Correction: free space check for Thick is done by aligned size, error of selecting
+    node with maximum free space is no longer ignored
+- Updating base images and lib-helm to 1.72.12
+- Fixed vulnerability in gRPC (GHSA-hrxh-6v49-42gf)
+- Internal changes in module assembly
