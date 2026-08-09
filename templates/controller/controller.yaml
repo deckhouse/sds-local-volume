@@ -23,6 +23,21 @@
   (printf "-log-level=%s" (include "helm_lib_module_controller_log_level" (list . "sdsLocalVolume")))
 }}
 
+{{- /*
+  LLV_ORPHAN_GRACE_PERIOD is passed explicitly rather than left to the binary's
+  default, so that the llvOrphanGracePeriod setting is reachable through a
+  ModuleConfig. Without this the value would only be settable by editing the
+  Deployment, which the addon-operator reverts on the next reconcile.
+
+  The variable is omitted rather than defaulted when the setting is absent, so the
+  fallback stays stated once — as the Go constant — instead of being restated here
+  where it could drift.
+*/ -}}
+{{- $controllerEnvs := list }}
+{{- with .Values.sdsLocalVolume.llvOrphanGracePeriod }}
+  {{- $controllerEnvs = append $controllerEnvs (dict "name" "LLV_ORPHAN_GRACE_PERIOD" "value" .) }}
+{{- end }}
+
 {{- /* Controller Deployment */ -}}
 {{- $config := dict
   "valuesKey" "sdsLocalVolume"
@@ -33,6 +48,7 @@
   "controllerMetricsPort" 8080
   "webhooksCertMountPath" $webhooksCertMountPath
   "webhooksCommand" $webhooksCommand
+  "additionalControllerEnvs" $controllerEnvs
 }}
 {{ include "helm_lib_module_controller_manifests" (list . $config) }}
 

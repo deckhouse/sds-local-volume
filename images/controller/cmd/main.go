@@ -29,6 +29,7 @@ import (
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -105,6 +106,13 @@ func main() {
 		DefaultNamespaces: map[string]cache.Config{
 			cfgParams.ControllerNamespace: {},
 		},
+		ByObject: map[client.Object]cache.ByObject{
+			// The LVMLogicalVolume garbage collector needs every PersistentVolume in
+			// the cluster, but only its name and its CSI reference. Caching them whole
+			// would grow with the cluster for no reason, so everything else is dropped
+			// on the way into the cache.
+			&v1.PersistentVolume{}: {Transform: controller.StripPersistentVolume},
+		},
 	}
 
 	managerOpts := manager.Options{
@@ -134,6 +142,11 @@ func main() {
 
 	if _, err = controller.RunLocalCSINodeWatcherController(mgr, *cfgParams, log, metrics); err != nil {
 		log.Error("unable to run the controller", logger.Err(err), slog.String("controller", controller.LocalCSINodeWatcherCtrl))
+		os.Exit(1)
+	}
+
+	if _, err = controller.RunLVMLogicalVolumeGCController(mgr, *cfgParams, log, metrics); err != nil {
+		log.Error("unable to run the controller", logger.Err(err), slog.String("controller", controller.LVMLogicalVolumeGCCtrlName))
 		os.Exit(1)
 	}
 

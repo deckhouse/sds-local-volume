@@ -19,6 +19,7 @@ package config
 import (
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
@@ -35,6 +36,26 @@ const (
 	DefaultHealthProbeBindAddress        = ":8081"
 	MetricsBindAddressEnvName            = "METRICS_BIND_ADDRESS"
 	DefaultMetricsBindAddress            = ":8080"
+
+	// DefaultLLVSweepInterval is how often the LVMLogicalVolume garbage collector
+	// re-scans on its own. The scan is event-driven, so this only bounds how stale
+	// the orphan metrics can get if an event is ever missed; it is deliberately not
+	// configurable, because there is nothing an operator would gain by tuning it.
+	DefaultLLVSweepInterval = time.Minute
+
+	// LLVOrphanGracePeriodEnvName overrides how long a deleted LVMLogicalVolume
+	// whose PersistentVolume is missing — or a deleted LVMLogicalVolumeSnapshot — is
+	// left alone before its CSI finalizer is removed. The delay lets an in-flight
+	// DeleteVolume or DeleteSnapshot finish on its own.
+	//
+	// The chart passes this from the module's llvOrphanGracePeriod setting, so the
+	// value is reachable through a ModuleConfig rather than only from the code.
+	//
+	// DefaultLLVOrphanGracePeriod is the only place the default lives: the setting
+	// carries no default in openapi/config-values.yaml, so the chart omits the
+	// variable entirely when nothing is configured, and the two cannot drift apart.
+	LLVOrphanGracePeriodEnvName = "LLV_ORPHAN_GRACE_PERIOD"
+	DefaultLLVOrphanGracePeriod = 30 * time.Second
 )
 
 type Options struct {
@@ -45,6 +66,12 @@ type Options struct {
 	ControllerNamespace         string
 	HealthProbeBindAddress      string
 	MetricsBindAddress          string
+
+	// LLVSweepInterval and LLVOrphanGracePeriod are whole durations, unlike the
+	// two Requeue* fields above, which are bare numbers the call sites multiply by
+	// time.Second.
+	LLVSweepInterval     time.Duration
+	LLVOrphanGracePeriod time.Duration
 }
 
 func NewConfig() *Options {
@@ -84,7 +111,29 @@ func NewConfig() *Options {
 	opts.RequeueSecretInterval = 10
 	opts.ConfigSecretName = ConfigSecretName
 
+	opts.LLVSweepInterval = DefaultLLVSweepInterval
+	opts.LLVOrphanGracePeriod = durationFromEnv(LLVOrphanGracePeriodEnvName, DefaultLLVOrphanGracePeriod)
+
 	return &opts
+}
+
+// durationFromEnv reads a Go duration (for example "45s") from the environment,
+// falling back to def when the variable is unset, unparsable or not positive. A
+// bad value is logged and ignored rather than fatal: the controller has a working
+// default and a typo in an override should not keep it from starting.
+func durationFromEnv(name string, def time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return def
+	}
+
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		log.Printf("Ignoring %s=%q, using %s", name, raw, def)
+		return def
+	}
+
+	return d
 }
 
 // SdsLocalVolumeConfig mirrors the structure of the controller-config Secret

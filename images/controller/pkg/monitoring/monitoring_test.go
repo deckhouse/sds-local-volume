@@ -215,5 +215,163 @@ func TestZeroRecorderRecordsNothing(t *testing.T) {
 		rec.SetLocalStorageClassPhase("sc-a", "Created")
 		rec.SetLocalStorageClassReady("sc-a", true)
 		rec.ForgetLocalStorageClass("sc-a")
+		rec.SetLVMLogicalVolumeSweep(LVMLogicalVolumeSweep{})
+		rec.ObserveCSIFinalizerRemoval(KindLVMLogicalVolume, ResultSuccess)
 	})
+}
+
+func TestSetLVMLogicalVolumeSweepPublishesTheWholePicture(t *testing.T) {
+	rec, scrape := newTestRecorder(t)
+
+	rec.SetLVMLogicalVolumeSweep(LVMLogicalVolumeSweep{
+		CountBy: map[PhaseAndType]int{
+			{Phase: "Created", Type: "Thick"}:   2,
+			{Phase: PhaseUnknown, Type: "Thin"}: 1,
+		},
+		AllocatedBytesBy: map[PhaseAndType]float64{
+			{Phase: "Created", Type: "Thick"}:   3221225472,
+			{Phase: PhaseUnknown, Type: "Thin"}: 0,
+		},
+		Orphans: []OrphanedLVMLogicalVolume{
+			{Name: "pvc-a", LVMVolumeGroup: "vg-0", Type: "Thick", State: OrphanStateActive, AllocatedBytes: 1073741824},
+			{Name: "pvc-b", LVMVolumeGroup: "vg-1", Type: "Thick", State: OrphanStateTerminating, AllocatedBytes: 2147483648},
+			{
+				Name:           "pvc-c",
+				LVMVolumeGroup: "vg-1",
+				Type:           "Thick",
+				State:          OrphanStateBlocked,
+				Reason:         BlockReasonSnapshotsPresent,
+				AllocatedBytes: 4294967296,
+			},
+		},
+		OrphanedSnapshots: []OrphanedLVMLogicalVolumeSnapshot{
+			{
+				Name:             "snapshot-1",
+				LVMLogicalVolume: "pvc-c",
+				State:            OrphanStateBlocked,
+				Reason:           BlockReasonVolumeSnapshotContentExists,
+				UsedBytes:        134217728,
+			},
+		},
+		AwaitingAgentByKind: map[string]int{KindLVMLogicalVolume: 4},
+	})
+
+	out := scrape()
+	assert.Contains(t, out, LVMLogicalVolumeCount+"{phase=Created,type=Thick,}2")
+	assert.Contains(t, out, LVMLogicalVolumeCount+"{phase="+PhaseUnknown+",type=Thin,}1")
+	assert.Contains(t, out, LVMLogicalVolumeAllocatedBytes+"{phase=Created,type=Thick,}3221225472")
+
+	// An orphan that is not blocked has nothing to explain, so the reason label is
+	// empty rather than carrying a value a rule would have to know to ignore.
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeAllocatedBytes+"{lvm_volume_group=vg-0,name=pvc-a,reason=,state="+OrphanStateActive+",type=Thick,}1073741824")
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeAllocatedBytes+"{lvm_volume_group=vg-1,name=pvc-b,reason=,state="+OrphanStateTerminating+",type=Thick,}2147483648")
+
+	// A blocked orphan names the refusal, so that neither a dashboard nor an
+	// on-call engineer has to grep the controller log for it.
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeAllocatedBytes+"{lvm_volume_group=vg-1,name=pvc-c,reason="+BlockReasonSnapshotsPresent+",state="+OrphanStateBlocked+",type=Thick,}4294967296")
+
+	// A blocked snapshot is reported the same way, and names the volume it is in
+	// turn keeping blocked.
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeSnapshotUsedBytes+"{lvm_logical_volume=pvc-c,name=snapshot-1,reason="+BlockReasonVolumeSnapshotContentExists+",state="+OrphanStateBlocked+",}134217728")
+
+	// Every state is published, including the ones with nothing in them, so that
+	// an alerting rule reads a zero instead of a missing series.
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeCount+"{state="+OrphanStateActive+",}1")
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeCount+"{state="+OrphanStateRetained+",}0")
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeCount+"{state="+OrphanStateTerminating+",}1")
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeCount+"{state="+OrphanStateBlocked+",}1")
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeSnapshotCount+"{state="+OrphanStateBlocked+",}1")
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeSnapshotCount+"{state="+OrphanStateTerminating+",}0")
+
+	// The same holds for the kinds of the awaiting-agent counter: the alert reading
+	// it must see a zero for the kind that has nothing waiting.
+	assert.Contains(t, out, AwaitingAgentCount+"{kind="+KindLVMLogicalVolume+",}4")
+	assert.Contains(t, out, AwaitingAgentCount+"{kind="+KindLVMLogicalVolumeSnapshot+",}0")
+}
+
+func TestSetLVMLogicalVolumeSweepDropsWhatTheSweepNoLongerSees(t *testing.T) {
+	rec, scrape := newTestRecorder(t)
+
+	rec.SetLVMLogicalVolumeSweep(LVMLogicalVolumeSweep{
+		CountBy: map[PhaseAndType]int{
+			{Phase: "Created", Type: "Thick"}: 1,
+			{Phase: "Failed", Type: "Thick"}:  1,
+		},
+		Orphans: []OrphanedLVMLogicalVolume{
+			{Name: "pvc-a", LVMVolumeGroup: "vg-0", Type: "Thick", State: OrphanStateTerminating, AllocatedBytes: 1073741824},
+		},
+		OrphanedSnapshots: []OrphanedLVMLogicalVolumeSnapshot{
+			{Name: "snapshot-1", LVMLogicalVolume: "pvc-a", State: OrphanStateTerminating, UsedBytes: 134217728},
+		},
+	})
+	out := scrape()
+	require.Contains(t, out, "name=pvc-a")
+	require.Contains(t, out, "name=snapshot-1")
+
+	// The orphan and the snapshot have been reclaimed and the Failed volume is gone.
+	// Every one of those series has to disappear: a gauge that keeps its last value
+	// would report leaked space that no longer exists, and would keep an alert
+	// firing forever.
+	rec.SetLVMLogicalVolumeSweep(LVMLogicalVolumeSweep{
+		CountBy: map[PhaseAndType]int{{Phase: "Created", Type: "Thick"}: 1},
+	})
+
+	out = scrape()
+	assert.NotContains(t, out, "name=pvc-a")
+	assert.NotContains(t, out, "name=snapshot-1")
+	assert.NotContains(t, out, "phase=Failed")
+	assert.Contains(t, out, LVMLogicalVolumeCount+"{phase=Created,type=Thick,}1")
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeCount+"{state="+OrphanStateTerminating+",}0")
+	assert.Contains(t, out, OrphanedLVMLogicalVolumeSnapshotCount+"{state="+OrphanStateTerminating+",}0")
+}
+
+func TestSetLVMLogicalVolumeSweepLeavesOtherMetricsAlone(t *testing.T) {
+	rec, scrape := newTestRecorder(t)
+
+	res, err := reconcile.Result{}, error(nil)
+	rec.ObserveReconcile("test-controller", time.Now(), &res, &err)
+	rec.SetLocalStorageClassPhase("sc-a", "Created")
+	rec.ObserveCSIFinalizerRemoval(KindLVMLogicalVolume, ResultSuccess)
+
+	// A sweep expires its own group across every collector, so anything published
+	// outside that group has to survive it.
+	rec.SetLVMLogicalVolumeSweep(LVMLogicalVolumeSweep{})
+
+	out := scrape()
+	assert.Contains(t, out, "controller=test-controller,result="+ResultSuccess)
+	assert.Contains(t, out, LocalStorageClassPhase+"{name=sc-a,phase=Created,}1")
+	assert.Contains(t, out, CSIFinalizerRemovalsTotal+"{kind="+KindLVMLogicalVolume+",result="+ResultSuccess+",}1")
+}
+
+func TestObserveCSIFinalizerRemovalCountsByOutcome(t *testing.T) {
+	rec, scrape := newTestRecorder(t)
+
+	rec.ObserveCSIFinalizerRemoval(KindLVMLogicalVolume, ResultSuccess)
+	rec.ObserveCSIFinalizerRemoval(KindLVMLogicalVolume, ResultSuccess)
+	rec.ObserveCSIFinalizerRemoval(KindLVMLogicalVolume, ResultError)
+	rec.ObserveCSIFinalizerRemoval(KindLVMLogicalVolume, ResultNoop)
+
+	out := scrape()
+	assert.Contains(t, out, CSIFinalizerRemovalsTotal+"{kind="+KindLVMLogicalVolume+",result="+ResultSuccess+",}2")
+	assert.Contains(t, out, CSIFinalizerRemovalsTotal+"{kind="+KindLVMLogicalVolume+",result="+ResultError+",}1")
+
+	// A pass that found nothing left to do is counted apart from one that wrote:
+	// folding it into success would make the counter report sweeps rather than
+	// reclaims, and the "CSI finalizer removals" panel would never read zero.
+	assert.Contains(t, out, CSIFinalizerRemovalsTotal+"{kind="+KindLVMLogicalVolume+",result="+ResultNoop+",}1")
+}
+
+// TestObserveCSIFinalizerRemovalSeparatesTheKinds is why the counter carries the
+// kind: the two halves have different runbooks, and an alert on the error outcome
+// has to be able to say which one it is about.
+func TestObserveCSIFinalizerRemovalSeparatesTheKinds(t *testing.T) {
+	rec, scrape := newTestRecorder(t)
+
+	rec.ObserveCSIFinalizerRemoval(KindLVMLogicalVolume, ResultError)
+	rec.ObserveCSIFinalizerRemoval(KindLVMLogicalVolumeSnapshot, ResultSuccess)
+
+	out := scrape()
+	assert.Contains(t, out, CSIFinalizerRemovalsTotal+"{kind="+KindLVMLogicalVolume+",result="+ResultError+",}1")
+	assert.Contains(t, out, CSIFinalizerRemovalsTotal+"{kind="+KindLVMLogicalVolumeSnapshot+",result="+ResultSuccess+",}1")
+	assert.NotContains(t, out, CSIFinalizerRemovalsTotal+"{kind="+KindLVMLogicalVolumeSnapshot+",result="+ResultError+",}")
 }
