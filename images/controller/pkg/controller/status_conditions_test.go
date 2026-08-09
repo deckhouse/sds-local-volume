@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -401,6 +402,49 @@ func TestUpdateLocalStorageClassPhase_DoesNotReviveTheFinalizerWhileDeleting(t *
 	}
 	if ready.Message != reason {
 		t.Errorf("message = %q, want %q", ready.Message, reason)
+	}
+}
+
+// The failure paths pass err.Error() through as the condition message, and the
+// schema caps it at 32768. Over the cap the API server rejects the whole status
+// write, so the resource keeps reporting its previous verdict and the reconcile
+// fails on the write instead of on what actually went wrong.
+func TestUpdateLocalStorageClassPhase_TruncatesAnOversizedMessage(t *testing.T) {
+	lsc := &slv.LocalStorageClass{
+		ObjectMeta: metav1.ObjectMeta{Name: testLSCName, Generation: 1},
+	}
+	cl := newStatusTestClient(t, lsc)
+
+	// Multi-byte on purpose. The schema's maxLength is an OpenAPI string
+	// length, counted in runes, and TruncateMessage counts the same way — a
+	// byte-counting assertion here would fail on a message that is in fact
+	// within the limit.
+	//
+	// Written as an escape rather than the character itself: the module linter
+	// rejects non-ASCII bytes in Go sources.
+	huge := strings.Repeat("\u044f", conditions.MaxMessageLen+100)
+	if err := updateLocalStorageClassPhase(context.Background(), cl, lsc, FailedStatusPhase, huge); err != nil {
+		t.Fatalf("updateLocalStorageClassPhase: %v", err)
+	}
+
+	ready := conditions.Get(readLSC(t, cl).Status.Conditions, slv.ConditionTypeReady)
+	if ready == nil {
+		t.Fatal("Ready condition was not published")
+	}
+	// Counted in runes, not bytes: the schema's maxLength is an OpenAPI string
+	// length, which the API server validates with utf8.RuneCountInString, and
+	// TruncateMessage counts the same way. Measuring len() would fail this test
+	// on any non-ASCII message that is in fact within the limit.
+	if utf8.RuneCountInString(ready.Message) > conditions.MaxMessageLen {
+		t.Errorf("message is %d runes, over the %d the schema allows",
+			utf8.RuneCountInString(ready.Message), conditions.MaxMessageLen)
+	}
+
+	// The caller's copy is mirrored from the same condition, so it must not
+	// carry the untruncated message either.
+	mirrored := conditions.Get(lsc.Status.Conditions, slv.ConditionTypeReady)
+	if mirrored == nil || utf8.RuneCountInString(mirrored.Message) > conditions.MaxMessageLen {
+		t.Errorf("the mirrored condition was not truncated: %+v", mirrored)
 	}
 }
 

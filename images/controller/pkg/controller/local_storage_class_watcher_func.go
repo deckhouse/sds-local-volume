@@ -791,6 +791,16 @@ func publishLocalStorageClassStatus(
 	phase,
 	reason string,
 ) error {
+	// The schema caps the message at 32768, and the callers pass err.Error()
+	// straight through — an error carrying a command's output or an aggregate
+	// of per-node failures reaches that. Over the cap the API server rejects
+	// the whole status write, so the resource would keep reporting its previous
+	// verdict and the reconcile would fail on the write rather than on what
+	// actually went wrong. conditions.Set does not truncate: it is a thin
+	// wrapper over meta.SetStatusCondition, and only the library's Ready and
+	// ReadyWithMessage builders truncate for you.
+	cond.Message = conditions.TruncateMessage(cond.Message)
+
 	apply := func(sc *slv.LocalStorageClass) {
 		if sc.Status == nil {
 			sc.Status = new(slv.LocalStorageClassStatus)
