@@ -498,9 +498,29 @@ d8 k annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kube
        reclaimPolicy: Delete
        volumeBindingMode: WaitForFirstConsumer
      status:
+       conditions:
+       - lastTransitionTime: "2025-01-01T00:00:00Z"
+         message: the LocalStorageClass is in the Created phase
+         observedGeneration: 1
+         reason: Reconciled
+         status: "True"
+         type: Ready
+       observedGeneration: 1
        phase: Created
    kind: List
    ```
+
+   Читать следует `status.conditions`: условие `Ready` показывает, полностью ли
+   контроллер привёл ресурс к желаемому состоянию, а его `observedGeneration` —
+   к какой версии спецификации относится этот вердикт. Если значение отстаёт от
+   `metadata.generation`, контроллер ещё не обработал последнее изменение.
+
+   Поле `status.phase` — это грубая сводка того же прохода reconcile в терминах
+   `Created`/`Failed`, оставленная для обратной совместимости. Оба поля
+   записываются вместе, но это не всегда один и тот же ответ: у `phase` нет
+   значения для удаляемого ресурса, поэтому LocalStorageClass, застрявший в
+   состоянии `Terminating`, сообщает `Ready=False` с причиной `Deleting`, а его
+   `phase` остаётся `Created`.
 
    В поле `spec.lvm.lvmVolumeGroups` указаны используемые ресурсы [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup).
 

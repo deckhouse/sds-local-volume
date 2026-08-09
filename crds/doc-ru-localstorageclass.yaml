@@ -98,3 +98,33 @@ spec:
                 reason:
                   description: |
                     Дополнительная информация о текущем состоянии StorageClass.
+                observedGeneration:
+                  description: |
+                    Значение `metadata.generation`, которое контроллер обработал последним. Если оно
+                    отстаёт от `metadata.generation`, значит контроллер ещё не обработал последнее
+                    изменение спецификации, и условия ниже описывают предыдущее состояние.
+                conditions:
+                  description: |
+                    Последние наблюдения состояния ресурса. Тип условия: `Ready`.
+                  items:
+                    properties:
+                      type:
+                        description: |
+                          Тип условия. `Ready` принимает значение `True`, когда StorageClass создан и LVMVolumeGroups разрешены, и `False` — если проход reconcile завершился ошибкой (`reason: ReconcileFailed`) или ресурс удаляется (`reason: Deleting`). Пока контроллер не обработал ресурс в первый раз, условие отсутствует, а не имеет значение `Unknown`.
+                      status:
+                        description: |
+                          Текущий статус условия.
+                      observedGeneration:
+                        description: |
+                          Значение `metadata.generation`, для которого это условие было выставлено.
+                      lastTransitionTime:
+                        description: |
+                          Время последней смены статуса этого условия. Не обновляется, если изменились
+                          только `reason` или `message`.
+                      reason:
+                        description: |
+                          Машиночитаемая причина текущего статуса, пригодная для фильтрации логов
+                          и алертинга.
+                      message:
+                        description: |
+                          Человекочитаемое пояснение текущего статуса.

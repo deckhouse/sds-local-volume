@@ -26,7 +26,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
-	errors2 "k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/yaml"
 
+	"github.com/deckhouse/sds-common-lib/conditions"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
@@ -106,7 +107,7 @@ func RunLocalStorageClassWatcherController(
 			log.Info("start")
 			lsc := &slv.LocalStorageClass{}
 			err = cl.Get(ctx, request.NamespacedName, lsc)
-			if err != nil && !errors2.IsNotFound(err) {
+			if err != nil && !apierrors.IsNotFound(err) {
 				log.Error("unable to get the LocalStorageClass", logger.Err(err))
 				return reconcile.Result{}, err
 			}
@@ -143,11 +144,30 @@ func RunLocalStorageClassWatcherController(
 			}
 
 			// RunEventReconcile updates lsc.Status.Phase in place, so this reads
-			// the phase the reconcile just settled on. It stays empty while a
-			// resource is being deleted, in which case there is nothing to report.
-			if lsc.Status.Phase != "" {
+			// the phase the reconcile just settled on.
+			//
+			// Status is a pointer and stays nil on every path that returns before
+			// reaching updateLocalStorageClassPhase: the finalizer step failing,
+			// the managed StorageClass already existing, and the whole deletion
+			// path. It is also nil for the lifetime of an object created while the
+			// new CRD was applied but the old controller image was still running,
+			// since that controller's full-object Updates could no longer carry a
+			// status. Dereferencing it there is a panic, not an empty phase.
+			if lsc.Status != nil && lsc.Status.Phase != "" {
 				metrics.SetLocalStorageClassPhase(lsc.Name, lsc.Status.Phase)
 			}
+
+			// Ready is published on every pass, including as 0 for a resource
+			// whose status has never been written. The phase gauge cannot
+			// carry this: its vocabulary is Created/Failed, so a resource
+			// wedged in Terminating keeps reporting Created while the Ready
+			// condition says otherwise. Publishing 0 rather than nothing is
+			// deliberate — an absent series is indistinguishable from a scrape
+			// gap, and this is the series an alert would be written against.
+			metrics.SetLocalStorageClassReady(
+				lsc.Name,
+				lsc.Status != nil && conditions.IsTrue(lsc.Status.Conditions, slv.ConditionTypeReady),
+			)
 
 			if shouldRequeue {
 				log.Warn("requeueing the request")
@@ -165,32 +185,7 @@ func RunLocalStorageClassWatcherController(
 		return nil, err
 	}
 
-	err = c.Watch(source.Kind(mgr.GetCache(), &slv.LocalStorageClass{}, handler.TypedFuncs[*slv.LocalStorageClass, reconcile.Request]{
-		CreateFunc: func(_ context.Context, e event.TypedCreateEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-			log.Named("create-event").Info("enqueueing the LocalStorageClass", "localStorageClass", e.Object.GetName())
-			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: e.Object.GetNamespace(), Name: e.Object.GetName()}}
-			q.Add(request)
-		},
-		UpdateFunc: func(_ context.Context, e event.TypedUpdateEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-			log.Named("update-event").Info("checking whether the LocalStorageClass should be reconciled", "localStorageClass", e.ObjectNew.GetName())
-
-			oldLsc := e.ObjectOld
-			newLsc := e.ObjectNew
-
-			if reflect.DeepEqual(oldLsc.Spec, newLsc.Spec) &&
-				reflect.DeepEqual(oldLsc.Labels, newLsc.Labels) &&
-				newLsc.DeletionTimestamp == nil {
-				log.Named("update-event").Info("the update touched neither spec nor labels, not reconciling", "localStorageClass", newLsc.Name)
-				return
-			}
-
-			log.Named("update-event").Info("enqueueing the LocalStorageClass", "localStorageClass", newLsc.Name)
-			request := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: newLsc.Namespace, Name: newLsc.Name}}
-			q.Add(request)
-		},
-	},
-	),
-	)
+	err = c.Watch(source.Kind(mgr.GetCache(), &slv.LocalStorageClass{}, localStorageClassEventHandler(log)))
 	if err != nil {
 		log.Error("unable to watch LocalStorageClass events", logger.Err(err))
 		return nil, err
@@ -278,6 +273,56 @@ func RunLocalStorageClassWatcherController(
 	return c, nil
 }
 
+// localStorageClassEventHandler maps LocalStorageClass watch events onto
+// reconcile requests.
+func localStorageClassEventHandler(log logger.Logger) handler.TypedFuncs[*slv.LocalStorageClass, reconcile.Request] {
+	enqueue := func(q workqueue.TypedRateLimitingInterface[reconcile.Request], obj *slv.LocalStorageClass) {
+		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}})
+	}
+
+	return handler.TypedFuncs[*slv.LocalStorageClass, reconcile.Request]{
+		CreateFunc: func(_ context.Context, e event.TypedCreateEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			log.Named("create-event").Info("enqueueing the LocalStorageClass", "localStorageClass", e.Object.GetName())
+			enqueue(q, e.Object)
+		},
+		UpdateFunc: func(_ context.Context, e event.TypedUpdateEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			log.Named("update-event").Info("checking whether the LocalStorageClass should be reconciled", "localStorageClass", e.ObjectNew.GetName())
+
+			oldLsc := e.ObjectOld
+			newLsc := e.ObjectNew
+
+			if reflect.DeepEqual(oldLsc.Spec, newLsc.Spec) &&
+				reflect.DeepEqual(oldLsc.Labels, newLsc.Labels) &&
+				newLsc.DeletionTimestamp == nil {
+				log.Named("update-event").Info("the update touched neither spec nor labels, not reconciling", "localStorageClass", newLsc.Name)
+				return
+			}
+
+			log.Named("update-event").Info("enqueueing the LocalStorageClass", "localStorageClass", newLsc.Name)
+			enqueue(q, newLsc)
+		},
+		// There is nothing left to reconcile, and that is precisely why the
+		// event has to be delivered: the reconciler is the only thing that
+		// calls ForgetLocalStorageClass, and it reaches it through the "the
+		// object is gone" branch, which needs a request for a name the API
+		// server no longer knows.
+		//
+		// Dropping this event leaves the gauges keyed by that name exported
+		// until the process restarts, holding whatever the final pass
+		// published — for a teardown that succeeded, ready=0, which is the
+		// value an alert is written against.
+		//
+		// Enqueueing rather than forgetting the series here is deliberate. The
+		// workqueue serialises by key, so this request is handled after the
+		// delete pass that set those gauges has finished; dropping them from
+		// this handler would race that pass and could be undone by it.
+		DeleteFunc: func(_ context.Context, e event.TypedDeleteEvent[*slv.LocalStorageClass], q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			log.Named("delete-event").Info("enqueueing the deleted LocalStorageClass", "localStorageClass", e.Object.GetName())
+			enqueue(q, e.Object)
+		},
+	}
+}
+
 func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger, scList *v1.StorageClassList, lsc *slv.LocalStorageClass, ignoredLabelPrefixes []string) (bool, error) {
 	// Resolve the effective LVMVolumeGroups (explicit list or the ones matched
 	// by the label selector) once per reconcile so that every downstream step
@@ -346,7 +391,7 @@ func getStorageClassLabelIgnoredPrefixes(ctx context.Context, cl client.Client, 
 	}
 	secret := &corev1.Secret{}
 	if err := cl.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, secret); err != nil {
-		if errors2.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err

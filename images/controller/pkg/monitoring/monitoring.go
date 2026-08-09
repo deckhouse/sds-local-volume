@@ -39,6 +39,7 @@ const (
 	ReconcilesTotal          = "sds_local_volume_reconciles_total"
 	ReconcileDurationSeconds = "sds_local_volume_reconcile_duration_seconds"
 	LocalStorageClassPhase   = "sds_local_volume_local_storage_class_phase"
+	LocalStorageClassReady   = "sds_local_volume_local_storage_class_ready"
 )
 
 // Label names.
@@ -89,6 +90,14 @@ func Register(st metricsstorage.Storage) error {
 		options.WithHelp("Current phase of a LocalStorageClass, 1 for the active phase."),
 	); err != nil {
 		return fmt.Errorf("register %s: %w", LocalStorageClassPhase, err)
+	}
+
+	if _, err := st.RegisterGauge(
+		LocalStorageClassReady,
+		[]string{LabelName},
+		options.WithHelp("Whether the Ready condition of a LocalStorageClass is True, 1 or 0."),
+	); err != nil {
+		return fmt.Errorf("register %s: %w", LocalStorageClassReady, err)
 	}
 
 	return nil
@@ -164,6 +173,34 @@ func (r Recorder) SetLocalStorageClassPhase(name, phase string) {
 	grouped.GaugeSet(localStorageClassGroup(name), LocalStorageClassPhase, 1, map[string]string{
 		LabelName:  name,
 		LabelPhase: phase,
+	})
+}
+
+// SetLocalStorageClassReady publishes whether the Ready condition of a single
+// LocalStorageClass is True.
+//
+// It exists because the phase gauge cannot express the state that matters most.
+// The phase vocabulary is exactly Created and Failed and has no word for a
+// teardown, so a LocalStorageClass wedged in Terminating — held by a finalizer
+// that never gets removed — goes on reporting phase=Created indefinitely, which
+// is the one thing an operator needs to be told about and the one thing the
+// phase cannot say. Ready goes to 0 there.
+//
+// The label set is just the resource name, so successive calls overwrite the
+// same series and no expiry is needed between them; ForgetLocalStorageClass
+// drops it along with the phase series when the resource goes away.
+func (r Recorder) SetLocalStorageClassReady(name string, ready bool) {
+	if r.st == nil {
+		return
+	}
+
+	value := 0.0
+	if ready {
+		value = 1
+	}
+
+	r.st.Grouped().GaugeSet(localStorageClassGroup(name), LocalStorageClassReady, value, map[string]string{
+		LabelName: name,
 	})
 }
 

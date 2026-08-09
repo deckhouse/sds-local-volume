@@ -73,7 +73,11 @@ func NewFakeClient() client.Client {
 		}
 	}
 
-	builder := fake.NewClientBuilder().WithScheme(scheme)
+	// LocalStorageClass has a status subresource, so the fake client has to
+	// model one too: without this, Status().Update() does not reach the object.
+	builder := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&slv.LocalStorageClass{})
 	cl := builder.Build()
 	return cl
 }

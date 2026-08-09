@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
@@ -160,7 +161,14 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 
 		scBefore := &v1.StorageClass{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, scBefore)).To(Succeed())
-		rvBefore := scBefore.ResourceVersion
+
+		// Tag the object so that "was it recreated" is a question about its
+		// identity rather than about its resourceVersion: the fake client
+		// numbers those per object, so a recreated StorageClass starts again
+		// from 1 and can compare equal to the one it replaced.
+		const markerUID = "before-the-recreate"
+		scBefore.UID = markerUID
+		Expect(cl.Update(ctx, scBefore)).To(Succeed())
 
 		scList := &v1.StorageClassList{}
 		Expect(cl.List(ctx, scList)).To(Succeed())
@@ -171,7 +179,7 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 
 		scAfter := &v1.StorageClass{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, scAfter)).To(Succeed())
-		Expect(scAfter.ResourceVersion).NotTo(Equal(rvBefore))
+		Expect(scAfter.UID).NotTo(Equal(types.UID(markerUID)))
 		Expect(scAfter.Labels).To(HaveKeyWithValue("team", "platform"))
 		Expect(scAfter.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassCtrlName))
 		Expect(scAfter.Labels).NotTo(HaveKey("argocd.argoproj.io/instance"))

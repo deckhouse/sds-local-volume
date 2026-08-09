@@ -167,10 +167,33 @@ func TestSetLocalStorageClassPhaseKeepsResourcesIndependent(t *testing.T) {
 	assert.Contains(t, out, "name=sc-b,phase=Failed,")
 }
 
+// The state this gauge exists for is the one the phase cannot name: a
+// LocalStorageClass wedged in Terminating keeps reporting phase=Created, while
+// Ready goes to 0. An alert can only be written against the latter.
+func TestSetLocalStorageClassReadyTracksTheCondition(t *testing.T) {
+	rec, scrape := newTestRecorder(t)
+
+	rec.SetLocalStorageClassPhase("sc-a", "Created")
+	rec.SetLocalStorageClassReady("sc-a", true)
+	require.Contains(t, scrape(), LocalStorageClassReady+"{name=sc-a,}1")
+
+	rec.SetLocalStorageClassReady("sc-a", false)
+
+	out := scrape()
+	assert.Contains(t, out, LocalStorageClassReady+"{name=sc-a,}0")
+	// The label set is just the name, so the previous value is overwritten
+	// rather than leaving two series behind.
+	assert.NotContains(t, out, LocalStorageClassReady+"{name=sc-a,}1")
+	// The phase is deliberately untouched by a teardown, which is exactly why
+	// the readiness gauge had to be added next to it.
+	assert.Contains(t, out, LocalStorageClassPhase+"{name=sc-a,phase=Created,}1")
+}
+
 func TestForgetLocalStorageClassDropsSeries(t *testing.T) {
 	rec, scrape := newTestRecorder(t)
 
 	rec.SetLocalStorageClassPhase("sc-a", "Created")
+	rec.SetLocalStorageClassReady("sc-a", true)
 	rec.SetLocalStorageClassPhase("sc-b", "Created")
 	rec.ForgetLocalStorageClass("sc-a")
 
@@ -190,6 +213,7 @@ func TestZeroRecorderRecordsNothing(t *testing.T) {
 	assert.NotPanics(t, func() {
 		rec.ObserveReconcile("test-controller", time.Now(), &res, &err)
 		rec.SetLocalStorageClassPhase("sc-a", "Created")
+		rec.SetLocalStorageClassReady("sc-a", true)
 		rec.ForgetLocalStorageClass("sc-a")
 	})
 }

@@ -53,6 +53,7 @@ var _ = Describe("sds-local-volume LocalStorageClass provisioning", Ordered, fun
 
 		Expect(storagekube.WaitForLocalStorageClassCreated(ctx, suiteRestCfg, scName, lscCreatedTimeout)).To(Succeed())
 		assertStorageClassExists(ctx, scName)
+		assertLSCReady(ctx, scName)
 
 		roundTripPVC(ctx, scName, "e2e-name")
 	})
@@ -204,6 +205,50 @@ func deleteLSC(ctx context.Context, name string) {
 	if err != nil && !apierrors.IsNotFound(err) {
 		GinkgoWriter.Printf("  warning: LocalStorageClass %s cleanup failed: %v\n", name, err)
 	}
+}
+
+// assertLSCReady waits for the controller to publish Ready=True on the
+// LocalStorageClass and checks that observedGeneration has caught up with the
+// generation the verdict was recorded for.
+//
+// This is the only level at which the status subresource is exercised end to
+// end. The CRD has to declare it, and the controller ServiceAccount has to be
+// authorized for localstorageclasses/status — a ClusterRole naming only
+// "localstorageclasses" leaves every status write returning Forbidden, which no
+// unit test can see because the fake client does not evaluate RBAC. Its symptom
+// is exactly this assertion timing out with the conditions never appearing.
+//
+// observedGeneration converging on metadata.generation is itself a check on the
+// subresource: without it the API server bumps the generation on every status
+// write, so the two could never meet.
+func assertLSCReady(ctx context.Context, name string) {
+	GinkgoHelper()
+	Eventually(func(g Gomega) {
+		lsc, err := suiteDyn.Resource(storagekube.LocalStorageClassGVR).Get(ctx, name, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+
+		conds, found, err := unstructured.NestedSlice(lsc.Object, "status", "conditions")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(found).To(BeTrue(), "LocalStorageClass %s should publish status.conditions", name)
+
+		var ready map[string]interface{}
+		for _, c := range conds {
+			cond, ok := c.(map[string]interface{})
+			g.Expect(ok).To(BeTrue(), "every entry of status.conditions should be an object")
+			if cond["type"] == "Ready" {
+				ready = cond
+				break
+			}
+		}
+		g.Expect(ready).NotTo(BeNil(), "LocalStorageClass %s should publish the Ready condition", name)
+		g.Expect(ready["status"]).To(Equal("True"), "Ready condition: %v", ready)
+		g.Expect(ready["reason"]).To(Equal("Reconciled"))
+
+		observed, found, err := unstructured.NestedInt64(lsc.Object, "status", "observedGeneration")
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(found).To(BeTrue(), "LocalStorageClass %s should publish status.observedGeneration", name)
+		g.Expect(observed).To(Equal(lsc.GetGeneration()))
+	}).WithTimeout(lscCreatedTimeout).WithPolling(pollInterval).Should(Succeed())
 }
 
 func assertStorageClassExists(ctx context.Context, name string) {
