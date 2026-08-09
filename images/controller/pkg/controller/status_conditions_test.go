@@ -404,6 +404,38 @@ func TestUpdateLocalStorageClassPhase_DoesNotReviveTheFinalizerWhileDeleting(t *
 	}
 }
 
+// The failure paths pass err.Error() through as the condition message, and the
+// schema caps it at 32768. Over the cap the API server rejects the whole status
+// write, so the resource keeps reporting its previous verdict and the reconcile
+// fails on the write instead of on what actually went wrong.
+func TestUpdateLocalStorageClassPhase_TruncatesAnOversizedMessage(t *testing.T) {
+	lsc := &slv.LocalStorageClass{
+		ObjectMeta: metav1.ObjectMeta{Name: testLSCName, Generation: 1},
+	}
+	cl := newStatusTestClient(t, lsc)
+
+	huge := strings.Repeat("x", conditions.MaxMessageLen+100)
+	if err := updateLocalStorageClassPhase(context.Background(), cl, lsc, FailedStatusPhase, huge); err != nil {
+		t.Fatalf("updateLocalStorageClassPhase: %v", err)
+	}
+
+	ready := conditions.Get(readLSC(t, cl).Status.Conditions, slv.ConditionTypeReady)
+	if ready == nil {
+		t.Fatal("Ready condition was not published")
+	}
+	if len(ready.Message) > conditions.MaxMessageLen {
+		t.Errorf("message is %d bytes, over the %d the schema allows",
+			len(ready.Message), conditions.MaxMessageLen)
+	}
+
+	// The caller's copy is mirrored from the same condition, so it must not
+	// carry the untruncated message either.
+	mirrored := conditions.Get(lsc.Status.Conditions, slv.ConditionTypeReady)
+	if mirrored == nil || len(mirrored.Message) > conditions.MaxMessageLen {
+		t.Errorf("the mirrored condition was not truncated: %+v", mirrored)
+	}
+}
+
 // A LocalStorageClass whose teardown is blocked used to keep advertising
 // Ready=True from its last successful pass, which is precisely the state an
 // alert on "Ready=False for longer than N minutes" is meant to catch.
