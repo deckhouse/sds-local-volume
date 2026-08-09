@@ -1,0 +1,142 @@
+- name: kubernetes.sds_local_volume.lvm_logical_volume
+  rules:
+    - alert: D8SdsLocalVolumeOrphanedLVMLogicalVolumes
+      expr: max(sds_local_volume_orphaned_lvm_logical_volume_count{state="active"}) > 0
+      for: 1h
+      labels:
+        severity_level: "6"
+        tier: cluster
+      annotations:
+        plk_markup_format: "markdown"
+        plk_protocol_version: "1"
+        plk_create_group_if_not_exists__d8_sds_local_volume_lvm_logical_volume_health: "D8SdsLocalVolumeLVMLogicalVolumeHealth,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        plk_grouped_by__d8_sds_local_volume_lvm_logical_volume_health: "D8SdsLocalVolumeLVMLogicalVolumeHealth,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        summary: There are LVMLogicalVolumes whose PersistentVolume no longer exists
+        description: |
+          {{ $value }} LVMLogicalVolume resources have no PersistentVolume any more, so the space they occupy in the volume groups is allocated but unusable.
+
+          This is the expected state right after a `reclaimPolicy: Retain` PersistentVolume is deleted: the data is kept on purpose until an administrator asks for it to go. It becomes a leak when nobody ever does, and the volume groups fill up while the PersistentVolume dashboards stay green.
+
+          The recommended course of action:
+          1. List the volumes and the space they hold: `d8 k get lvmlogicalvolume -o custom-columns=NAME:.metadata.name,VG:.spec.lvmVolumeGroupName,TYPE:.spec.type,SIZE:.status.actualSize,PHASE:.status.phase`. For a `Thin` volume the size is the virtual one and says nothing about the thin pool's consumption; only a `Thick` size is space held in the volume group.
+          2. Decide, per volume, whether the data is still needed. The names match the PersistentVolumes that used to own them, so an audit log or a backup catalog can be used to identify them.
+          3. Delete the ones that are not: `d8 k delete lvmlogicalvolume <name>`. The sds-local-volume controller removes its finalizer, sds-node-configurator removes the logical volume, and the space returns to the volume group.
+          4. For the ones that are meant to outlive their PersistentVolume, say so instead of silencing this alert: `d8 k annotate lvmlogicalvolume <name> storage.deckhouse.io/retain-acknowledged=true`. An acknowledged volume moves to `state="retained"`, which this alert does not read, and is still reclaimed normally once somebody deletes it.
+
+    - alert: D8SdsLocalVolumeLVMLogicalVolumeDeletionStuck
+      expr: max by (kind) (sds_local_volume_awaiting_agent_count) > 0
+      # The metric counts every deletion that is in the agent's hands, not only the
+      # ones that are stuck there — the two are told apart by how long it lasts, so
+      # the wait is what carries the whole meaning of this alert.
+      #
+      # It has to exceed the slowest wipe the module can legitimately ask for.
+      # `volumeCleanup: RandomFillThreePass` writes the whole volume three times
+      # before lvremove, which on a large Thick volume on shared or spinning storage
+      # is far more than fifteen minutes, and a batch delete serialises several of
+      # them on one node. Firing during a correct secure erase would send the on-call
+      # looking for a failing lvremove that is not failing, and the alert would end
+      # up silenced — taking the dead-agent case it exists for with it.
+      for: 2h
+      labels:
+        severity_level: "5"
+        tier: cluster
+      annotations:
+        plk_markup_format: "markdown"
+        plk_protocol_version: "1"
+        plk_create_group_if_not_exists__d8_sds_local_volume_lvm_logical_volume_health: "D8SdsLocalVolumeLVMLogicalVolumeHealth,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        plk_grouped_by__d8_sds_local_volume_lvm_logical_volume_health: "D8SdsLocalVolumeLVMLogicalVolumeHealth,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        summary: Deletion of an LVMLogicalVolume is not making progress
+        description: |
+          {{ $value }} {{ $labels.kind }} resources have been asked to be deleted, carry no finalizer of sds-local-volume any more, and have been waiting for more than two hours.
+
+          Nothing else is holding them up: the deletion now waits entirely on the sds-node-configurator agent to remove the logical volume and drop the last finalizer. Until it does, the space stays allocated in the volume group and no other alert of this module covers it — the resource is outside every orphan series precisely because this module no longer holds a finalizer on it.
+
+          Two things this counts that the name does not suggest. It counts resources this module never owned — a hand-written LVMLogicalVolume, or one belonging to another consumer of sds-node-configurator, also carries no finalizer of this module; the deletion is stuck in the agent either way, which is what this alert is about. And it counts a deletion that is legitimately still running: the agent erases the volume as `spec.volumeCleanup` says before it runs `lvremove`, and `RandomFillThreePass` on a large volume takes a long time. That is what the two-hour wait is for, so start by checking whether a wipe is in progress rather than assuming a fault.
+
+          The recommended course of action:
+          1. Find the resources: `d8 k get lvmlogicalvolume -o json | jq -r '.items[] | select(.metadata.deletionTimestamp) | "\(.metadata.name) \(.spec.lvmVolumeGroupName) \(.spec.volumeCleanup) \(.metadata.finalizers)"'` (use `lvmlogicalvolumesnapshot` when the `kind` label says so)
+          2. Check whether the agent is still erasing the volume rather than stuck: `d8 k -n d8-sds-node-configurator logs -l app=sds-node-configurator --tail=200 | grep -iE "volumeCleanup|wipe|shred"`. A volume with `volumeCleanup` set to `RandomFillSinglePass` or `RandomFillThreePass` is written over completely before it is removed, and that is not a fault
+          3. Check that the sds-node-configurator agent is running on the node holding the volume group: `d8 k -n d8-sds-node-configurator get pods -l app=sds-node-configurator -o wide`
+          4. Check that the LVMVolumeGroup is healthy: `d8 k get lvmvolumegroup`
+          5. Look for a failing lvremove in the agent log: `d8 k -n d8-sds-node-configurator logs -l app=sds-node-configurator --tail=200 | grep -i lvremove`
+
+    - alert: D8SdsLocalVolumeLVMLogicalVolumeReclaimBlocked
+      expr: max(sds_local_volume_orphaned_lvm_logical_volume_count{state="blocked"}) > 0
+      for: 15m
+      labels:
+        severity_level: "5"
+        tier: cluster
+      annotations:
+        plk_markup_format: "markdown"
+        plk_protocol_version: "1"
+        plk_create_group_if_not_exists__d8_sds_local_volume_lvm_logical_volume_health: "D8SdsLocalVolumeLVMLogicalVolumeHealth,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        plk_grouped_by__d8_sds_local_volume_lvm_logical_volume_health: "D8SdsLocalVolumeLVMLogicalVolumeHealth,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        summary: sds-local-volume is keeping the deletion of an LVMLogicalVolume blocked
+        description: |
+          {{ $value }} LVMLogicalVolume resources have been asked to be deleted, but the sds-local-volume controller is keeping its finalizer on them.
+
+          Which reason applies is in the `reason` label of `sds_local_volume_orphaned_lvm_logical_volume_allocated_bytes{state="blocked"}`, per volume:
+          - `snapshots_present` — the logical volume still has LVMLogicalVolumeSnapshots taken from it;
+          - `agent_finalizer_absent` — the sds-node-configurator finalizer is absent, so nothing would remove the logical volume and deleting the resource would leave it on the node with nothing pointing at it;
+          - `persistent_volume_exists` — a PersistentVolume for the volume turned out to exist after all;
+          - `successor_in_place` — the name is now held by a different object than the one the sweep looked at, because external-provisioner reused the volume ID on a retry. Nothing to do: the object now holding the name is classified on its own terms by the next sweep, and this reason disappears with it;
+          - `api_error` — the controller could not confirm the reclaim against the API server. This one is a fault in the module, not a property of the volume;
+          - `removal_failed` — the reclaim was allowed but the finalizer could not be written off. Also a fault in the module, and also raises D8SdsLocalVolumeCSIFinalizerRemovalErrors.
+
+          The recommended course of action:
+          1. Read the reason per volume: `d8 k -n d8-monitoring exec -it sts/prometheus-main -c prometheus -- curl -s 'localhost:9090/api/v1/query?query=sds_local_volume_orphaned_lvm_logical_volume_allocated_bytes%7Bstate%3D%22blocked%22%7D' | jq -r '.data.result[].metric | "\(.name) \(.lvm_volume_group) \(.reason)"'`, or from the controller log: `d8 k -n d8-sds-local-volume logs deploy/controller -c controller | grep -E "refusing to unblock|keeping the finalizer"`
+          2. For `snapshots_present`, delete the snapshots first: `d8 k get lvmlogicalvolumesnapshot -o custom-columns=NAME:.metadata.name,SOURCE:.spec.lvmLogicalVolumeName`, then `d8 k delete lvmlogicalvolumesnapshot <name>`. The module unblocks a snapshot deletion on the same rule it unblocks a volume one, so this does not hang; if it does not complete, D8SdsLocalVolumeLVMLogicalVolumeSnapshotReclaimBlocked says why
+          3. For `agent_finalizer_absent`, check that the node and its LVMVolumeGroup are healthy: `d8 k get lvmvolumegroup`
+          4. For `persistent_volume_exists`, the `driver` field in the controller log says whether a PersistentVolume of this module really refers to the volume or the name merely collides with another provisioner's
+          5. For `api_error` or `removal_failed`, treat it as a module fault: `d8 k -n d8-sds-local-volume logs deploy/controller -c controller | grep -E "unable to confirm|unable to remove"`
+
+    - alert: D8SdsLocalVolumeLVMLogicalVolumeSnapshotReclaimBlocked
+      expr: max(sds_local_volume_orphaned_lvm_logical_volume_snapshot_count{state="blocked"}) > 0
+      for: 15m
+      labels:
+        severity_level: "5"
+        tier: cluster
+      annotations:
+        plk_markup_format: "markdown"
+        plk_protocol_version: "1"
+        plk_create_group_if_not_exists__d8_sds_local_volume_lvm_logical_volume_health: "D8SdsLocalVolumeLVMLogicalVolumeHealth,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        plk_grouped_by__d8_sds_local_volume_lvm_logical_volume_health: "D8SdsLocalVolumeLVMLogicalVolumeHealth,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        summary: sds-local-volume is keeping the deletion of an LVMLogicalVolumeSnapshot blocked
+        description: |
+          {{ $value }} LVMLogicalVolumeSnapshot resources have been asked to be deleted, but the sds-local-volume controller is keeping its finalizer on them.
+
+          A snapshot in this state also keeps the volume it was taken from from being reclaimed, which shows up as `reason="snapshots_present"` on that volume.
+
+          Which reason applies is in the `reason` label of `sds_local_volume_orphaned_lvm_logical_volume_snapshot_used_bytes{state="blocked"}`, per snapshot:
+          - `volume_snapshot_content_exists` — a VolumeSnapshotContent still refers to the snapshot, so the snapshot is live and only the resource underneath it was deleted. Delete the VolumeSnapshot instead, and let the snapshot-controller take the rest down;
+          - `agent_finalizer_absent` — the sds-node-configurator finalizer is absent, so nothing would remove the snapshot on the node;
+          - `successor_in_place` — the name is now held by a different object than the one the sweep looked at; nothing to do, the next sweep classifies the successor on its own terms;
+          - `api_error` or `removal_failed` — faults in the module rather than properties of the snapshot.
+
+          The recommended course of action:
+          1. Read the reason per snapshot: `d8 k -n d8-monitoring exec -it sts/prometheus-main -c prometheus -- curl -s 'localhost:9090/api/v1/query?query=sds_local_volume_orphaned_lvm_logical_volume_snapshot_used_bytes%7Bstate%3D%22blocked%22%7D' | jq -r '.data.result[].metric | "\(.name) \(.lvm_logical_volume) \(.reason)"'`
+          2. For `volume_snapshot_content_exists`, find what still refers to it: `d8 k get volumesnapshotcontent -o custom-columns=NAME:.metadata.name,HANDLE:.status.snapshotHandle,SNAPSHOT:.spec.volumeSnapshotRef.name`
+          3. Otherwise follow the same steps as for D8SdsLocalVolumeLVMLogicalVolumeReclaimBlocked
+
+    - alert: D8SdsLocalVolumeCSIFinalizerRemovalErrors
+      expr: max by (kind) (increase(sds_local_volume_csi_finalizer_removals_total{result="error"}[15m])) > 0
+      for: 0m
+      labels:
+        severity_level: "5"
+        tier: cluster
+      annotations:
+        plk_markup_format: "markdown"
+        plk_protocol_version: "1"
+        plk_create_group_if_not_exists__d8_sds_local_volume_lvm_logical_volume_health: "D8SdsLocalVolumeLVMLogicalVolumeHealth,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        plk_grouped_by__d8_sds_local_volume_lvm_logical_volume_health: "D8SdsLocalVolumeLVMLogicalVolumeHealth,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        summary: sds-local-volume cannot remove its finalizer from an LVMLogicalVolume
+        description: |
+          The sds-local-volume controller is failing to take its finalizer off {{ $labels.kind }} resources, so their deletion will hang and the space will not be reclaimed.
+
+          The counter only ever counts failed writes: every deliberate refusal to unblock a deletion is reported as `state="blocked"` with a reason instead — including the benign ones, such as a name whose object was replaced by a same-named successor — and an attempt that found nothing left to do is counted as `result="noop"`. So this alert always means a fault in the module or its permissions.
+
+          It has no `for` on purpose: the `increase` window is what absorbs the noise, and a `for` on top of it would make a single failure impossible to catch — the sample would leave the window before the wait elapsed.
+
+          The recommended course of action:
+          1. Check the controller log: `d8 k -n d8-sds-local-volume logs deploy/controller -c controller | grep "unable to remove the CSI finalizer"`
+          2. Check that the controller may patch the resources: `d8 k auth can-i patch lvmlogicalvolumes --as=system:serviceaccount:d8-sds-local-volume:controller` and `d8 k auth can-i patch lvmlogicalvolumesnapshots --as=system:serviceaccount:d8-sds-local-volume:controller`. The verb is `patch` and not `update`: the controller writes a merge patch of `metadata.finalizers` alone, and the two are independent RBAC verbs — a ClusterRole granting only `update` answers `yes` to a `can-i update` check while every write is denied

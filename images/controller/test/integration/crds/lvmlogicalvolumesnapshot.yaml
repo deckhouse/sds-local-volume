@@ -1,0 +1,119 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: lvmlogicalvolumesnapshots.storage.deckhouse.io
+  labels:
+    heritage: deckhouse
+    module: sds-node-configurator
+    backup.deckhouse.io/cluster-config: "true"
+spec:
+  group: storage.deckhouse.io
+  scope: Cluster
+  names:
+    kind: LVMLogicalVolumeSnapshot
+    plural: lvmlogicalvolumesnapshots
+    singular: lvmlogicalvolumesnapshot
+    shortNames:
+      - llvs
+  preserveUnknownFields: false
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: |
+            LVMLogicalVolumeSnapshot resource defines the storage where a VolumeSnapshot will be created.
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - lvmLogicalVolumeName
+              properties:
+                actualSnapshotNameOnTheNode:
+                  type: string
+                  description: |
+                    Name of the volume snapshot.
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: Value is immutable.
+                  minLength: 1
+                lvmLogicalVolumeName:
+                  type: string
+                  description: |
+                    Name of the snapshotted LLV resource.
+                  x-kubernetes-validations:
+                    - rule: self == oldSelf
+                      message: Value is immutable.
+                  minLength: 1
+            status:
+              type: object
+              description: |
+                Describes the resource status.
+              properties:
+                nodeName:
+                  type: string
+                  description: |
+                    Name of the Kubernetes node the snapshot resides in.
+                actualVGNameOnTheNode:
+                  type: string
+                  description: |
+                    Name of the Volume Group, where the snapshot resides in.
+                actualLVNameOnTheNode:
+                  type: string
+                  description: |
+                    Name of the volume the snapshot is created from.
+                phase:
+                  type: string
+                  enum: [Created, Pending, Failed]
+                  description: |
+                    Current resource's phase.
+                    
+                    Possible values:
+                    
+                    - `Created`: Snapshot was created successfully.
+                    - `Pending`: Snapshot is being created.
+                    - `Failed`: An error occurred while creating the snapshot.
+                reason:
+                  type: string
+                  description: |
+                    Reason of the phase.
+                size:
+                  description: |
+                    Snapshotted Logical Volume size on the node.
+                  type: string
+                usedSize:
+                  description: |
+                    Snapshot Logical Volume size on the node.
+                  type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - jsonPath: .spec.lvmLogicalVolumeName
+          name: Snapshotted LLV Name
+          type: string
+          description: Snapshotted LLV name
+        - jsonPath: .status.nodeName
+          name: NodeName
+          type: string
+          description: Name of the Kubernetes node the snapshot resides in.
+        - jsonPath: .status.phase
+          name: Phase
+          type: string
+          description: Current resource status.
+        - jsonPath: .status.size
+          name: Size
+          type: string
+          description: Snapshotted Logical Volume size.
+        - jsonPath: .status.usedSize
+          name: UsedSize
+          type: string
+          description: Snapshot size.
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+          description: Age of this resource.

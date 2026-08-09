@@ -36,10 +36,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -59,6 +61,9 @@ var (
 	cfg       *rest.Config
 	scheme    *apiruntime.Scheme
 	k8sClient client.Client
+	// mgrCache is the manager's cache, so that a spec can assert on what the
+	// controller actually reads rather than only on what the API server holds.
+	mgrCache cache.Cache
 
 	suiteCtx    context.Context
 	suiteCancel context.CancelFunc
@@ -82,8 +87,9 @@ var _ = BeforeSuite(func() {
 		CRDDirectoryPaths: []string{
 			// The module's own CRDs (LocalStorageClass).
 			filepath.Join("..", "..", "..", "..", "crds"),
-			// The LVMVolumeGroup CRD from sds-node-configurator, vendored as a
-			// fixture so the suite does not depend on a sibling checkout.
+			// The LVMVolumeGroup, LVMLogicalVolume and LVMLogicalVolumeSnapshot CRDs
+			// from sds-node-configurator, vendored as fixtures so the suite does not
+			// depend on a sibling checkout.
 			filepath.Join("crds"),
 		},
 		ErrorIfCRDPathMissing: true,
@@ -109,17 +115,42 @@ var _ = BeforeSuite(func() {
 		Scheme:         scheme,
 		Metrics:        metricsserver.Options{BindAddress: "0"},
 		LeaderElection: false,
+		// Mirrors cmd/main.go. The wiring is the part that is easy to get wrong and
+		// that no unit test can reach: the namespace restriction must not keep the
+		// cluster-scoped PersistentVolume cache from being cluster-wide, and the
+		// transform has to survive the ByObject defaulting. Without this the suite
+		// would exercise a cache the production binary does not have, and a
+		// controller-runtime bump that changed either could leave every test green
+		// while referencingPersistentVolumes silently returned an empty map.
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{controllerNamespace: {}},
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.PersistentVolume{}: {Transform: controller.StripPersistentVolume},
+			},
+		},
 	})
 	Expect(err).NotTo(HaveOccurred())
+	mgrCache = mgr.GetCache()
 
 	cfgParams := config.Options{
 		ControllerNamespace:         controllerNamespace,
 		ConfigSecretName:            config.ConfigSecretName,
 		RequeueStorageClassInterval: 1,
+		// Short enough that a spec can wait out the grace period, long enough that a
+		// spec asserting the opposite — that a volume is left alone — is not racing
+		// the collector.
+		LLVOrphanGracePeriod: 2 * time.Second,
+		LLVSweepInterval:     time.Second,
 	}
 	// The zero Recorder discards every observation, so the suite does not need a
 	// metrics registry to exercise the reconcile behaviour.
 	_, err = controller.RunLocalStorageClassWatcherController(mgr, cfgParams, suiteLog, monitoring.Recorder{})
+	Expect(err).NotTo(HaveOccurred())
+
+	// The garbage collector runs on the same manager, so the specs exercise it
+	// against a real API server: envtest enforces finalizer semantics, which a fake
+	// client only approximates.
+	_, err = controller.RunLVMLogicalVolumeGCController(mgr, cfgParams, suiteLog, monitoring.Recorder{})
 	Expect(err).NotTo(HaveOccurred())
 
 	go func() {

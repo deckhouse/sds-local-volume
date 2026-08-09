@@ -12,6 +12,31 @@ properties:
       - TRACE
     description: Module log level
     default: DEBUG
+  llvOrphanGracePeriod:
+    type: string
+    pattern: '^[1-9][0-9]*(s|m|h)$'
+    description: |
+      How long an LVMLogicalVolume or an LVMLogicalVolumeSnapshot that has been
+      asked to be deleted and whose PersistentVolume (or VolumeSnapshotContent) no
+      longer exists is left alone before the module removes its own finalizer,
+      letting `sds-node-configurator` remove the logical volume.
+
+      Defaults to 30 seconds. The setting deliberately has no default value in the
+      schema: the fallback is stated once, in the controller, instead of being
+      restated here where the two could drift apart.
+
+      The value is a whole number of seconds, minutes or hours — `45s`, `5m`, `1h`.
+      Compound and sub-second durations (`1m30s`, `500ms`) are rejected on purpose,
+      as is `0s`.
+
+      The delay exists so that an in-flight `DeleteVolume` call gets to remove the
+      finalizer itself. Raise it on a cluster where the CSI driver needs longer than
+      the default to complete a deletion; there is no reason to lower it.
+
+      **Caution!** Once the finalizer is removed the logical volume is destroyed and
+      the data is not recoverable. Only volumes an administrator has explicitly asked
+      to delete are ever unblocked — deleting a `reclaimPolicy: Retain`
+      PersistentVolume alone never is.
   dataNodes:
     type: object
     description: Settings for local volumes csi on nodes with data

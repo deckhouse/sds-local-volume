@@ -5,6 +5,25 @@
        only "localstorageclasses" leaves every status write returning Forbidden.
        Its verbs are the ones a status subresource actually serves — GET, PUT and PATCH;
        create/delete/list/watch on it would be grants with no endpoint behind them. */ -}}
+{{- /*
+  The LVMLogicalVolume garbage collector only ever removes its own finalizer from
+  a resource an administrator has already asked to delete, so it is granted patch
+  on lvmlogicalvolumes and lvmlogicalvolumesnapshots but neither create nor delete
+  on either. It reads volumesnapshotcontents to keep from unblocking a snapshot
+  that is still live, the same way it reads persistentvolumes for a volume.
+
+  The verb is patch and not update because the collector writes a merge patch of
+  metadata.finalizers alone rather than sending the whole object back. The
+  authorizer derives the verb from the HTTP method — PATCH is authorised against
+  patch, PUT against update — so the two are independent grants and update would
+  not cover the write. No code path of this module issues a PUT on either
+  resource, so update is not granted at all.
+
+  volumesnapshotcontents is granted even though snapshot-controller is an optional
+  dependency: a rule naming a resource whose CRD is absent is inert, whereas the
+  controller degrading to "nothing refers to this snapshot" because it may not look
+  would be a silent loss of a safety check.
+*/ -}}
 {{- $rbacConfig := dict
   "roleRules" (list
     (dict "apiGroups" (list "") "resources" (list "secrets") "verbs" (list "get" "list" "watch"))
@@ -16,6 +35,9 @@
     (dict "apiGroups" (list "") "resources" (list "events") "verbs" (list "create" "list"))
     (dict "apiGroups" (list "storage.deckhouse.io") "resources" (list "localstorageclasses" "lvmvolumegroups") "verbs" (list "get" "list" "create" "delete" "watch" "update"))
     (dict "apiGroups" (list "storage.deckhouse.io") "resources" (list "localstorageclasses/status") "verbs" (list "get" "update" "patch"))
+    (dict "apiGroups" (list "storage.deckhouse.io") "resources" (list "lvmlogicalvolumes") "verbs" (list "get" "list" "watch" "patch"))
+    (dict "apiGroups" (list "storage.deckhouse.io") "resources" (list "lvmlogicalvolumesnapshots") "verbs" (list "get" "list" "watch" "patch"))
+    (dict "apiGroups" (list "snapshot.storage.k8s.io") "resources" (list "volumesnapshotcontents") "verbs" (list "get" "list" "watch"))
     (dict "apiGroups" (list "storage.k8s.io") "resources" (list "storageclasses") "verbs" (list "create" "delete" "list" "get" "watch" "update"))
     (dict "apiGroups" (list "") "resources" (list "pods" "persistentvolumeclaims" "persistentvolumes") "verbs" (list "get"))
   )
