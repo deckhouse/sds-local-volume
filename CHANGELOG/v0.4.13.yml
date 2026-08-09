@@ -1,0 +1,13 @@
+Changes:
+- Correction: LVMLogicalVolume and LVMLogicalVolumeSnapshot remaining after removing
+    a PersistentVolume from a StorageClass with reclaimPolicy Retain no longer remain
+    forever - a collector has been added that removes the module finalizer from resources
+    that have already been requested to be deleted and that are not referenced. Previously,
+    the space in the volume group remained occupied, the LVMLogicalVolume delete command
+    did not complete, and the finalizer had to be removed manually
+- Added metrics for logical volumes and volumes that have outlived their PersistentVolume,
+  five alerting rules and an “SDS Local Volume” dashboard; describes the procedure
+  for manually freeing up space when reclaimPolicy Retain
+- LocalStorageClass publishes status.conditions and status.observedGeneration
+- Correction: condition message is truncated to schema-allowed length
+- Updating base images to v1.3.25 and lib-helm to 1.72.13
