@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -414,7 +415,11 @@ func TestUpdateLocalStorageClassPhase_TruncatesAnOversizedMessage(t *testing.T) 
 	}
 	cl := newStatusTestClient(t, lsc)
 
-	huge := strings.Repeat("x", conditions.MaxMessageLen+100)
+	// Multi-byte on purpose. The schema's maxLength is an OpenAPI string
+	// length, counted in runes, and TruncateMessage counts the same way — a
+	// byte-counting assertion here would fail on a message that is in fact
+	// within the limit.
+	huge := strings.Repeat("я", conditions.MaxMessageLen+100)
 	if err := updateLocalStorageClassPhase(context.Background(), cl, lsc, FailedStatusPhase, huge); err != nil {
 		t.Fatalf("updateLocalStorageClassPhase: %v", err)
 	}
@@ -423,15 +428,19 @@ func TestUpdateLocalStorageClassPhase_TruncatesAnOversizedMessage(t *testing.T) 
 	if ready == nil {
 		t.Fatal("Ready condition was not published")
 	}
-	if len(ready.Message) > conditions.MaxMessageLen {
-		t.Errorf("message is %d bytes, over the %d the schema allows",
-			len(ready.Message), conditions.MaxMessageLen)
+	// Counted in runes, not bytes: the schema's maxLength is an OpenAPI string
+	// length, which the API server validates with utf8.RuneCountInString, and
+	// TruncateMessage counts the same way. Measuring len() would fail this test
+	// on any non-ASCII message that is in fact within the limit.
+	if utf8.RuneCountInString(ready.Message) > conditions.MaxMessageLen {
+		t.Errorf("message is %d runes, over the %d the schema allows",
+			utf8.RuneCountInString(ready.Message), conditions.MaxMessageLen)
 	}
 
 	// The caller's copy is mirrored from the same condition, so it must not
 	// carry the untruncated message either.
 	mirrored := conditions.Get(lsc.Status.Conditions, slv.ConditionTypeReady)
-	if mirrored == nil || len(mirrored.Message) > conditions.MaxMessageLen {
+	if mirrored == nil || utf8.RuneCountInString(mirrored.Message) > conditions.MaxMessageLen {
 		t.Errorf("the mirrored condition was not truncated: %+v", mirrored)
 	}
 }
