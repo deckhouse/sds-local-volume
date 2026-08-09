@@ -21,17 +21,20 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/utils/strings/slices"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	"github.com/deckhouse/sds-common-lib/conditions"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/internal"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
@@ -180,7 +183,7 @@ func reconcileLSCDeleteFunc(
 	}
 
 	log.Debug("removing the finalizer", "finalizer", LocalStorageClassFinalizerName)
-	removed, err := removeFinalizerIfExists(ctx, cl, lsc, LocalStorageClassFinalizerName)
+	removed, err := removeControllerFinalizers(ctx, cl, lsc)
 	if err != nil {
 		log.Error("unable to remove the finalizer", logger.Err(err), slog.String("finalizer", LocalStorageClassFinalizerName))
 		upErr := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, fmt.Sprintf("Unable to remove a finalizer, err: %s", err.Error()))
@@ -190,6 +193,31 @@ func reconcileLSCDeleteFunc(
 		return true, err
 	}
 	log.Debug("finalizer removal result", "finalizer", LocalStorageClassFinalizerName, "removed", removed)
+
+	// Published last, once nothing is left that could conflict with it.
+	//
+	// The obvious place for this is the top of the function — say "deleting"
+	// before anything can go wrong — and that is where it does not work. The
+	// status write bumps resourceVersion on the server while the caller's copy
+	// and the informer cache still hold the old one, so the finalizer removal
+	// that followed would land on a stale revision and 409. Retrying does not
+	// help: the re-read goes through the same cache, which needs the watch
+	// event to arrive before it can return anything newer. The deletion would
+	// stall and the resource would be marked Failed for a teardown that was
+	// going fine.
+	//
+	// Publishing here loses nothing. The two ways a teardown fails are covered:
+	// a step that errors takes an error branch above and publishes Ready=False
+	// with reason ReconcileFailed, and a resource held by somebody else's
+	// finalizer survives our removal and keeps the Deleting condition set here.
+	//
+	// Not fatal on its own — failing to say "deleting" must not stop the
+	// deletion — and a NotFound simply means ours was the last finalizer and the
+	// object finished going away, which is the normal case and not worth a log
+	// line.
+	if err := setLocalStorageClassDeleting(ctx, cl, lsc); err != nil && !apierrors.IsNotFound(err) {
+		log.Error("unable to publish the Deleting condition", logger.Err(err))
+	}
 
 	log.Debug("done")
 	return false, nil
@@ -329,7 +357,31 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 					return true, nil
 				}
 
-				if lsc.Status.Phase == FailedStatusPhase {
+				// Retry a LocalStorageClass whose last verdict is either not a
+				// success or not about the generation currently in the spec,
+				// even when the StorageClass itself needs no change.
+				//
+				// The staleness half is not symmetry for its own sake. Not every
+				// spec edit reaches hasSCDiff: it compares the LVMVolumeGroups as
+				// a set, so reordering lvmVolumeGroups — or rewriting a
+				// matchLabels selector as the equivalent matchExpressions — bumps
+				// metadata.generation and produces no difference. Without this
+				// check that generation is never observed, identifyReconcileFunc
+				// answers "none", and status.observedGeneration trails
+				// metadata.generation for the lifetime of the resource, which is
+				// exactly the state the field is documented to rule out. The pass
+				// it costs is cheap: conditions.UpdateStatus skips the write when
+				// the only thing that moved is a resync.
+				//
+				// Checked against the Ready condition rather than the phase, so an
+				// object the controller has never written a status for — and one
+				// carried over from a release that predates the conditions — is
+				// picked up as well. IsStale covers a missing condition; the nil
+				// check is for the pointer above it, which is absent until the
+				// first status write.
+				if lsc.Status == nil ||
+					conditions.IsStale(lsc.Status.Conditions, slv.ConditionTypeReady, lsc.Generation) ||
+					!conditions.IsTrue(lsc.Status.Conditions, slv.ConditionTypeReady) {
 					return true, nil
 				}
 
@@ -476,12 +528,11 @@ func reconcileLSCCreateFunc(
 	log = log.Named("create").With("localStorageClass", lsc.Name)
 
 	log.Debug("validating the LocalStorageClass")
-	added, err := addFinalizerIfNotExistsForLSC(ctx, cl, lsc)
-	if err != nil {
+	if err := ensureFinalizer(ctx, cl, lsc); err != nil {
 		log.Error("unable to add the finalizer to the LocalStorageClass", logger.Err(err), slog.String("finalizer", LocalStorageClassFinalizerName))
 		return true, err
 	}
-	log.Debug("finalizer addition result", "finalizer", LocalStorageClassFinalizerName, "added", added)
+	log.Debug("ensured the finalizer", "finalizer", LocalStorageClassFinalizerName)
 
 	valid, msg := validateLocalStorageClass(scList, lsc, lvgList, effectiveLVGs)
 	if !valid {
@@ -527,7 +578,7 @@ func reconcileLSCCreateFunc(
 		return true, nil
 	}
 
-	added, err = addFinalizerIfNotExistsForSC(ctx, cl, sc)
+	added, err := addFinalizerIfNotExistsForSC(ctx, cl, sc)
 	if err != nil {
 		log.Error("unable to add the finalizer to the StorageClass", logger.Err(err), slog.String("finalizer", LocalStorageClassFinalizerName), slog.String("storageClass", sc.Name))
 		return true, err
@@ -564,26 +615,25 @@ func createStorageClassIfNotExists(
 	return true, err
 }
 
-func addFinalizerIfNotExistsForLSC(ctx context.Context, cl client.Client, lsc *slv.LocalStorageClass) (bool, error) {
-	if !slices.Contains(lsc.Finalizers, LocalStorageClassFinalizerName) {
-		lsc.Finalizers = append(lsc.Finalizers, LocalStorageClassFinalizerName)
-	}
-
-	err := cl.Update(ctx, lsc)
-	if err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
-
+// addFinalizerIfNotExistsForSC puts the controller finalizer on the managed
+// StorageClass and reports whether it had to write anything.
+//
+// The early return is not a micro-optimisation. Its only caller runs it
+// straight after createStorageClassIfNotExists, on a StorageClass that
+// configureStorageClass built with the finalizer already in its ObjectMeta —
+// so the previous unconditional Update was a no-op write on every create pass,
+// costing a round-trip and a resourceVersion bump, and the "added" it returned
+// was true regardless of whether anything had been added.
+//
+// This is the same defect ensureFinalizer was written to replace on the
+// LocalStorageClass side.
 func addFinalizerIfNotExistsForSC(ctx context.Context, cl client.Client, sc *v1.StorageClass) (bool, error) {
-	if !slices.Contains(sc.Finalizers, LocalStorageClassFinalizerName) {
-		sc.Finalizers = append(sc.Finalizers, LocalStorageClassFinalizerName)
+	if slices.Contains(sc.Finalizers, LocalStorageClassFinalizerName) {
+		return false, nil
 	}
 
-	err := cl.Update(ctx, sc)
-	if err != nil {
+	sc.Finalizers = append(sc.Finalizers, LocalStorageClassFinalizerName)
+	if err := cl.Update(ctx, sc); err != nil {
 		return false, err
 	}
 
@@ -661,6 +711,22 @@ func configureStorageClass(lsc *slv.LocalStorageClass, effectiveLVGs []slv.Local
 	return sc, nil
 }
 
+// updateLocalStorageClassPhase records the outcome of a reconcile pass as both
+// the coarse phase and the Ready condition.
+//
+// The phase is the input rather than something derived from the condition,
+// unlike in the other storage modules. This controller reports its verdict from
+// sixteen different call sites, and the phase vocabulary is exactly two values,
+// so the two representations are in one-to-one correspondence: rewriting every
+// call site to pass an error instead would be a large change with no observable
+// difference in the result.
+//
+// The finalizer used to be appended as a side effect of the same full-object
+// Update that carried the status. Now that status lives on its own subresource
+// those are two calls, but the ordering is preserved — the finalizer is in place
+// before the status is published. It matters because this function runs on
+// failure paths that are reached before the regular finalizer step. The one
+// exception is a resource that is already being deleted; see ensureFinalizer.
 func updateLocalStorageClassPhase(
 	ctx context.Context,
 	cl client.Client,
@@ -668,23 +734,143 @@ func updateLocalStorageClassPhase(
 	phase,
 	reason string,
 ) error {
-	if lsc.Status == nil {
-		lsc.Status = new(slv.LocalStorageClassStatus)
-	}
-	lsc.Status.Phase = phase
-	lsc.Status.Reason = reason
-
-	if !slices.Contains(lsc.Finalizers, LocalStorageClassFinalizerName) {
-		lsc.Finalizers = append(lsc.Finalizers, LocalStorageClassFinalizerName)
-	}
-
-	// TODO: add retry logic
-	err := cl.Update(ctx, lsc)
-	if err != nil {
+	if err := ensureFinalizer(ctx, cl, lsc); err != nil {
 		return err
 	}
 
+	cond := metav1.Condition{
+		Type:               slv.ConditionTypeReady,
+		Status:             metav1.ConditionTrue,
+		Reason:             conditions.ReasonReconciled,
+		Message:            reason,
+		ObservedGeneration: lsc.Generation,
+	}
+	if phase != CreatedStatusPhase {
+		cond.Status = metav1.ConditionFalse
+		cond.Reason = conditions.ReasonReconcileFailed
+	}
+	if cond.Message == "" {
+		// The success path passes no reason, and a condition with an empty
+		// message tells `kubectl describe` nothing.
+		cond.Message = fmt.Sprintf("the LocalStorageClass is in the %s phase", phase)
+	}
+
+	return publishLocalStorageClassStatus(ctx, cl, lsc, cond, phase, reason)
+}
+
+// setLocalStorageClassDeleting reports that a teardown is under way, without
+// touching the phase.
+//
+// The phase vocabulary is exactly Created and Failed, so it has nothing to say
+// about a resource that is being deleted — which is why the delete path used to
+// stay silent. Conditions do not have that limitation, and silence is the wrong
+// answer here: a LocalStorageClass whose finalizer removal is blocked sits in
+// Terminating indefinitely while still advertising Ready=True from its last
+// successful pass, so an alert on "Ready=False for longer than N minutes" is
+// exactly what it never fires.
+func setLocalStorageClassDeleting(ctx context.Context, cl client.Client, lsc *slv.LocalStorageClass) error {
+	return publishLocalStorageClassStatus(ctx, cl, lsc, metav1.Condition{
+		Type:               slv.ConditionTypeReady,
+		Status:             metav1.ConditionFalse,
+		Reason:             conditions.ReasonDeleting,
+		Message:            "the LocalStorageClass is being deleted",
+		ObservedGeneration: lsc.Generation,
+	}, "", "")
+}
+
+// publishLocalStorageClassStatus writes cond, and — when phase is non-empty —
+// the coarse phase and its reason, through the status subresource.
+//
+// An empty phase leaves status.phase and status.reason as they are: the
+// deletion path has a verdict to report but no phase value that could carry it.
+func publishLocalStorageClassStatus(
+	ctx context.Context,
+	cl client.Client,
+	lsc *slv.LocalStorageClass,
+	cond metav1.Condition,
+	phase,
+	reason string,
+) error {
+	apply := func(sc *slv.LocalStorageClass) {
+		if sc.Status == nil {
+			sc.Status = new(slv.LocalStorageClassStatus)
+		}
+		// The generation that was actually reconciled. Carried on cond by the
+		// caller, taken from the object the caller reconciled rather than from
+		// the one read inside UpdateStatus: if the spec changed in between,
+		// observedGeneration must still point at the generation this verdict is
+		// about.
+		sc.Status.ObservedGeneration = cond.ObservedGeneration
+		conditions.Set(&sc.Status.Conditions, cond)
+		if phase != "" {
+			sc.Status.Phase = phase
+			sc.Status.Reason = reason
+		}
+	}
+
+	if err := conditions.UpdateStatus(ctx, cl, lsc, apply); err != nil {
+		return err
+	}
+
+	// Applied to the caller's object as well, not only to the copy that gets
+	// persisted. The reconcile loop reads lsc.Status straight after this to
+	// publish the phase and readiness gauges, and UpdateStatus deliberately
+	// leaves the object it was handed untouched — without this the metrics
+	// would go on reporting the previous phase, and would find no status at
+	// all on a resource that has never had one written.
+	//
+	// After the write rather than before it, so that the gauges cannot report
+	// a status the API server rejected. The case that matters is the
+	// localstorageclasses/status RBAC rule going missing: every status write
+	// comes back Forbidden, the resource shows an empty phase and no Ready
+	// column, and metrics claiming otherwise would be the last place anyone
+	// looks. A skipped no-op write returns nil here, which is correct — the
+	// server already holds what apply would have produced.
+	apply(lsc)
 	return nil
+}
+
+// ensureFinalizer adds the controller finalizer to lsc unless it is already
+// there or the resource is being deleted. It is the only path that puts the
+// finalizer on a LocalStorageClass.
+//
+// Skipping a terminating object is not an optimisation. The API server rejects
+// any new finalizer on an object that already carries a deletionTimestamp
+// ("no new finalizers can be added if the object is being deleted"), and the
+// delete path strips the finalizer from the in-memory object before its own
+// Update — so a failed removal would be followed by an attempt to put it back,
+// the rejection would surface as this function's error, and the Failed verdict
+// explaining why the deletion is stuck would never be published.
+//
+// The write re-reads the object and retries on conflict for the same reason
+// conditions.UpdateStatus does: lsc comes from the informer cache and can be a
+// revision behind, and a conflict here aborts the status write that follows.
+// The same caveat as in removeControllerFinalizers applies — the re-read is served
+// from the cache, so the retry buys time for the cache to catch up rather than
+// guaranteeing fresh state.
+func ensureFinalizer(ctx context.Context, cl client.Client, lsc *slv.LocalStorageClass) error {
+	if lsc.DeletionTimestamp != nil || slices.Contains(lsc.Finalizers, LocalStorageClassFinalizerName) {
+		return nil
+	}
+
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		fresh := &slv.LocalStorageClass{}
+		if err := cl.Get(ctx, client.ObjectKeyFromObject(lsc), fresh); err != nil {
+			return err
+		}
+		if fresh.DeletionTimestamp != nil || slices.Contains(fresh.Finalizers, LocalStorageClassFinalizerName) {
+			return nil
+		}
+
+		fresh.Finalizers = append(fresh.Finalizers, LocalStorageClassFinalizerName)
+		if err := cl.Update(ctx, fresh); err != nil {
+			return err
+		}
+
+		lsc.Finalizers = fresh.Finalizers
+		lsc.ResourceVersion = fresh.ResourceVersion
+		return nil
+	})
 }
 
 func validateLocalStorageClass(
@@ -924,7 +1110,7 @@ func deleteStorageClass(ctx context.Context, cl client.Client, sc *v1.StorageCla
 		return fmt.Errorf("a storage class %s does not belong to %s provisioner", sc.Name, LocalStorageClassProvisioner)
 	}
 
-	_, err := removeFinalizerIfExists(ctx, cl, sc, LocalStorageClassFinalizerName)
+	_, err := removeControllerFinalizers(ctx, cl, sc)
 	if err != nil {
 		return err
 	}
@@ -937,23 +1123,77 @@ func deleteStorageClass(ctx context.Context, cl client.Client, sc *v1.StorageCla
 	return nil
 }
 
-func removeFinalizerIfExists(ctx context.Context, cl client.Client, obj metav1.Object, finalizerName string) (bool, error) {
-	removed := false
-	finalizers := obj.GetFinalizers()
-	for i, f := range finalizers {
-		if f == finalizerName || f == LocalStorageClassFinalizerNameOld {
-			finalizers = append(finalizers[:i], finalizers[i+1:]...)
-			removed = true
-			break
-		}
-	}
+// localStorageClassFinalizers is every spelling this controller has ever put on
+// a LocalStorageClass or on the StorageClass it manages. All of them are removed
+// together; see removeControllerFinalizers.
+var localStorageClassFinalizers = []string{
+	LocalStorageClassFinalizerName,
+	LocalStorageClassFinalizerNameOld,
+}
 
-	if removed {
-		obj.SetFinalizers(finalizers)
-		err := cl.Update(ctx, obj.(client.Object))
-		if err != nil {
-			return false, err
+// removeControllerFinalizers drops every spelling of this controller's
+// finalizer from obj and reports whether any of them was there to begin with.
+//
+// Taking the whole set rather than a name from the caller is the point rather
+// than tidiness. Nothing migrates one name to the other: the add path tests for
+// the current name only, so a resource created by a module version that used
+// the old name ends up carrying both. Removing one and stopping would leave the
+// other attached, report success, and return without requeueing — the resource
+// would sit in Terminating forever with no event source left to revisit it. On
+// the StorageClass path the same slip orphans the StorageClass in Terminating
+// after its owning LocalStorageClass is already gone.
+//
+// The removal is done against a re-read object and retried on conflict, because
+// obj comes from the informer cache and can be a revision behind. Note what
+// that retry can and cannot do: cl is the manager's client, which serves
+// structured reads from the same cache, so the re-read is only as current as
+// the cache is. The retry absorbs the window in which the cache is catching up;
+// it cannot absorb a cache that is durably behind. Callers must therefore not
+// hand this function a conflict of their own making by writing to the object
+// immediately beforehand — see the ordering note in reconcileLSCDeleteFunc.
+func removeControllerFinalizers(ctx context.Context, cl client.Client, obj client.Object) (bool, error) {
+	removed := false
+
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		removed = false
+
+		fresh, ok := reflect.New(reflect.TypeOf(obj).Elem()).Interface().(client.Object)
+		if !ok {
+			return fmt.Errorf("%T is not a pointer to a client.Object", obj)
 		}
+		if err := cl.Get(ctx, client.ObjectKeyFromObject(obj), fresh); err != nil {
+			// Already gone: there is no finalizer left to remove, which is the
+			// outcome the caller wanted.
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+
+		finalizers := fresh.GetFinalizers()
+		kept := make([]string, 0, len(finalizers))
+		for _, f := range finalizers {
+			if slices.Contains(localStorageClassFinalizers, f) {
+				removed = true
+				continue
+			}
+			kept = append(kept, f)
+		}
+		if !removed {
+			return nil
+		}
+
+		fresh.SetFinalizers(kept)
+		if err := cl.Update(ctx, fresh); err != nil {
+			return err
+		}
+
+		obj.SetFinalizers(kept)
+		obj.SetResourceVersion(fresh.GetResourceVersion())
+		return nil
+	})
+	if err != nil {
+		return false, err
 	}
 
 	return removed, nil

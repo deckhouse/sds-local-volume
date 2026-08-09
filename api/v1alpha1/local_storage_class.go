@@ -52,8 +52,34 @@ type LocalStorageClassLVMSpec struct {
 }
 
 type LocalStorageClassStatus struct {
-	Phase  string `json:"phase,omitempty"`
+	// Phase is the coarse Created/Failed summary of the last reconcile pass,
+	// kept for compatibility with the printer column and existing tooling. It
+	// is written from the same verdict as the Ready condition, not derived
+	// from it.
+	//
+	// Conditions are the richer of the two and the ones to read. The phase
+	// vocabulary has no value for a resource that is being torn down, so a
+	// terminating LocalStorageClass reports Ready=False with reason Deleting
+	// while the phase stays where the last successful pass left it.
+	Phase string `json:"phase,omitempty"`
+
+	// Reason carries the failure text of the last reconcile pass, and is empty
+	// on success. The same text is the message of the Ready condition, which on
+	// success spells the phase out instead of staying blank.
 	Reason string `json:"reason,omitempty"`
+
+	// ObservedGeneration is the most recent metadata.generation the
+	// controller has acted on. When it trails metadata.generation the
+	// controller has not yet processed the latest spec.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// Conditions holds the latest observations of the resource state.
+	// Condition type: Ready.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 type LocalStorageClassLVG struct {

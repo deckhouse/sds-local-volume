@@ -498,9 +498,30 @@ Follow these steps:
        reclaimPolicy: Delete
        volumeBindingMode: WaitForFirstConsumer
      status:
+       conditions:
+       - lastTransitionTime: "2025-01-01T00:00:00Z"
+         message: the LocalStorageClass is in the Created phase
+         observedGeneration: 1
+         reason: Reconciled
+         status: "True"
+         type: Ready
+       observedGeneration: 1
        phase: Created
    kind: List
    ```
+
+   `status.conditions` is the field to read: the `Ready` condition reports
+   whether the controller has fully reconciled the resource, and its
+   `observedGeneration` tells you which version of the spec that verdict is
+   about. When it trails `metadata.generation`, the controller has not yet
+   processed your latest change.
+
+   `status.phase` is the coarse `Created`/`Failed` summary of the same
+   reconcile pass, kept for compatibility. The two are written together, but
+   they are not always the same answer: the phase has no value for a resource
+   that is being deleted, so a LocalStorageClass stuck in `Terminating`
+   reports `Ready=False` with reason `Deleting` while its phase stays at
+   `Created`.
 
    The `spec.lvm.lvmVolumeGroups` field lists the used [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources.
 

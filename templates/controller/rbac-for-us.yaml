@@ -1,4 +1,10 @@
 {{- /* RBAC */ -}}
+{{- /* localstorageclasses/status has a rule of its own on purpose: the CRD carries a status
+       subresource, so the controller writes the phase and the conditions through
+       Status().Update(), which authorizes against "localstorageclasses/status". A rule naming
+       only "localstorageclasses" leaves every status write returning Forbidden.
+       Its verbs are the ones a status subresource actually serves — GET, PUT and PATCH;
+       create/delete/list/watch on it would be grants with no endpoint behind them. */ -}}
 {{- $rbacConfig := dict
   "roleRules" (list
     (dict "apiGroups" (list "") "resources" (list "secrets") "verbs" (list "get" "list" "watch"))
@@ -9,6 +15,7 @@
     (dict "apiGroups" (list "") "resources" (list "nodes" "persistentvolumes") "verbs" (list "get" "list" "watch" "patch" "update"))
     (dict "apiGroups" (list "") "resources" (list "events") "verbs" (list "create" "list"))
     (dict "apiGroups" (list "storage.deckhouse.io") "resources" (list "localstorageclasses" "lvmvolumegroups") "verbs" (list "get" "list" "create" "delete" "watch" "update"))
+    (dict "apiGroups" (list "storage.deckhouse.io") "resources" (list "localstorageclasses/status") "verbs" (list "get" "update" "patch"))
     (dict "apiGroups" (list "storage.k8s.io") "resources" (list "storageclasses") "verbs" (list "create" "delete" "list" "get" "watch" "update"))
     (dict "apiGroups" (list "") "resources" (list "pods" "persistentvolumeclaims" "persistentvolumes") "verbs" (list "get"))
   )
