@@ -1,4 +1,4 @@
-{{- if (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PodMonitor") }}
+{{- if (include "helm_lib_api_version_exists" (list . "monitoring.coreos.com/v1/PodMonitor")) }}
 {{- /*
   Both CSI workloads are scraped with a PodMonitor rather than a ServiceMonitor:
   helm_lib_csi_controller_manifests and helm_lib_csi_node_manifests create no
