@@ -1,4 +1,4 @@
-{{- if (.Values.global.enabledModules | has "operator-prometheus-crd") }}
+{{- if (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PodMonitor") }}
 {{- /*
   Both CSI workloads are scraped with a PodMonitor rather than a ServiceMonitor:
   helm_lib_csi_controller_manifests and helm_lib_csi_node_manifests create no
