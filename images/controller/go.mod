@@ -1,7 +1,6 @@
 module github.com/deckhouse/sds-local-volume/images/controller
 
 go 1.26.5
-
 require (
 	github.com/deckhouse/deckhouse/pkg/log v0.2.1
 	github.com/deckhouse/deckhouse/pkg/metrics-storage v0.3.0
