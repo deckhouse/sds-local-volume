@@ -1,13 +1,14 @@
 module github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi
 
-go 1.26.5
+go 1.26.6
+
 require (
+	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
+	github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-20250215220933-9c8f9f5ab53d
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20260817175335-6cbd94c30050
 	github.com/container-storage-interface/spec v1.10.0
 	github.com/deckhouse/deckhouse/pkg/log v0.2.1
 	github.com/deckhouse/deckhouse/pkg/metrics-storage v0.3.0
-	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
-	github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-20250215220933-9c8f9f5ab53d
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20260318114210-2fdda7b75905
 	github.com/go-logr/logr v1.4.3
 	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0

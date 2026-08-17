@@ -26,10 +26,9 @@ import (
 	"fmt"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
 	metricsstorage "github.com/deckhouse/deckhouse/pkg/metrics-storage"
 	"github.com/deckhouse/deckhouse/pkg/metrics-storage/options"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // Metric names. The sds_local_volume_ prefix is spelled out rather than being

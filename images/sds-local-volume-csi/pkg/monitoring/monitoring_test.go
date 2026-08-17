@@ -23,12 +23,11 @@ import (
 	"testing"
 	"time"
 
+	metricsstorage "github.com/deckhouse/deckhouse/pkg/metrics-storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	metricsstorage "github.com/deckhouse/deckhouse/pkg/metrics-storage"
 )
 
 // newTestRecorder returns a Recorder backed by an isolated registry plus a

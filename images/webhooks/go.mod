@@ -1,11 +1,12 @@
 module github.com/deckhouse/sds-local-volume/images/webhooks
 
-go 1.26.5
+go 1.26.6
+
 require (
+	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20260817175335-6cbd94c30050
 	github.com/deckhouse/deckhouse/pkg/log v0.2.1
 	github.com/deckhouse/sds-common-lib v0.5.0
-	github.com/deckhouse/sds-local-volume/api v0.0.0-20250114155747-5d75d401a787
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20260318114210-2fdda7b75905
 	github.com/go-logr/logr v1.4.2
 	github.com/slok/kubewebhook/v2 v2.6.0
 	github.com/stretchr/testify v1.10.0

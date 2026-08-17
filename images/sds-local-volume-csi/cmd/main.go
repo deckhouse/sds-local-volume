@@ -24,6 +24,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	metricsstorage "github.com/deckhouse/deckhouse/pkg/metrics-storage"
 	v1 "k8s.io/api/core/v1"
 	sv1 "k8s.io/api/storage/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -32,7 +33,6 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	metricsstorage "github.com/deckhouse/deckhouse/pkg/metrics-storage"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/config"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/driver"

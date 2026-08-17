@@ -23,10 +23,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/deckhouse/deckhouse/pkg/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/deckhouse/deckhouse/pkg/log"
 )
 
 func newBufLogger(t *testing.T, level Verbosity) (Logger, *bytes.Buffer) {

@@ -39,9 +39,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-logr/logr"
-
 	"github.com/deckhouse/deckhouse/pkg/log"
+	"github.com/go-logr/logr"
 )
 
 // Verbosity is the numeric LOG_LEVEL value taken from the environment.

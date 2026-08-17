@@ -1,3 +1,4 @@
+.gitlab-ci.yml
 *.md
 CHANGELOG
 api

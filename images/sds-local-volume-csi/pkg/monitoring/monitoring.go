@@ -27,10 +27,9 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/status"
-
 	metricsstorage "github.com/deckhouse/deckhouse/pkg/metrics-storage"
 	"github.com/deckhouse/deckhouse/pkg/metrics-storage/options"
+	"google.golang.org/grpc/status"
 )
 
 // Metric names. The sds_local_volume_csi_ prefix is spelled out rather than

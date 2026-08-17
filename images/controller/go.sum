@@ -14,8 +14,6 @@ github.com/deckhouse/deckhouse/pkg/metrics-storage v0.3.0 h1:xZvbKuexrSQGEw6CB4n
 github.com/deckhouse/deckhouse/pkg/metrics-storage v0.3.0/go.mod h1:Rz++SzCLkFW03WGgftnn91TimGU2shiKb5S/YuxcBuE=
 github.com/deckhouse/sds-common-lib v0.8.0 h1:uuWhnwxrh2CZWMiKGL8/NS/O47S07V9EIVeocPdOLlI=
 github.com/deckhouse/sds-common-lib v0.8.0/go.mod h1:Ka/KF9rQO/I5fAKQkXcLHEPTlD/GU3T+0jnOWLMg1EI=
-github.com/deckhouse/sds-node-configurator/api v0.0.0-20260318114210-2fdda7b75905 h1:OKwOW3JFlbMxG8lLM9rfLxl+2M8lFpThQRFAJy4lBMQ=
-github.com/deckhouse/sds-node-configurator/api v0.0.0-20260318114210-2fdda7b75905/go.mod h1:FQGg6o8m9dmvnsiAN9dZg8CWo/jbuDhE6g6L83aCqxo=
 github.com/emicklei/go-restful/v3 v3.12.1 h1:PJMDIM/ak7btuL8Ex0iYET9hxM3CI2sjZtzpL63nKAU=
 github.com/emicklei/go-restful/v3 v3.12.1/go.mod h1:6n3XBCmQQb25CM2LCACGz8ukIrRry+4bhvbpWn3mrbc=
 github.com/evanphx/json-patch v4.12.0+incompatible h1:4onqiflcdA9EOZ4RxV643DvftH5pOlLGNtQ5lPWQu84=

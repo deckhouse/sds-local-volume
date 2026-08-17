@@ -8,8 +8,6 @@ github.com/deckhouse/deckhouse/pkg/log v0.2.1 h1:7SSD+QJPnziAO3l8ycgRwN5wlQeC312
 github.com/deckhouse/deckhouse/pkg/log v0.2.1/go.mod h1:pbAxTSDcPmwyl3wwKDcEB3qdxHnRxqTV+J0K+sha8bw=
 github.com/deckhouse/sds-common-lib v0.5.0 h1:dDERy3iKz4UsP2dLFCmoJivaAlUX4+gpdqsQ5l2XnD4=
 github.com/deckhouse/sds-common-lib v0.5.0/go.mod h1:tAZI7ZaVeJi5/Fe5Mebw3d6NC4nTHUOOTwZFnHHzxFU=
-github.com/deckhouse/sds-node-configurator/api v0.0.0-20260318114210-2fdda7b75905 h1:OKwOW3JFlbMxG8lLM9rfLxl+2M8lFpThQRFAJy4lBMQ=
-github.com/deckhouse/sds-node-configurator/api v0.0.0-20260318114210-2fdda7b75905/go.mod h1:FQGg6o8m9dmvnsiAN9dZg8CWo/jbuDhE6g6L83aCqxo=
 github.com/emicklei/go-restful/v3 v3.12.1 h1:PJMDIM/ak7btuL8Ex0iYET9hxM3CI2sjZtzpL63nKAU=
 github.com/emicklei/go-restful/v3 v3.12.1/go.mod h1:6n3XBCmQQb25CM2LCACGz8ukIrRry+4bhvbpWn3mrbc=
 github.com/evanphx/json-patch v4.12.0+incompatible h1:4onqiflcdA9EOZ4RxV643DvftH5pOlLGNtQ5lPWQu84=
