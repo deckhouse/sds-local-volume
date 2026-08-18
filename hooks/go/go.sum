@@ -23,8 +23,6 @@ github.com/deckhouse/deckhouse/pkg/log v0.2.0 h1:6tmZQLwNb1o/hP1gzJQBjcwfA/bubbg
 github.com/deckhouse/deckhouse/pkg/log v0.2.0/go.mod h1:pbAxTSDcPmwyl3wwKDcEB3qdxHnRxqTV+J0K+sha8bw=
 github.com/deckhouse/module-sdk v0.10.3 h1:+IRQWGWnt909zk8h4AvS6Obag/56nLZCikxNkAQZsB0=
 github.com/deckhouse/module-sdk v0.10.3/go.mod h1:Z1jfmd0fICoYww0daMijWAU+OZTxeJUXfMciKKuYAYA=
-github.com/deckhouse/sds-common-lib v0.6.3 h1:k0OotLuQaKuZt8iyph9IusDixjAE0MQRKyuTe2wZP3I=
-github.com/deckhouse/sds-common-lib v0.6.3/go.mod h1:UHZMKkqEh6RAO+vtA7dFTwn/2m5lzfPn0kfULBmDf2o=
 github.com/docker/cli v29.3.1+incompatible h1:M04FDj2TRehDacrosh7Vlkgc7AuQoWloQkf1PA5hmoI=
 github.com/docker/cli v29.3.1+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/distribution v2.8.3+incompatible h1:AtKxIZ36LoNK51+Z6RpzLpddBirtxJnzDrHLEKxTAYk=

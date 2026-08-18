@@ -25,7 +25,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/deckhouse/sds-common-lib/conditions"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	"github.com/deckhouse/sds-common-lib/conditions"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/internal"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
