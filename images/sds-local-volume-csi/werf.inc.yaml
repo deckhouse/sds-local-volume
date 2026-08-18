@@ -47,11 +47,19 @@ shell:
     - export GOOS=linux GOARCH=amd64 CGO_ENABLED=0
     - |
       {{- include "image-build.build" (set $ "BuildCommand" (printf `go build -ldflags="-s -w" -tags "%s" -o /%s` .MODULE_EDITION $.ImageName)) | nindent 6 }}
-    - chmod +x /{{ $.ImageName }}
+    # An absolute mode, not `+x`, which is masked by whatever umask is in effect and can therefore grant
+    # execute to the owner alone. The binary is then runnable by root only, and every workload that runs
+    # it as a non-root user with `capabilities: drop: [ALL]` — that is, without CAP_DAC_OVERRIDE to
+    # bypass the permission bits — fails to start with "permission denied" from runc.
+    - chmod 0755 /{{ $.ImageName }}
 
 ---
 image: {{ .ModuleNamePrefix }}{{ .ImageName }}
 from: {{ index $.Images "builder/distroless" }}
+# werf keys an import on the imported file's CONTENT, not on its mode, so the chmod above does not change
+# this image's digest: without a cache bust the stage built before the fix keeps being reused and the
+# module ships the old, root-only binary no matter how often it is rebuilt.
+fromCacheVersion: "1"
 
 git:
 {{- include "image mount points" . }}
