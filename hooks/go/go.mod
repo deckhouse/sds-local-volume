@@ -1,8 +1,9 @@
 module github.com/deckhouse/sds-local-volume/hooks/go
 
 go 1.26.6
+
 require (
-	github.com/deckhouse/sds-common-lib v0.9.0
+	github.com/deckhouse/sds-common-lib v0.10.0
 	github.com/deckhouse/module-sdk v0.10.3
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.4.0
 	k8s.io/api v0.35.3

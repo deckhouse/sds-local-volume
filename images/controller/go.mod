@@ -3,9 +3,9 @@ module github.com/deckhouse/sds-local-volume/images/controller
 go 1.26.6
 
 require (
-	github.com/deckhouse/sds-common-lib v0.9.0
+	github.com/deckhouse/sds-common-lib v0.10.0
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20260817195343-682df4d51ffd
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20260821070809-e0881361c645
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20260821070809-7c0d06d31bb2
 	github.com/deckhouse/deckhouse/pkg/log v0.2.1
 	github.com/deckhouse/deckhouse/pkg/metrics-storage v0.3.0
 	github.com/go-logr/logr v1.4.2
