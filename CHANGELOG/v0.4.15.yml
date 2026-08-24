@@ -1,0 +1,4 @@
+Changes:
+  - "Fix: the release image is no longer built from cache with an outdated changelog.yaml — git-mapping dependencies are bound to the install stage, where the file is copied"
+  - Update base images to v2.1.4 and lib-helm to 1.72.14
+  - Internal build changes for the module
