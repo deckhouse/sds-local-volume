@@ -1,7 +1,6 @@
 module github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi
 
 go 1.26.6
-
 require (
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20260817195343-682df4d51ffd
 	github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-20260817195343-682df4d51ffd
