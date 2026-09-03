@@ -171,6 +171,7 @@ echo "Data migration completed"
 d8 k annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kubernetes.io/is-default-class=true
 ```
 
+
 ## Выбор узлов для работы модуля
 
 Модуль использует узлы, которые имеют метки, указанные в поле `nodeSelector` в настройках модуля. Сделать это можно следующим образом:

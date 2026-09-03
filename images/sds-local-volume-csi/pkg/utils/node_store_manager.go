@@ -26,12 +26,13 @@ import (
 	mountutils "k8s.io/mount-utils"
 	utilexec "k8s.io/utils/exec"
 
+	"github.com/deckhouse/sds-common-lib/fsreserve"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 )
 
 type NodeStoreManager interface {
-	NodeStageVolumeFS(source, target string, fsType string, mountOpts []string, formatOpts []string, lvmType, lvmThinPoolName string) error
+	NodeStageVolumeFS(source, target string, fsType string, mountOpts []string, formatOpts []string, lvmType, lvmThinPoolName string, reservedPercent int) error
 	NodePublishVolumeBlock(source, target string, mountOpts []string) error
 	NodePublishVolumeFS(source, devPath, target, fsType string, mountOpts []string) error
 	Unstage(target string) error
@@ -57,7 +58,7 @@ func NewStore(logger logger.Logger) *Store {
 	}
 }
 
-func (s *Store) NodeStageVolumeFS(source, target string, fsType string, mountOpts []string, formatOpts []string, lvmType, lvmThinPoolName string) error {
+func (s *Store) NodeStageVolumeFS(source, target string, fsType string, mountOpts []string, formatOpts []string, lvmType, lvmThinPoolName string, reservedPercent int) error {
 	log := s.Log.Named("NodeStageVolumeFS").With("source", source, "target", target)
 
 	log.Trace("format parameters", "fsType", fsType, "formatOptions", formatOpts)
@@ -114,9 +115,57 @@ func (s *Store) NodeStageVolumeFS(source, target string, fsType string, mountOpt
 	if lvmType == internal.LVMTypeThin {
 		log.Trace("thin volume", "thinPoolName", lvmThinPoolName)
 	}
+
+	// Whether the filesystem is ours decides whether we may touch its reserve
+	// below, and the answer only exists before FormatAndMount runs.
+	existingFormat, err := s.NodeStorage.GetDiskFormat(source)
+	if err != nil {
+		return fmt.Errorf("failed to check the filesystem on %s: %w", source, err)
+	}
+
 	err = s.NodeStorage.FormatAndMountSensitiveWithFormatOptions(source, target, fsType, mountOpts, nil, formatOpts)
 	if err != nil {
 		return fmt.Errorf("failed to FormatAndMount : %w", err)
+	}
+
+	if existingFormat == "" {
+		if err := s.setReservedPercent(source, fsType, reservedPercent); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// setReservedPercent hands the volume the share of blocks its StorageClass
+// asked to keep for the superuser.
+//
+// It runs after the filesystem was created rather than as a format option
+// because mount-utils appends its own "-m0" behind whatever we pass, and
+// mkfs.ext4 honours the last -m on its command line. tune2fs reaches the same
+// superblock field and does not care that the filesystem is already mounted.
+//
+// Only a filesystem this node just created is touched: restaging a volume must
+// not rewrite the superblock of a filesystem that already carries data.
+func (s *Store) setReservedPercent(devicePath, fsType string, reservedPercent int) error {
+	if reservedPercent == fsreserve.Default {
+		return nil
+	}
+
+	log := s.Log.Named("setReservedPercent").With("devicePath", devicePath)
+
+	if !fsreserve.SupportedFSType(fsType) {
+		log.Warn("the filesystem keeps no blocks for the superuser, ignoring the requested reserve",
+			"fsType", fsType, "reservedPercent", reservedPercent)
+		return nil
+	}
+
+	log.Debug("setting the reserved block percentage", "reservedPercent", reservedPercent)
+
+	output, err := s.NodeStorage.Exec.Command("tune2fs", fsreserve.Tune2fsArgs(reservedPercent, devicePath)...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to reserve %d%% of %s for the superuser: %w, output: %s",
+			reservedPercent, devicePath, err, string(output))
 	}
 
 	return nil

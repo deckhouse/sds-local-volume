@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -35,6 +36,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/deckhouse/sds-common-lib/conditions"
+	"github.com/deckhouse/sds-common-lib/fsreserve"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/internal"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
@@ -666,6 +668,17 @@ func configureStorageClass(lsc *slv.LocalStorageClass, effectiveLVGs []slv.Local
 		LVMVolumeBindingModeParamKey: lsc.Spec.VolumeBindingMode,
 		LVMVolumeGroupsParamKey:      string(lvgsParam),
 		FSTypeParamKey:               fsType,
+	}
+
+	// A CSI driver never sees the annotations of a StorageClass, so carry the
+	// reserved share through the parameters, which reach NodeStageVolume as
+	// the volume context. The value is validated by the webhook; an invalid
+	// one that predates the webhook is dropped here rather than failing every
+	// volume of the class.
+	if reservedPercent, err := fsreserve.FromMap(lsc.Annotations); err != nil {
+		return nil, err
+	} else if reservedPercent != fsreserve.Default {
+		params[fsreserve.ParameterKey] = strconv.Itoa(reservedPercent)
 	}
 
 	if lsc.Spec.LVM.Thick != nil && lsc.Spec.LVM.Thick.Contiguous != nil {

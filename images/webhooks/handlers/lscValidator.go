@@ -25,6 +25,7 @@ import (
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/deckhouse/sds-common-lib/fsreserve"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/webhooks/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
@@ -39,6 +40,23 @@ func LSCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 		if !ok {
 			// If not a storage class just continue the validation chain(if there is one) and do nothing.
 			return &kwhvalidating.ValidatorResult{}, nil
+		}
+
+		// The reserved-block percentage travels as an annotation, so the CRD
+		// schema cannot vet it. Reject a bad value here instead of letting
+		// every volume of the class fail at NodeStageVolume.
+		reservedPercent, err := fsreserve.FromMap(lsc.Annotations)
+		if err != nil {
+			errMsg := err.Error()
+			log.Info(errMsg)
+			return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+		}
+
+		var warnings []string
+		if reservedPercent != fsreserve.Default && !fsreserve.SupportedFSType(lsc.Spec.FSType) {
+			warnings = append(warnings, fmt.Sprintf(
+				"%s is ignored for fsType %q: only the ext filesystems keep blocks for the superuser",
+				fsreserve.AnnotationKey, lsc.Spec.FSType))
 		}
 
 		cl, err := NewKubeClient("")
@@ -143,6 +161,6 @@ func LSCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 			}
 		}
 
-		return &kwhvalidating.ValidatorResult{Valid: true}, nil
+		return &kwhvalidating.ValidatorResult{Valid: true, Warnings: warnings}, nil
 	}
 }

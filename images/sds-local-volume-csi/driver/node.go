@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/deckhouse/sds-common-lib/fsreserve"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 )
@@ -141,13 +142,22 @@ func (d *Driver) NodeStageVolume(_ context.Context, request *csi.NodeStageVolume
 	lvmType := context[internal.LvmTypeKey]
 	lvmThinPoolName := context[internal.ThinPoolNameKey]
 
+	// The StorageClass carries the reserve in its parameters, which reach us as
+	// the volume context: annotations are invisible to a CSI driver.
+	reservedPercent, err := fsreserve.FromMap(context)
+	if err != nil {
+		log.Error("invalid reserved block percentage", logger.Err(err))
+		return nil, status.Errorf(codes.InvalidArgument, "[NodeStageVolume] %v", err)
+	}
+
 	log.Trace("resolved format options", "formatOptions", formatOptions)
+	log.Trace("resolved reserved block percentage", "reservedPercent", reservedPercent)
 	log.Trace("resolved mount options", "mountOptions", mountOptions)
 	log.Trace("resolved LVM type", "lvmType", lvmType)
 	log.Trace("resolved thin pool", "thinPoolName", lvmThinPoolName)
 	log.Trace("resolved filesystem type", "fsType", fsType)
 
-	err = d.storeManager.NodeStageVolumeFS(devPath, target, fsType, mountOptions, formatOptions, lvmType, lvmThinPoolName)
+	err = d.storeManager.NodeStageVolumeFS(devPath, target, fsType, mountOptions, formatOptions, lvmType, lvmThinPoolName, reservedPercent)
 	if err != nil {
 		log.Error("unable to mount the volume", logger.Err(err), slog.String("devicePath", devPath), slog.String("target", target))
 		return nil, status.Errorf(codes.Internal, "[NodeStageVolume] Error format device %q and mounting volume at %q: %v", devPath, target, err)

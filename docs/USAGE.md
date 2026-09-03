@@ -171,6 +171,7 @@ Add the `storageclass.kubernetes.io/is-default-class: "true"` annotation to the 
 d8 k annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kubernetes.io/is-default-class=true
 ```
 
+
 ## Selecting nodes for module operation
 
 The module uses nodes that have the labels specified in the `nodeSelector` field in the module settings. To do this:

@@ -143,3 +143,19 @@ Snapshots are collected on the same rule and reported the same way, in `sds_loca
 A deletion that carries no finalizer of this module any more, and still carries the `sds-node-configurator` one, is counted in `sds_local_volume_awaiting_agent_count`. Every deletion passes through that state, and a volume with `spec.volumeCleanup` set is written over completely before `lvremove` runs, so time in this series is normal rather than a fault: `D8SdsLocalVolumeLVMLogicalVolumeDeletionStuck` fires only after two hours of it. The series also counts resources this module never owned — the absence of its finalizer cannot tell "already unblocked" from "never ours" — and no orphan metric covers any of them, for the same reason.
 
 The delay between asking for a volume to be deleted and the module removing its finalizer exists so that an in-flight `DeleteVolume` call gets to remove it first. It is 30 seconds by default and is set by the `llvOrphanGracePeriod` module setting.
+
+## How much of a volume is reserved for the superuser?
+
+Nothing, by default: the module formats ext4 with `-m 0`, so the whole volume is available to the workload.
+
+Where the classic 5% ext4 reserve is wanted — for example to keep a filesystem writable for a privileged process after a workload has filled it — annotate the `LocalStorageClass` with the percentage to reserve:
+
+```shell
+d8 k annotate localstorageclass <lsc-name> storage.deckhouse.io/ext4-reserved-percent=5
+```
+
+The value is a whole number of percent between 0 and 50; an invalid one is rejected by the validating webhook.
+
+The reserve applies only to volumes created after the annotation was set — filesystems that already exist keep the reserve they were created with. Only the ext filesystems keep blocks for the superuser: with `fsType: xfs` the annotation is ignored, and the webhook returns a warning saying so.
+
+Changing the annotation makes the controller recreate the StorageClass, because `parameters` of an existing StorageClass are immutable in Kubernetes. Existing volumes and PVCs are not affected.
