@@ -1,5 +1,6 @@
 .gitlab-ci.yml
 *.md
+.release-notes
 CHANGELOG
 api
 crds
