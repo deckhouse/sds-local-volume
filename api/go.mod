@@ -1,6 +1,6 @@
 module github.com/deckhouse/sds-local-volume/api
 
-go 1.27.0
+go 1.27.1
 require k8s.io/apimachinery v0.30.2
 
 require (
