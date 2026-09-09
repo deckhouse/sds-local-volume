@@ -1,0 +1,24 @@
+date: "2026-09-09"
+
+summary: "A LocalStorageClass can reserve a share of the filesystem for the superuser, the csi-node deadlock that left single nodes unable to attach a volume is fixed, and a release of the module is described in sections and in both languages."
+
+highlights:
+  - "A `LocalStorageClass` can ask for a share of the filesystem to be kept for the superuser — the classic ext4 reserve — with the `storage.deckhouse.io/ext4-reserved-percent` annotation. Volumes keep being formatted with no reserve unless it is asked for."
+  - "A restart of `node-driver-registrar` no longer wedges the node plugin. That deadlock left one or two nodes of a cluster without the module's driver in their `CSINode`, unable to attach a volume, while their siblings were fine."
+  - "A release is described in sections — summary, highlights, new features, improvements, fixes — in English and in Russian, and the console shows the notes in the language of the reader."
+
+new_features:
+  - "`storage.deckhouse.io/ext4-reserved-percent` on a `LocalStorageClass` sets the percentage of the filesystem kept for the superuser: a whole number from 0 to 50, default 0. The value travels through the `parameters` of the managed StorageClass and the CSI volume context to `NodeStageVolume`, because a CSI driver never sees the annotations of a StorageClass, and `tune2fs` applies it there. Only a filesystem that stage call has just created is touched: restaging a volume never rewrites the superblock of a filesystem that already carries data, so a volume keeps the reserve it was created with. The reserve applies to the ext family only — with `fsType: xfs` the annotation is ignored and the validating webhook says so in a warning — and an invalid value is rejected by that webhook outright, instead of failing every volume of the class at stage time. Changing the annotation makes the controller recreate the StorageClass, because `parameters` of an existing StorageClass are immutable in Kubernetes; existing volumes and PVCs are not affected."
+
+improvements:
+  - "Release notes are written per locale in `.release-notes/<tag>.yaml` and `<tag>.ru.yaml` with the sections `summary`, `highlights`, `new_features`, `improvements`, `fixes`, `security`, `breaking`, `upgrade_notes`, `known_issues`, `docs` and `dependencies`. Both locales reach the cluster; the releases cut before this one keep the previous flat format and render on the same page exactly as before."
+
+fixes:
+  - "A restart of `node-driver-registrar` no longer takes the CSI driver with it. The csi-node liveness probe watched a port the registrar serves but was attached to the driver container, and the two deadlocked: the registrar exits by design when registration fails, its port goes with it, the probe kills the driver, the CSI socket disappears, and the restarted registrar can no longer reach it. A node came up with the node plugin wedged — a dozen restarts and no driver in its `CSINode`, so no volume could be attached there — while other nodes of the same cluster were fine. The probe now sits on the container that serves it."
+  - "A release tag with no release notes used to publish an empty `changelog.yaml`, leaving `ModuleRelease.spec.changelog` blank with a green build. Such a tag now fails the build."
+
+upgrade_notes:
+  - "Nothing has to be done in the module configuration. A node whose csi-node pod was stuck in the registration deadlock recovers as the DaemonSet rolls out the fixed pod — no pod has to be deleted by hand."
+
+docs:
+  - "A FAQ entry describes the share of a volume kept for the superuser: the annotation, the range of values, that the reserve applies only to volumes created afterwards, and that it is ignored for `fsType: xfs`."
