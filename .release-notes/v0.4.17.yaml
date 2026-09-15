@@ -1,0 +1,12 @@
+date: "2026-09-15"
+
+summary: "The module logs at INFO by default instead of DEBUG, so an installation that never chose a level stops writing debug output from its CSI components."
+
+highlights:
+  - "`logLevel` defaults to `INFO` instead of `DEBUG`. Where the level was never set in the module configuration, the CSI controller and the node plugin become markedly quieter after the update; setting `logLevel: DEBUG` brings the previous verbosity back."
+
+improvements:
+  - "The default of `logLevel` in the module configuration is now `INFO`. The setting drives `LOG_LEVEL` of the CSI controller and of the `csi-node` plugin, so `DEBUG` as the default meant that every installation which never touched the setting ran its whole data plane at debug verbosity and paid for it in log volume. A `logLevel` stated explicitly in the ModuleConfig is honoured exactly as before, whatever it says."
+
+upgrade_notes:
+  - "Nothing has to be done in the module configuration. Where `logLevel` is not set, the components come up at `INFO` as their pods roll out with the update; where it is set, the level stays as configured. To keep the previous behaviour, set `logLevel: DEBUG` explicitly."
