@@ -910,7 +910,7 @@ func validateLocalStorageClass(
 	unmanagedScName := findUnmanagedDuplicatedSC(scList, lsc)
 	if unmanagedScName != "" {
 		valid = false
-		failedMsgBuilder.WriteString(fmt.Sprintf("There already is a storage class with the same name: %s but it is not managed by the LocalStorageClass controller\n", unmanagedScName))
+		fmt.Fprintf(&failedMsgBuilder, "There already is a storage class with the same name: %s but it is not managed by the LocalStorageClass controller\n", unmanagedScName)
 	}
 
 	if lsc.Spec.LVM != nil {
@@ -933,25 +933,25 @@ func validateLocalStorageClass(
 
 			if hasName == hasSelector {
 				valid = false
-				failedMsgBuilder.WriteString(fmt.Sprintf("Each spec.lvm.lvmVolumeGroups entry must set exactly one of name or labelSelector (entry #%d)\n", i))
+				fmt.Fprintf(&failedMsgBuilder, "Each spec.lvm.lvmVolumeGroups entry must set exactly one of name or labelSelector (entry #%d)\n", i)
 			} else if hasSelector {
 				if _, err := metav1.LabelSelectorAsSelector(entry.LabelSelector); err != nil {
 					valid = false
-					failedMsgBuilder.WriteString(fmt.Sprintf("Invalid labelSelector in spec.lvm.lvmVolumeGroups entry #%d: %s\n", i, err.Error()))
+					fmt.Fprintf(&failedMsgBuilder, "Invalid labelSelector in spec.lvm.lvmVolumeGroups entry #%d: %s\n", i, err.Error())
 				} else if countLVGsMatchingSelector(lvgList, entry.LabelSelector) == 0 {
 					valid = false
-					failedMsgBuilder.WriteString(fmt.Sprintf("labelSelector in spec.lvm.lvmVolumeGroups entry #%d matched no LVMVolumeGroups\n", i))
+					fmt.Fprintf(&failedMsgBuilder, "labelSelector in spec.lvm.lvmVolumeGroups entry #%d matched no LVMVolumeGroups\n", i)
 				}
 			}
 
 			if lsc.Spec.LVM.Type == LVMThinType {
 				if entry.Thin == nil || entry.Thin.PoolName == "" {
 					valid = false
-					failedMsgBuilder.WriteString(fmt.Sprintf("Field thin.poolName is required for spec.lvm.lvmVolumeGroups entry #%d when type is Thin\n", i))
+					fmt.Fprintf(&failedMsgBuilder, "Field thin.poolName is required for spec.lvm.lvmVolumeGroups entry #%d when type is Thin\n", i)
 				}
 			} else if entry.Thin != nil {
 				valid = false
-				failedMsgBuilder.WriteString(fmt.Sprintf("Field thin must not be specified for spec.lvm.lvmVolumeGroups entry #%d when type is Thick\n", i))
+				fmt.Fprintf(&failedMsgBuilder, "Field thin must not be specified for spec.lvm.lvmVolumeGroups entry #%d when type is Thick\n", i)
 			}
 		}
 
@@ -963,32 +963,32 @@ func validateLocalStorageClass(
 		LVGsFromTheSameNode := findLVMVolumeGroupsOnTheSameNode(lvgList, effectiveLVGs)
 		if len(LVGsFromTheSameNode) != 0 {
 			valid = false
-			failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use the same node (|node: LVG names): %s\n", strings.Join(LVGsFromTheSameNode, "")))
+			fmt.Fprintf(&failedMsgBuilder, "Some LVMVolumeGroups use the same node (|node: LVG names): %s\n", strings.Join(LVGsFromTheSameNode, ""))
 		}
 
 		nonexistentLVGs := findNonexistentLVGs(lvgList, effectiveLVGs)
 		if len(nonexistentLVGs) != 0 {
 			valid = false
-			failedMsgBuilder.WriteString(fmt.Sprintf("Some of selected LVMVolumeGroups are nonexistent, LVG names: %s\n", strings.Join(nonexistentLVGs, ",")))
+			fmt.Fprintf(&failedMsgBuilder, "Some of selected LVMVolumeGroups are nonexistent, LVG names: %s\n", strings.Join(nonexistentLVGs, ","))
 		}
 
 		if lsc.Spec.LVM.Type == LVMThinType {
 			LVGSWithNonexistentTps := findNonexistentThinPools(lvgList, effectiveLVGs)
 			if len(LVGSWithNonexistentTps) != 0 {
 				valid = false
-				failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use nonexistent thin pools, LVG names: %s\n", strings.Join(LVGSWithNonexistentTps, ",")))
+				fmt.Fprintf(&failedMsgBuilder, "Some LVMVolumeGroups use nonexistent thin pools, LVG names: %s\n", strings.Join(LVGSWithNonexistentTps, ","))
 			}
 		} else {
 			LVGsWithTps := findAnyThinPool(effectiveLVGs)
 			if len(LVGsWithTps) != 0 {
 				valid = false
-				failedMsgBuilder.WriteString(fmt.Sprintf("Some LVMVolumeGroups use thin pools though device type is Thick, LVG names: %s\n", strings.Join(LVGsWithTps, ",")))
+				fmt.Fprintf(&failedMsgBuilder, "Some LVMVolumeGroups use thin pools though device type is Thick, LVG names: %s\n", strings.Join(LVGsWithTps, ","))
 			}
 		}
 	} else {
 		// TODO: add support for other types
 		valid = false
-		failedMsgBuilder.WriteString(fmt.Sprintf("Unable to identify a type of LocalStorageClass %s", lsc.Name))
+		fmt.Fprintf(&failedMsgBuilder, "Unable to identify a type of LocalStorageClass %s", lsc.Name)
 	}
 
 	return valid, failedMsgBuilder.String()
@@ -1097,9 +1097,9 @@ func findLVMVolumeGroupsOnTheSameNode(lvgList *snc.LVMVolumeGroupList, effective
 	for nodeName, lvgs := range nodesWithLVGs {
 		if len(lvgs) > 1 {
 			var msgBuilder strings.Builder
-			msgBuilder.WriteString(fmt.Sprintf("|%s: ", nodeName))
+			fmt.Fprintf(&msgBuilder, "|%s: ", nodeName)
 			for _, lvgName := range lvgs {
-				msgBuilder.WriteString(fmt.Sprintf("%s,", lvgName))
+				fmt.Fprintf(&msgBuilder, "%s,", lvgName)
 			}
 
 			badLVGs = append(badLVGs, msgBuilder.String())

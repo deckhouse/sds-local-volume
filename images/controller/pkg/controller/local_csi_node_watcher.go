@@ -189,11 +189,11 @@ func reconcileLocalCSILabels(ctx context.Context, cl client.Client, log logger.L
 		} else {
 			lvgsNames := strings.Builder{}
 			for _, lvg := range lvgsForManualEviction {
-				lvgsNames.WriteString(fmt.Sprintf("%s ", lvg.Name))
+				fmt.Fprintf(&lvgsNames, "%s ", lvg.Name)
 			}
 			lscNames := strings.Builder{}
 			for _, lsc := range lscsForManualEviction {
-				lscNames.WriteString(fmt.Sprintf("%s ", lsc.Name))
+				fmt.Fprintf(&lscNames, "%s ", lsc.Name)
 			}
 			log.Warn("cannot remove the label: the node LVMVolumeGroups are still used by LocalStorageClasses", "label", localCsiNodeSelectorLabel, "nodeName", node.Name, "lvmVolumeGroups", lvgsNames.String(), "localStorageClasses", lscNames.String())
 
@@ -356,7 +356,7 @@ func clearManualEvictionLabelsIfNeeded(ctx context.Context, cl client.Client, lo
 
 			if _, exist := kubeLvg.Labels[candidateManualEvictionLabel]; exist {
 				healthy = false
-				badLVGs.WriteString(fmt.Sprintf("%s ", lvg.Name))
+				fmt.Fprintf(&badLVGs, "%s ", lvg.Name)
 			}
 		}
 
