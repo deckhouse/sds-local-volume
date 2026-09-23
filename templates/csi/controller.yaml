@@ -59,7 +59,6 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiControllerConfig "resizerEnabled" true }}
 {{- $_ := set $csiControllerConfig "provisionerTimeout" "1m" }}
 {{- $_ := set $csiControllerConfig "extraCreateMetadataEnabled" true }}
-{{- $_ := set $csiControllerConfig "livenessProbePort" 4250 }}
 {{- $_ := set $csiControllerConfig "csiControllerHostNetwork" "false" }}
 {{- $_ := set $csiControllerConfig "additionalPullSecrets" (include "additional_pull_secrets" . | fromYamlArray) }}
 {{- $_ := set $csiControllerConfig "additionalControllerArgs" (include "csi_controller_args" . | fromYamlArray) }}
@@ -111,7 +110,6 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $csiNodeConfig := dict }}
 {{- $_ := set $csiNodeConfig "nodeImage" $csiNodeImage }}
 {{- $_ := set $csiNodeConfig "driverFQDN" "local.csi.storage.deckhouse.io" }}
-{{- $_ := set $csiNodeConfig "livenessProbePort" 4251 }}
 {{- $_ := set $csiNodeConfig "csiNodeHostNetwork" "false" }}
 {{- $_ := set $csiNodeConfig "serviceAccount" "csi" }}
 {{- $_ := set $csiNodeConfig "additionalNodeArgs" (include "csi_node_args" . | fromYamlArray) }}
