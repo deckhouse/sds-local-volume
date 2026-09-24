@@ -1,0 +1,13 @@
+date: "2026-09-24"
+
+summary: "Security update of the CSI driver and the module's hooks; the CSI Pods no longer use ports from the range reserved for the host network."
+
+highlights:
+  - "`google.golang.org/grpc` is raised from v1.82.1 to v1.83.2 in the CSI driver, closing CVE-2026-84303, CVE-2026-84304 and CVE-2026-84445."
+
+improvements:
+  - "The livenessprobe of the CSI controller and the CSI node plugin no longer uses ports 4250 and 4251, which belong to the 4200–4299 range reserved for modules that listen on the host network; both Pods run in the Pod network, and the probe now uses the default port inside the Pod. The CSI Pods are restarted by the update."
+
+security:
+  - "`google.golang.org/grpc` is raised from v1.82.1 to v1.83.2 in the CSI driver, closing CVE-2026-84303, CVE-2026-84304 and CVE-2026-84445."
+  - "`golang.org/x/crypto` is raised from v0.53.0 to v0.57.0 in the module's hooks (`go-hooks`), closing CVE-2026-56854 (authentication bypass by source address in `x/crypto/ssh`), CVE-2026-56855 and CVE-2026-78662."
