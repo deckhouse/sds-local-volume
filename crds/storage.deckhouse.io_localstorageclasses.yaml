@@ -1,0 +1,330 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    backup.deckhouse.io/cluster-config: "true"
+    heritage: deckhouse
+    module: sds-local-volume
+  name: localstorageclasses.storage.deckhouse.io
+spec:
+  group: storage.deckhouse.io
+  names:
+    kind: LocalStorageClass
+    plural: localstorageclasses
+    shortNames:
+    - lsc
+    singular: localstorageclass
+  preserveUnknownFields: false
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.reason
+      name: Reason
+      priority: 1
+      type: string
+    - description: The age of this resource
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: LocalStorageClass is a Kubernetes Custom Resource that defines
+          a configuration for a Kubernetes StorageClass.
+        properties:
+          spec:
+            description: Defines a Kubernetes StorageClass configuration.
+            properties:
+              fsType:
+                default: ext4
+                description: StorageClass file system type.
+                enum:
+                - ext4
+                - xfs
+                type: string
+                x-kubernetes-validations:
+                - message: Value is immutable.
+                  rule: self == oldSelf
+              lvm:
+                description: LVM configuration.
+                properties:
+                  lvmVolumeGroups:
+                    description: |-
+                      List of entries selecting the LVMVolumeGroup resources where PersistentVolumes will be created.
+
+                      Each entry selects LVMVolumeGroups either by name (`name`) or by labels (`labelSelector`). Exactly one of the two must be set per entry, and the whole list must use one kind consistently — either all `name` entries or all `labelSelector` entries, not a mix. A `labelSelector` entry is resolved by the controller into every matching LVMVolumeGroup and kept in sync as LVMVolumeGroups are added, removed or relabeled. Name-based entries must list each LVMVolumeGroup at most once. Overlapping `labelSelector` entries that resolve to the same LVMVolumeGroup are collapsed when they agree on `thin.poolName` and rejected when they disagree.
+                    items:
+                      properties:
+                        labelSelector:
+                          description: Label selector that selects one or more LVMVolumeGroup
+                            resources by their labels. Mutually exclusive with `name`.
+                          properties:
+                            matchExpressions:
+                              description: List of label selector requirements. The
+                                requirements are ANDed.
+                              items:
+                                description: A label selector requirement -- a key,
+                                  an operator and, for some operators, a list of values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: operator represents a key's relationship
+                                      to a set of values. Valid operators are In,
+                                      NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: values is an array of string values.
+                                      If the operator is In or NotIn, the values array
+                                      must be non-empty. If the operator is Exists
+                                      or DoesNotExist, the values array must be empty.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: Map of {key,value} pairs. A single {key,value}
+                                in the matchLabels map is equivalent to an element
+                                of matchExpressions, whose key field is "key", the
+                                operator is "In", and the values array contains only
+                                "value".
+                              type: object
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        name:
+                          description: LVMVolumeGroup resource name. Mutually exclusive
+                            with `labelSelector`.
+                          maxLength: 253
+                          type: string
+                        thin:
+                          description: Thin pool used for the LVMVolumeGroups selected
+                            by this entry. Required when `type` is `Thin`, forbidden
+                            when `type` is `Thick`.
+                          properties:
+                            poolName:
+                              description: Thin pool name.
+                              maxLength: 253
+                              minLength: 1
+                              pattern: ^.*$
+                              type: string
+                          required:
+                          - poolName
+                          type: object
+                      type: object
+                      x-kubernetes-validations:
+                      - message: Exactly one of name or labelSelector must be set.
+                        rule: has(self.name) != has(self.labelSelector)
+                    maxItems: 256
+                    minItems: 1
+                    type: array
+                  thick:
+                    description: Settings for Logical Volumes in a LVMVolumeGroup
+                      resource.
+                    properties:
+                      contiguous:
+                        description: |-
+                          If `true`, the Logical Volume will be created with the contiguous flag.
+
+                          > Note: This flag should be used with caution because it may lead to poor scheduling of pods using the PersistentVolume. Our scheduler checks the free space in VG and selects nodes with the most free space for pods. However, it cannot determine the maximum amount of sequential free space available. Consequently, there may be situations where a pod is scheduled to a node, but the volume cannot be created due to insufficient contiguous free space. If such a situation arises, manual intervention will be required.
+                        type: boolean
+                        x-kubernetes-validations:
+                        - message: Value is immutable.
+                          rule: self == oldSelf
+                    type: object
+                    x-kubernetes-validations:
+                    - message: Field 'contiguous' cannot be removed.
+                      rule: (!has(oldSelf.contiguous) || has(self.contiguous))
+                    - message: Field 'contiguous' is immutable and cannot be added
+                        if not specified at creation.
+                      rule: (!has(self.contiguous) || (has(self.contiguous) && self.contiguous
+                        == oldSelf.contiguous))
+                  type:
+                    description: Provisioning type of the LVM Logical Volumes (LV)
+                      created for PersistentVolumes (PV).
+                    enum:
+                    - Thick
+                    - Thin
+                    type: string
+                    x-kubernetes-validations:
+                    - message: Value is immutable.
+                      rule: self == oldSelf
+                  volumeCleanup:
+                    description: |-
+                      Volume cleanup method after the PersistentVolume is deleted.
+                      If this parameter is not set, there's no guarantee that the data will be completely deleted.
+
+                      Allowed values:
+
+                      - `RandomFillSinglePass`: The volume will be overwritten with random data once before deletion. This option is not recommended for solid-state drives (SSDs), as overwriting reduces the drive's lifespan.
+                      - `RandomFillThreePass`: The volume will be overwritten with random data three times before deletion. This option is also not recommended for SSDs, as overwriting reduces the drive's lifespan.
+                      - `Discard`: Before deletion, all blocks of the volume will be marked as free using the `discard` system call. This option is applicable only to SSDs.
+                    enum:
+                    - RandomFillThreePass
+                    - RandomFillSinglePass
+                    - Discard
+                    type: string
+                required:
+                - lvmVolumeGroups
+                - type
+                type: object
+                x-kubernetes-validations:
+                - message: Field spec.lvm.thick is forbidden for Thin type.
+                  rule: (self.type == "Thin" && !has(self.thick)) || self.type !=
+                    "Thin"
+                - message: Field 'contiguous' is immutable and cannot be added if
+                    not specified at creation.
+                  rule: (!has(self.thick) || !has(self.thick.contiguous) || (has(self.thick.contiguous)
+                    && self.thick.contiguous == oldSelf.thick.contiguous))
+                - message: Field 'thick' cannot be removed if 'thick.contiguous' is
+                    specified.
+                  rule: (!has(oldSelf.thick) || has(self.thick) || !has(oldSelf.thick.contiguous))
+                - message: Each spec.lvm.lvmVolumeGroups entry must set exactly one
+                    of name or labelSelector.
+                  rule: self.lvmVolumeGroups.all(g, has(g.name) != has(g.labelSelector))
+                - message: spec.lvm.lvmVolumeGroups must use either name entries or
+                    labelSelector entries, not a mix.
+                  rule: self.lvmVolumeGroups.all(g, has(g.name)) || self.lvmVolumeGroups.all(g,
+                    has(g.labelSelector))
+                - message: Field thin.poolName is required for every spec.lvm.lvmVolumeGroups
+                    entry when type is Thin.
+                  rule: self.type != "Thin" || self.lvmVolumeGroups.all(g, has(g.thin)
+                    && has(g.thin.poolName) && size(g.thin.poolName) > 0)
+                - message: Field thin is forbidden for spec.lvm.lvmVolumeGroups entries
+                    when type is Thick.
+                  rule: self.type != "Thick" || self.lvmVolumeGroups.all(g, !has(g.thin))
+              reclaimPolicy:
+                description: |-
+                  StorageClass reclaim policy. Possible values:
+
+                  - `Delete`: If the PersistentVolumeClaim is deleted, the PersistentVolume and its associated storage are also deleted
+                  - `Retain`: If the PersistentVolumeClaim is deleted, the PersistentVolume and its associated storage remain
+                enum:
+                - Delete
+                - Retain
+                type: string
+                x-kubernetes-validations:
+                - message: Value is immutable.
+                  rule: self == oldSelf
+              volumeBindingMode:
+                description: |-
+                  StorageClass binding mode. Possible values:
+
+                  - `Immediate`: Creates a PersistentVolume immediately after the PersistentVolumeClaim is created
+                  - `WaitForFirstConsumer`: Creates a PersistentVolume only after a Pod that uses the PersistentVolumeClaim is created
+                enum:
+                - Immediate
+                - WaitForFirstConsumer
+                type: string
+                x-kubernetes-validations:
+                - message: Value is immutable.
+                  rule: self == oldSelf
+            required:
+            - lvm
+            - reclaimPolicy
+            - volumeBindingMode
+            type: object
+          status:
+            description: Current state of the StorageClass.
+            properties:
+              conditions:
+                description: 'The latest observations of the resource state. Condition
+                  type: `Ready`.'
+                items:
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        Timestamp of the last status transition for this condition. It is not bumped
+                        when only the reason or the message changes.
+                      format: date-time
+                      type: string
+                    message:
+                      description: Human-readable explanation of the current status.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: The value of `metadata.generation` this condition
+                        was set against.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        Machine-readable reason for the current status, suitable for log filtering
+                        and alerting.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: Current status of the condition.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: 'Condition type. `Ready` is `True` once the StorageClass
+                        is in place and the LVMVolumeGroups resolve, and `False` when
+                        a reconcile pass failed (`reason: ReconcileFailed`) or the
+                        resource is being deleted (`reason: Deleting`). Until the
+                        controller''s first pass over the resource the condition is
+                        absent rather than `Unknown`.'
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: |-
+                  The value of `metadata.generation` the controller has last acted on. When it trails
+                  `metadata.generation`, the controller has not yet processed the latest spec, and the
+                  conditions below still describe the previous one.
+                format: int64
+                type: integer
+              phase:
+                description: |-
+                  StorageClass current state. Possible values:
+
+                  - `Failed`: The controller received incorrect resource configuration or errors occurred during the operation
+                  - `Created`: All operations completed successfully
+                enum:
+                - Failed
+                - Created
+                type: string
+              reason:
+                description: Additional information about the current state of the
+                  StorageClass.
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
