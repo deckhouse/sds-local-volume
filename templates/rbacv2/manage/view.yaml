@@ -1,3 +1,31 @@
+{{- if eq (include "sds-local-volume.rbacv2_new_scheme" .) "true" }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    heritage: deckhouse
+    module: sds-local-volume
+    rbac.deckhouse.io/aggregate-to-storage-as: viewer
+    rbac.deckhouse.io/kind: capability
+    rbac.deckhouse.io/capability: "system-capability.sds-local-volume.view"
+    rbac.deckhouse.io/scope: system
+    rbac.deckhouse.io/namespace: d8-sds-local-volume
+  name: d8:system-capability:sds-local-volume:view
+  annotations:
+    en.meta.deckhouse.io/title: "Module sds-local-volume: view cluster resources"
+    ru.meta.deckhouse.io/title: "Модуль sds-local-volume: просмотр кластерных ресурсов"
+    en.meta.deckhouse.io/description: "Read-only access to the cluster-scoped resources of the sds-local-volume module (LocalStorageClass)."
+    ru.meta.deckhouse.io/description: "Доступ только на чтение к кластерным ресурсам модуля sds-local-volume (LocalStorageClass)."
+rules:
+  - apiGroups:
+      - storage.deckhouse.io
+    resources:
+      - localstorageclasses
+    verbs:
+      - get
+      - list
+      - watch
+{{- else }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -18,3 +46,4 @@ rules:
       - get
       - list
       - watch
+{{- end }}
