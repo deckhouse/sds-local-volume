@@ -33,12 +33,12 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/deckhouse/sds-common-lib/monitoring/csimetrics"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/config"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/driver"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/kubutils"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/monitoring"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -112,7 +112,8 @@ func main() {
 	// and serves it on a dedicated listener. A separate mux keeps /metrics off the
 	// default one used by the health probes above.
 	metricStorage := metricsstorage.NewMetricStorage(metricsstorage.WithNewRegistry())
-	if err = monitoring.Register(metricStorage); err != nil {
+	csiMetrics, err := csimetrics.New(metricStorage, "sds_local_volume_csi")
+	if err != nil {
 		log.Error("unable to register the metrics", logger.Err(err))
 		os.Exit(1)
 	}
@@ -125,7 +126,7 @@ func main() {
 	}()
 	log.Info("metrics registered", "address", cfgParams.MetricsBindAddress+"/metrics")
 
-	drv, err := driver.NewDriver(cfgParams.CsiAddress, cfgParams.DriverName, cfgParams.Address, &cfgParams.NodeName, log, monitoring.NewRecorder(metricStorage), cl)
+	drv, err := driver.NewDriver(cfgParams.CsiAddress, cfgParams.DriverName, cfgParams.Address, &cfgParams.NodeName, log, csiMetrics, cl)
 	if err != nil {
 		log.Error("create NewDriver", logger.Err(err))
 	}

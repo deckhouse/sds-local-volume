@@ -35,9 +35,9 @@ import (
 	"google.golang.org/grpc"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/deckhouse/sds-common-lib/monitoring/csimetrics"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/monitoring"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 )
 
@@ -67,7 +67,7 @@ type Driver struct {
 	srv     *grpc.Server
 	httpSrv http.Server
 	log     logger.Logger
-	metrics monitoring.Recorder
+	metrics csimetrics.Recorder
 
 	readyMu      sync.Mutex // protects ready
 	ready        bool
@@ -83,7 +83,7 @@ type Driver struct {
 // NewDriver returns a CSI plugin that contains the necessary gRPC
 // interfaces to interact with Kubernetes over unix domain sockets for
 // managing  disks
-func NewDriver(csiAddress, driverName, address string, nodeName *string, log logger.Logger, metrics monitoring.Recorder, cl client.Client) (*Driver, error) {
+func NewDriver(csiAddress, driverName, address string, nodeName *string, log logger.Logger, metrics csimetrics.Recorder, cl client.Client) (*Driver, error) {
 	if driverName == "" {
 		driverName = DefaultDriverName
 	}
