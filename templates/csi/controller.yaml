@@ -7,10 +7,59 @@
 - "--csi-address=unix://$(ADDRESS)"
 {{- end }}
 
-{{- define "csi_controller_ports" }}
-- name: metrics
-  containerPort: 8080
-  protocol: TCP
+{{- define "csi_controller_metrics_proxy" }}
+- name: kube-rbac-proxy
+  {{- include "helm_lib_module_container_security_context_pss_restricted_flexible" dict | nindent 2 }}
+  image: {{ include "helm_lib_module_common_image" (list . "kubeRbacProxy") }}
+  imagePullPolicy: IfNotPresent
+  args:
+    - "--secure-listen-address=$(KUBE_RBAC_PROXY_LISTEN_ADDRESS):{{ .Values.sdsLocalVolume.internal.csiControllerMetricsPort }}"
+    - "--v=2"
+    - "--logtostderr=true"
+    - "--stale-cache-interval=1h30m"
+    - "--livez-path=/livez"
+  env:
+    - name: KUBE_RBAC_PROXY_LISTEN_ADDRESS
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    - name: KUBE_RBAC_PROXY_CONFIG
+      value: |
+        excludePaths:
+        - /livez
+        upstreams:
+        - upstream: http://127.0.0.1:{{ .Values.sdsLocalVolume.internal.csiControllerMetricsPort }}/metrics
+          path: /metrics
+          authorization:
+            resourceAttributes:
+              namespace: d8-{{ .Chart.Name }}
+              apiGroup: apps
+              apiVersion: v1
+              resource: deployments
+              subresource: prometheus-metrics
+              name: csi-controller
+  ports:
+    - name: https-metrics
+      containerPort: {{ .Values.sdsLocalVolume.internal.csiControllerMetricsPort }}
+      protocol: TCP
+  livenessProbe:
+    httpGet:
+      path: /livez
+      port: {{ .Values.sdsLocalVolume.internal.csiControllerMetricsPort }}
+      scheme: HTTPS
+  {{- /* No readinessProbe on purpose: a container that only serves metrics must not be
+         able to take this pod out of the endpoints of anything that selects it. A wedged
+         proxy is still restarted by the liveness probe. */}}
+  resources:
+    requests:
+      {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 6 }}
+{{- if not (include "helm_lib_api_version_exists" (list . "autoscaling.k8s.io/v1/VerticalPodAutoscaler")) }}
+      {{- include "helm_lib_container_kube_rbac_proxy_resources" . | nindent 6 }}
+{{- end }}
+{{- end }}
+
+{{- define "csi_controller_metrics_proxy_vpa" }}
+{{- include "helm_lib_vpa_kube_rbac_proxy_resources" . }}
 {{- end }}
 
 {{- define "additional_pull_secrets" }} 
@@ -37,6 +86,11 @@
 {{- else if eq .Values.sdsLocalVolume.logLevel "TRACE" }}
   value: "4"
 {{- end }}
+{{- /* Loopback: the kube-rbac-proxy of this pod publishes the same port number on
+       the pod address, which is a different socket. Unset, the driver would listen
+       on every interface and serve the metrics unauthenticated. */}}
+- name: METRICS_BIND_ADDRESS
+  value: "127.0.0.1:{{ .Values.sdsLocalVolume.internal.csiControllerMetricsPort }}"
 {{- include "helm_lib_envs_for_proxy" . }}
 {{- end }}
 
@@ -63,7 +117,8 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiControllerConfig "additionalPullSecrets" (include "additional_pull_secrets" . | fromYamlArray) }}
 {{- $_ := set $csiControllerConfig "additionalControllerArgs" (include "csi_controller_args" . | fromYamlArray) }}
 {{- $_ := set $csiControllerConfig "additionalControllerEnvs" (include "csi_controller_envs" . | fromYamlArray) }}
-{{- $_ := set $csiControllerConfig "additionalControllerPorts" (include "csi_controller_ports" . | fromYamlArray) }}
+{{- $_ := set $csiControllerConfig "additionalContainers" (include "csi_controller_metrics_proxy" . | fromYamlArray) }}
+{{- $_ := set $csiControllerConfig "additionalControllerVPA" (include "csi_controller_metrics_proxy_vpa" . | fromYamlArray) }}
 
 {{- include "helm_lib_csi_controller_manifests" (list . $csiControllerConfig) }}
 
@@ -96,6 +151,67 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- else if eq .Values.sdsLocalVolume.logLevel "TRACE" }}
   value: "4"
 {{- end }}
+{{- /* The same for the node: helm_lib_csi_node_manifests has no way to declare a
+       port on the driver container, so the metrics are published by the
+       kube-rbac-proxy added below, and the driver keeps them on loopback. The pod is
+       not hostNetwork, so this is the loopback of the pod, not of the node. */}}
+- name: METRICS_BIND_ADDRESS
+  value: "127.0.0.1:{{ .Values.sdsLocalVolume.internal.csiNodeMetricsPort }}"
+{{- end }}
+
+{{- define "csi_node_metrics_proxy" }}
+- name: kube-rbac-proxy
+  {{- include "helm_lib_module_container_security_context_pss_restricted_flexible" dict | nindent 2 }}
+  image: {{ include "helm_lib_module_common_image" (list . "kubeRbacProxy") }}
+  imagePullPolicy: IfNotPresent
+  args:
+    - "--secure-listen-address=$(KUBE_RBAC_PROXY_LISTEN_ADDRESS):{{ .Values.sdsLocalVolume.internal.csiNodeMetricsPort }}"
+    - "--v=2"
+    - "--logtostderr=true"
+    - "--stale-cache-interval=1h30m"
+    - "--livez-path=/livez"
+  env:
+    - name: KUBE_RBAC_PROXY_LISTEN_ADDRESS
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    - name: KUBE_RBAC_PROXY_CONFIG
+      value: |
+        excludePaths:
+        - /livez
+        upstreams:
+        - upstream: http://127.0.0.1:{{ .Values.sdsLocalVolume.internal.csiNodeMetricsPort }}/metrics
+          path: /metrics
+          authorization:
+            resourceAttributes:
+              namespace: d8-{{ .Chart.Name }}
+              apiGroup: apps
+              apiVersion: v1
+              resource: daemonsets
+              subresource: prometheus-metrics
+              name: csi-node
+  ports:
+    - name: https-metrics
+      containerPort: {{ .Values.sdsLocalVolume.internal.csiNodeMetricsPort }}
+      protocol: TCP
+  livenessProbe:
+    httpGet:
+      path: /livez
+      port: {{ .Values.sdsLocalVolume.internal.csiNodeMetricsPort }}
+      scheme: HTTPS
+  {{- /* No readinessProbe on purpose: a container that only serves metrics must not be
+         able to take this pod out of the endpoints of anything that selects it. A wedged
+         proxy is still restarted by the liveness probe. */}}
+  resources:
+    requests:
+      {{- include "helm_lib_module_ephemeral_storage_only_logs" . | nindent 6 }}
+{{- if not (include "helm_lib_api_version_exists" (list . "autoscaling.k8s.io/v1/VerticalPodAutoscaler")) }}
+      {{- include "helm_lib_container_kube_rbac_proxy_resources" . | nindent 6 }}
+{{- end }}
+{{- end }}
+
+{{- define "csi_node_metrics_proxy_vpa" }}
+{{- include "helm_lib_vpa_kube_rbac_proxy_resources" . }}
 {{- end }}
 
 {{- define "csi_additional_node_volumes" }}
@@ -119,5 +235,7 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiNodeConfig "customNodeSelector" (include "csi_custom_node_selector" . | fromYaml) }}
 {{- $_ := set $csiNodeConfig "additionalPullSecrets" (include "additional_pull_secrets" . | fromYamlArray) }}
 {{- $_ := set $csiNodeConfig "forceCsiNodeAndStaticNodesDepoloy" true }}
+{{- $_ := set $csiNodeConfig "additionalContainers" (include "csi_node_metrics_proxy" . | fromYamlArray) }}
+{{- $_ := set $csiNodeConfig "additionalNodeVPA" (include "csi_node_metrics_proxy_vpa" . | fromYamlArray) }}
 
 {{- include "helm_lib_csi_node_manifests" (list . $csiNodeConfig) }}

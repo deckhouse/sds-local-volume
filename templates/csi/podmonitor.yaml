@@ -4,8 +4,10 @@
   helm_lib_csi_controller_manifests and helm_lib_csi_node_manifests create no
   Service, and a DaemonSet has to be scraped per pod anyway.
 
-  The node DaemonSet is matched by port number because
-  helm_lib_csi_node_manifests exposes no way to declare a named containerPort.
+  Both scrape the kube-rbac-proxy of their pod over TLS behind an authorization
+  check, so the scrape carries the Prometheus token; the certificate is the
+  proxy's own, hence insecureSkipVerify. The driver keeps its endpoint on
+  127.0.0.1.
 */ -}}
 ---
 apiVersion: monitoring.coreos.com/v1
@@ -16,9 +18,14 @@ metadata:
   {{- include "helm_lib_module_labels" (list $ (dict "prometheus" "main")) | nindent 2 }}
 spec:
   podMetricsEndpoints:
-  - port: metrics
-    scheme: http
+  - port: https-metrics
+    scheme: https
     path: /metrics
+    bearerTokenSecret:
+      name: "prometheus-token"
+      key: "token"
+    tlsConfig:
+      insecureSkipVerify: true
     relabelings:
     - regex: endpoint|namespace|pod|container
       action: labeldrop
@@ -26,6 +33,11 @@ spec:
       replacement: sds-local-volume-csi-controller
     - targetLabel: tier
       replacement: cluster
+    # A PodMonitor selects pods by label, so without this the terminating pod of a
+    # rolling update stays in the target list and every scrape of it fails.
+    - sourceLabels: [__meta_kubernetes_pod_ready]
+      regex: "true"
+      action: keep
   selector:
     matchLabels:
       app: csi-controller
@@ -41,16 +53,28 @@ metadata:
   {{- include "helm_lib_module_labels" (list $ (dict "prometheus" "main")) | nindent 2 }}
 spec:
   podMetricsEndpoints:
-  - targetPort: 8080
-    scheme: http
+  - port: https-metrics
+    scheme: https
     path: /metrics
+    bearerTokenSecret:
+      name: "prometheus-token"
+      key: "token"
+    tlsConfig:
+      insecureSkipVerify: true
     relabelings:
     - regex: endpoint|namespace|pod|container
       action: labeldrop
     - targetLabel: job
       replacement: sds-local-volume-csi-node
+    # The node this line came from is the useful dimension for a DaemonSet, and
+    # the pod label is dropped above.
     - sourceLabels: [__meta_kubernetes_pod_node_name]
       targetLabel: node
+    - targetLabel: tier
+      replacement: cluster
+    - sourceLabels: [__meta_kubernetes_pod_ready]
+      regex: "true"
+      action: keep
   selector:
     matchLabels:
       app: csi-node

@@ -9,6 +9,27 @@ properties:
       featureSnapshotsEnabled:
         type: boolean
         default: false
+      csiControllerMetricsPort:
+        type: integer
+        default: 8080
+        description: |
+          The port the CSI controller serves its operation metrics on. The driver binds
+          it on 127.0.0.1 and the kube-rbac-proxy of the same pod publishes the same
+          number on the pod address -- two different sockets. Reaching it requires
+          "get" on deployments/prometheus-metrics for csi-controller. What is on it is
+          sds_local_volume_csi_operations_total and
+          sds_local_volume_csi_operation_duration_seconds.
+
+          The pod is not hostNetwork, so the number is pod-level and needs no entry in
+          the Deckhouse port reference.
+      csiNodeMetricsPort:
+        type: integer
+        default: 8080
+        description: |
+          The same for the CSI node DaemonSet. Reaching it requires "get" on
+          daemonsets/prometheus-metrics for csi-node. The DaemonSet is not hostNetwork
+          either, so it can share the number with the CSI controller: the two pods have
+          separate network namespaces even on the same node.
       pythonVersions:
         type: array
         default: []
