@@ -1,0 +1,16 @@
+date: "2026-10-01"
+
+summary: "Prometheus теперь собирает метрики операций CSI не только с контроллера, но и с CSI-плагина на узлах, оба отдают их по HTTPS с проверкой авторизации, а роли доступа модуля следуют модели capability (возможностей) DKP 1.78."
+
+highlights:
+  - "У задания сбора `sds-local-volume-csi-node` появились цели: до этого релиза у Prometheus не было точки сбора для CSI-плагина на узлах, поэтому `sds_local_volume_csi_operations_total` и `sds_local_volume_csi_operation_duration_seconds` собирались только с контроллера CSI."
+  - "В DKP 1.78 и новее модуль выдаёт доступ к `LocalStorageClass` через роли `d8:system-capability:sds-local-volume:view` и `d8:system-capability:sds-local-volume:edit`; в более ранних версиях роли `d8:manage:permission:module:sds-local-volume:*` остаются без изменений."
+
+new_features:
+  - "Модуль поставляет ClusterRole в модели capability DKP 1.78: `d8:system-capability:sds-local-volume:view` (get, list и watch для `LocalStorageClass`) и `d8:system-capability:sds-local-volume:edit` (create, update, patch, delete и deletecollection), которые агрегируются в роли просмотра и управления хранилищем. Схема выбирается по версии Deckhouse: начиная с 1.78 эти роли заменяют `d8:manage:permission:module:sds-local-volume:view` и `d8:manage:permission:module:sds-local-volume:edit`, ниже 1.78 прежние роли создаются как раньше."
+
+fixes:
+  - "PodMonitor CSI-плагина на узлах выбирал точку сбора метрик по порту 8080, который контейнер `csi-node` не объявляет, поэтому у задания `sds-local-volume-csi-node` не было целей в Prometheus и метрики операций CSI с узлов не собирались никогда. Теперь и в контроллере CSI, и в DaemonSet `csi-node` работает sidecar `kube-rbac-proxy`, который публикует метрики как `https-metrics` на адресе пода; сам драйвер слушает только 127.0.0.1. Сбор разрешён только субъекту с правом `get` на подресурс `prometheus-metrics` Deployment `csi-controller` или DaemonSet `csi-node`, и это право выдано Prometheus Deckhouse. Ряды задания `sds-local-volume-csi-node` теперь, как и у контроллера, несут метку `tier: cluster`, а завершающиеся при обновлении поды больше не опрашиваются. Имена заданий и метрик не меняются. При обновлении поды CSI перезапускаются."
+
+upgrade_notes:
+  - "Метрики CSI больше не отдаются по обычному HTTP на порту 8080 адреса пода. Сборщику, отличному от Prometheus Deckhouse, который читал их напрямую, нужно обращаться по HTTPS на порт `https-metrics` с токеном субъекта, у которого есть право `get` на `deployments/prometheus-metrics` (контроллер) или `daemonsets/prometheus-metrics` (узлы) в `d8-sds-local-volume`. Для встроенного мониторинга ничего делать не нужно."

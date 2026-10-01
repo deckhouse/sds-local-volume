@@ -1,0 +1,16 @@
+date: "2026-10-01"
+
+summary: "Prometheus now collects the CSI operation metrics from the node plugin as well as from the controller, both served over HTTPS behind an authorization check, and the module's access roles follow the capability model of DKP 1.78."
+
+highlights:
+  - "The `sds-local-volume-csi-node` scrape job gets targets: before this release Prometheus had no endpoint for the CSI node plugin, so `sds_local_volume_csi_operations_total` and `sds_local_volume_csi_operation_duration_seconds` were collected from the CSI controller only."
+  - "On DKP 1.78 and later the module grants access to `LocalStorageClass` through the `d8:system-capability:sds-local-volume:view` and `d8:system-capability:sds-local-volume:edit` roles; on earlier versions the `d8:manage:permission:module:sds-local-volume:*` roles stay unchanged."
+
+new_features:
+  - "The module ships ClusterRoles in the capability model of DKP 1.78: `d8:system-capability:sds-local-volume:view` (get, list and watch on `LocalStorageClass`) and `d8:system-capability:sds-local-volume:edit` (create, update, patch, delete and deletecollection), aggregated into the storage viewer and manager roles. The scheme is chosen from the Deckhouse version: on 1.78 and later these roles replace `d8:manage:permission:module:sds-local-volume:view` and `d8:manage:permission:module:sds-local-volume:edit`, below 1.78 the previous roles are rendered as before."
+
+fixes:
+  - "The PodMonitor of the CSI node plugin selected the metrics endpoint by port 8080, which the `csi-node` container does not declare, so Prometheus had no targets for the `sds-local-volume-csi-node` job and the CSI operation metrics of the nodes were never collected. Both the CSI controller and the `csi-node` DaemonSet now carry a `kube-rbac-proxy` sidecar that publishes the metrics as `https-metrics` on the Pod address; the driver itself listens on 127.0.0.1 only. A scrape is allowed only for a subject with `get` on the `prometheus-metrics` subresource of the `csi-controller` Deployment or the `csi-node` DaemonSet, which is granted to the Deckhouse Prometheus. Series of the `sds-local-volume-csi-node` job now also carry `tier: cluster`, as those of the controller do, and the terminating Pods of a rolling update are no longer scraped. The job names and metric names do not change. The CSI Pods are restarted by the update."
+
+upgrade_notes:
+  - "The CSI metrics are no longer served as plain HTTP on port 8080 of the Pod address. A scraper other than the Deckhouse Prometheus that read them directly has to use HTTPS on the `https-metrics` port with a token of a subject that holds `get` on `deployments/prometheus-metrics` (controller) or `daemonsets/prometheus-metrics` (node) in `d8-sds-local-volume`. Nothing has to be done for the built-in monitoring."
