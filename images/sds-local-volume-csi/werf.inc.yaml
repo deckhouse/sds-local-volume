@@ -55,8 +55,24 @@ shell:
     - chmod 0755 /{{ $.ImageName }}
 
 ---
-image: {{ .ModuleNamePrefix }}{{ .ImageName }}
+image: {{ .ModuleNamePrefix }}{{ .ImageName }}-runtime-artifact
 from: {{ index $.Images "builder/distroless" }}
+final: false
+shell:
+  setup:
+    - |
+      pm install --rootDir /relocate \
+        gnu-glibc \
+        e2fsprogs \
+        xfsprogs \
+        lvm2 \
+        util-linux
+    - mkdir -p /relocate/etc
+    - if [ -x /relocate/sbin/ldconfig ]; then chroot /relocate /sbin/ldconfig; fi
+
+---
+image: {{ .ModuleNamePrefix }}{{ .ImageName }}
+from: {{ index $.Images "base/distroless" }}
 # werf keys an import on the imported file's CONTENT, not on its mode, so the chmod above does not change
 # this image's digest: without a cache bust the stage built before the fix keeps being reused and the
 # module ships the old, root-only binary no matter how often it is rebuilt.
@@ -66,20 +82,14 @@ git:
 {{- include "image mount points" . }}
 
 import:
+  - image: {{ .ModuleNamePrefix }}{{ .ImageName }}-runtime-artifact
+    add: /relocate
+    to: /
+    before: setup
   - image: {{ .ModuleNamePrefix }}{{ .ImageName }}-golang-artifact
     add: /{{ $.ImageName }}
     to: /{{ $.ImageName }}
     before: setup
-
-shell:
-  setup:
-    - |
-      pm install \
-        gnu-glibc \
-        e2fsprogs \
-        xfsprogs \
-        lvm2 \
-        util-linux
 
 imageSpec:
   config:
