@@ -65,7 +65,7 @@ func NewConfig() (*Options, error) {
 
 	loglevel := os.Getenv(LogLevel)
 	if loglevel == "" {
-		opts.Loglevel = logger.DebugLevel
+		opts.Loglevel = logger.InfoLevel
 	} else {
 		opts.Loglevel = logger.Verbosity(loglevel)
 	}
