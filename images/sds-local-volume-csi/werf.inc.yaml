@@ -61,12 +61,23 @@ final: false
 shell:
   setup:
     - |
-      pm install --rootDir /relocate \
-        gnu-glibc \
+      pm install -n --rootDir /relocate \
+        glibc \
         e2fsprogs \
         xfsprogs \
         lvm2 \
-        util-linux
+        util-linux \
+        mount \
+        umount \
+        blkid \
+        blockdev \
+        findmnt \
+        losetup \
+        lsblk \
+        wipefs \
+        fstrim \
+        sfdisk \
+        partx
     - mkdir -p /relocate/etc
     - if [ -x /relocate/sbin/ldconfig ]; then chroot /relocate /sbin/ldconfig; fi
 

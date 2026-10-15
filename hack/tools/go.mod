@@ -20,7 +20,7 @@
 // refuses to load a package declaring a newer `go` directive.
 module sds-local-volume-codegen-tools
 
-go 1.27.1
+go 1.27.2
 tool (
 	github.com/deckhouse/deckhouse/pkg/crd-enricher/cmd/crd-enricher
 	sigs.k8s.io/controller-tools/cmd/controller-gen
