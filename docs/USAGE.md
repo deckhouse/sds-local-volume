@@ -171,7 +171,6 @@ Add the `storageclass.kubernetes.io/is-default-class: "true"` annotation to the 
 d8 k annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kubernetes.io/is-default-class=true
 ```
 
-
 ## Selecting nodes for module operation
 
 The module uses nodes that have the labels specified in the `nodeSelector` field in the module settings. To do this:
@@ -549,4 +548,3 @@ Follow these steps:
 1. Verify that the node has no [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources that are used in [LocalStorageClass](cr.html#localstorageclass) resources.
 
    Before removing a node from module management, delete dependent resources manually to avoid losing control over created volumes.
-

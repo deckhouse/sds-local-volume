@@ -26,8 +26,6 @@ d8 k -n d8-sds-local-volume get po -owide
 
 If the pod is missing, ensure that the node has all the labels specified in the `nodeSelector` field in the module settings. For more details, see [Why are the sds-local-volume component service pods not created on the desired node?](#why-are-the-sds-local-volume-component-service-pods-not-created-on-the-desired-node).
 
-
-
 ## Why did the csi-node pod remain on the node after removing labels?
 
 The node likely has [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources that are used in [LocalStorageClass](cr.html#localstorageclass) resources.

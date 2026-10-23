@@ -238,4 +238,3 @@ To configure storage on nodes, follow these steps:
    ```
 
 After the StorageClass named `local-storage-class` appears, the `sds-local-volume` module setup is complete. You can now create PersistentVolumeClaim (PVC) resources, specifying the StorageClass named `local-storage-class`.
-

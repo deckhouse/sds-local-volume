@@ -26,8 +26,6 @@ d8 k -n d8-sds-local-volume get po -owide
 
 Если под отсутствует, убедитесь, что на узле присутствуют все метки, указанные в поле `nodeSelector` в настройках модуля. Подробнее см. [Почему служебные поды компонентов sds-local-volume не создаются на нужном узле](#почему-служебные-поды-компонентов-sds-local-volume-не-создаются-на-нужном-узле).
 
-
-
 ## Почему под csi-node остался на узле после снятия меток?
 
 Вероятно, на узле есть ресурсы [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup), которые используются в ресурсах [LocalStorageClass](cr.html#localstorageclass).
