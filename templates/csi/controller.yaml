@@ -217,5 +217,6 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- $_ := set $csiNodeConfig "forceCsiNodeAndStaticNodesDepoloy" true }}
 {{- $_ := set $csiNodeConfig "additionalContainers" (include "csi_node_metrics_proxy" . | fromYamlArray) }}
 {{- $_ := set $csiNodeConfig "additionalNodeVPA" (include "csi_node_metrics_proxy_vpa" . | fromYamlArray) }}
+{{- $_ := set $csiNodeConfig "securityPolicyExceptionEnabled" true }}
 
 {{- include "helm_lib_csi_node_manifests" (list . $csiNodeConfig) }}
