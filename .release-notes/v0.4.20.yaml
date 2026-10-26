@@ -1,0 +1,18 @@
+date: "2026-10-26"
+
+summary: "The CSI node plugin comes with the `SecurityPolicyException` that DKP 1.79 requires for system Pods, the CSI sidecars log at the level set by `logLevel`, and the module images no longer carry the reported Go dependency vulnerabilities."
+
+highlights:
+  - "The module ships a `SecurityPolicyException` for the `csi-node` DaemonSet in `d8-sds-local-volume`, so its Pods keep starting once DKP 1.79 switches the Pod Security Standards of system namespaces from warning to denial."
+
+improvements:
+  - "The `csi-node` DaemonSet gets a `SecurityPolicyException` that describes each privilege it needs beyond the restricted profile: the privileged `node` container, the `node` and `node-driver-registrar` containers running as root with privilege escalation, and the hostPath volumes for the kubelet directories and `/dev`. Its Pods carry the `security.deckhouse.io/security-policy-exception` label pointing to it. The module controller and the CSI controller already fit the restricted profile and get no exception. The object is rendered only when the `SecurityPolicyException` resource is available in the cluster (the `admission-policy-engine-crd` module is enabled); on earlier platforms nothing changes."
+
+fixes:
+  - "The CSI sidecars of the controller and `node-driver-registrar` ran with a fixed `--v=5` whatever `logLevel` was set to. Their verbosity now follows `logLevel`: `ERROR`, `WARN`, `INFO`, `DEBUG` and `TRACE` give `--v=0`, `1`, `2`, `4` and `5`. The default `INFO` gives `--v=2`, and `TRACE` keeps the previous level of detail."
+
+security:
+  - "Go dependencies of the CSI driver, the module controller, the webhooks and the hooks are updated, which clears CVE-2026-78669, CVE-2026-78659, CVE-2026-78660, CVE-2026-78663, CVE-2026-97032, CVE-2026-56851, CVE-2026-63209 and CVE-2026-85747 from scans of the module images."
+
+upgrade_notes:
+  - "Nothing has to be done by hand. The CSI controller and `csi-node` Pods restart once because of the new log arguments and, where the `SecurityPolicyException` resource is available, the new label."
