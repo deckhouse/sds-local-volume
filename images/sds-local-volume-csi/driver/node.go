@@ -18,6 +18,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -35,6 +36,7 @@ import (
 	"github.com/deckhouse/sds-common-lib/fsreserve"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
+	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 )
 
 const (
@@ -439,7 +441,23 @@ func (d *Driver) NodeExpandVolume(_ context.Context, request *csi.NodeExpandVolu
 		return nil, status.Error(codes.InvalidArgument, "Volume Path cannot be empty")
 	}
 
+	if request.GetVolumeCapability().GetBlock() != nil {
+		exists, err := d.storeManager.PathExists(volumePath)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "[NodeExpandVolume] Error checking if device exists: %v", err)
+		}
+		if !exists {
+			return nil, status.Errorf(codes.NotFound, "[NodeExpandVolume] Device %q not found", volumePath)
+		}
+		log.Info("block volume has no filesystem to resize", "volumePath", volumePath)
+		return &csi.NodeExpandVolumeResponse{}, nil
+	}
+
 	err := d.storeManager.ResizeFS(volumePath)
+	if errors.Is(err, utils.ErrNotMounted) {
+		log.Error("the volume path is not mounted", logger.Err(err))
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
 	if err != nil {
 		log.Error("unable to resize the filesystem", logger.Err(err))
 		return nil, status.Error(codes.Internal, err.Error())

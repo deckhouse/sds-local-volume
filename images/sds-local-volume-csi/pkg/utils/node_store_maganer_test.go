@@ -110,3 +110,15 @@ func TestNodeStoreManager(t *testing.T) {
 		})
 	})
 }
+
+func TestResizeFSNothingMounted(t *testing.T) {
+	store := &Store{
+		Log: logger.NewNop(),
+		NodeStorage: mountutils.SafeFormatAndMount{
+			Interface: &mountutils.FakeMounter{},
+		},
+	}
+
+	err := store.ResizeFS("some-target")
+	assert.ErrorIs(t, err, ErrNotMounted)
+}

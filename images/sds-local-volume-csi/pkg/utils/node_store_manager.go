@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -30,6 +31,9 @@ import (
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 )
+
+// ErrNotMounted is returned by ResizeFS when nothing is mounted at the target.
+var ErrNotMounted = errors.New("nothing is mounted")
 
 type NodeStoreManager interface {
 	NodeStageVolumeFS(source, target string, fsType string, mountOpts []string, formatOpts []string, lvmType, lvmThinPoolName string, reservedPercent int) error
@@ -279,6 +283,10 @@ func (s *Store) ResizeFS(mountTarget string) error {
 	if err != nil {
 		log.Error("unable to find the device mounted at the target", logger.Err(err))
 		return fmt.Errorf("failed to find the device mounted at %s: %w", mountTarget, err)
+	}
+	if devicePath == "" {
+		log.Error("nothing is mounted at the target")
+		return fmt.Errorf("%w at %s", ErrNotMounted, mountTarget)
 	}
 
 	log.Info("found the device to resize", "devicePath", devicePath)
