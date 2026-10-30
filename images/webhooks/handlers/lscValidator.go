@@ -44,6 +44,14 @@ func LSCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 			return &kwhvalidating.ValidatorResult{}, nil
 		}
 
+		// A class being deleted only waits for its finalizers to go. Checking it
+		// against the cluster as it is now would keep a class that no longer
+		// passes (one of its LVMVolumeGroups deleted first, say) from ever
+		// losing its finalizer, and so from ever being deleted.
+		if lsc.GetDeletionTimestamp() != nil {
+			return &kwhvalidating.ValidatorResult{Valid: true}, nil
+		}
+
 		// The reserved-block percentage travels as an annotation, so the CRD
 		// schema cannot vet it. Reject a bad value here instead of letting
 		// every volume of the class fail at NodeStageVolume.
