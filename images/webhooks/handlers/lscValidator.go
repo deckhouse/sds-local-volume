@@ -23,7 +23,9 @@ import (
 
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/deckhouse/sds-common-lib/fsreserve"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
@@ -161,6 +163,39 @@ func LSCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 			}
 		}
 
+		if len(lvmVolumeGroupUnique) > 0 {
+			nodes := &corev1.NodeList{}
+			if err := cl.List(ctx, nodes, client.MatchingLabels{slv.CSINodeLabel: ""}); err != nil {
+				log.Error("unable to list the nodes running the CSI node", logger.Err(err))
+				warnings = append(warnings, "could not check whether the nodes of the LVMVolumeGroups run the sds-local-volume CSI node")
+			} else if outside := lvgsOnNodesWithoutCSI(listDevice.Items, lvmVolumeGroupUnique, nodes.Items); len(outside) > 0 {
+				warnings = append(warnings, slv.LVMVolumeGroupsOutsideCSINodesMessage(outside))
+			}
+		}
+
 		return &kwhvalidating.ValidatorResult{Valid: true, Warnings: warnings}, nil
 	}
+}
+
+// lvgsOnNodesWithoutCSI returns "<lvg> (<node>)", sorted, for every named
+// LVMVolumeGroup whose node is not among csiNodes. It is a warning, not a
+// rejection: the controller labels the nodes after a ModuleConfig change, so a
+// class created right after one may come ahead of the label.
+func lvgsOnNodesWithoutCSI(lvgs []snc.LVMVolumeGroup, names []string, csiNodes []corev1.Node) []string {
+	withCSI := make(map[string]struct{}, len(csiNodes))
+	for _, node := range csiNodes {
+		withCSI[node.Name] = struct{}{}
+	}
+
+	var outside []string
+	for _, lvg := range lvgs {
+		if !slices.Contains(names, lvg.Name) || lvg.Spec.Local.NodeName == "" {
+			continue
+		}
+		if _, ok := withCSI[lvg.Spec.Local.NodeName]; !ok {
+			outside = append(outside, fmt.Sprintf("%s (%s)", lvg.Name, lvg.Spec.Local.NodeName))
+		}
+	}
+	slices.Sort(outside)
+	return outside
 }

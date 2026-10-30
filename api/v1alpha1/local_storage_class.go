@@ -136,7 +136,7 @@ type LocalStorageClassStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	// +crd-enricher:unset:items.description
-	// +crd-enricher:raw:items.properties.type.description="Condition type. `Ready` is `True` once the StorageClass is in place and the LVMVolumeGroups resolve, and `False` when a reconcile pass failed (`reason: ReconcileFailed`) or the resource is being deleted (`reason: Deleting`). Until the controller's first pass over the resource the condition is absent rather than `Unknown`."
+	// +crd-enricher:raw:items.properties.type.description="Condition type. `Ready` is `True` once the StorageClass is in place and the LVMVolumeGroups resolve, and `False` when a reconcile pass failed (`reason: ReconcileFailed`) or the resource is being deleted (`reason: Deleting`). A class with LVMVolumeGroups on nodes without the module's CSI node stays `True` with `reason: LVMVolumeGroupsOutsideCSINodes` and the groups listed in the message: volumes cannot be used on those groups. Until the controller's first pass over the resource the condition is absent rather than `Unknown`."
 	// +crd-enricher:raw:items.properties.status.description=Current status of the condition.
 	// +crd-enricher:raw:items.properties.observedGeneration.description=The value of `metadata.generation` this condition was set against.
 	// +crd-enricher:raw:items.properties.lastTransitionTime.description="Timestamp of the last status transition for this condition. It is not bumped\nwhen only the reason or the message changes."

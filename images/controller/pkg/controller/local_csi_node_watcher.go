@@ -43,7 +43,7 @@ import (
 const (
 	LocalCSINodeWatcherCtrl = "local-csi-node-watcher-controller"
 
-	localCsiNodeSelectorLabel    = "storage.deckhouse.io/sds-local-volume-node"
+	localCsiNodeSelectorLabel    = slv.CSINodeLabel
 	nodeManualEvictionLabel      = "storage.deckhouse.io/sds-local-volume-need-manual-eviction"
 	candidateManualEvictionLabel = "storage.deckhouse.io/sds-local-volume-candidate-for-eviction"
 )

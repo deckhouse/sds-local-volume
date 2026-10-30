@@ -270,6 +270,35 @@ func RunLocalStorageClassWatcherController(
 		return nil, err
 	}
 
+	// Watch the CSI node label so that a node joining or leaving
+	// dataNodes.nodeSelector re-reconciles every LocalStorageClass and the
+	// warning about LVMVolumeGroups on nodes without the CSI node follows it.
+	err = c.Watch(source.Kind(
+		mgr.GetCache(),
+		&corev1.Node{},
+		handler.TypedEnqueueRequestsFromMapFunc[*corev1.Node, reconcile.Request](
+			func(ctx context.Context, _ *corev1.Node) []reconcile.Request {
+				lscList := &slv.LocalStorageClassList{}
+				if err := cl.List(ctx, lscList); err != nil {
+					log.Named("node-watcher").Error("unable to list the LocalStorageClasses after a CSI node label change", logger.Err(err))
+					return nil
+				}
+				reqs := make([]reconcile.Request, 0, len(lscList.Items))
+				for _, lsc := range lscList.Items {
+					reqs = append(reqs, reconcile.Request{
+						NamespacedName: types.NamespacedName{Namespace: lsc.Namespace, Name: lsc.Name},
+					})
+				}
+				return reqs
+			},
+		),
+		csiNodeChanged(),
+	))
+	if err != nil {
+		log.Error("unable to watch the nodes", logger.Err(err))
+		return nil, err
+	}
+
 	return c, nil
 }
 
@@ -350,6 +379,18 @@ func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger,
 		return true, err
 	}
 
+	var csiWarning string
+	if lsc.DeletionTimestamp == nil {
+		// The nodes only feed a warning, so failing to list them does not fail
+		// the class: the pass is retried and the phase is left as it is.
+		csiNodes, err := csiNodeNames(ctx, cl)
+		if err != nil {
+			log.Error("unable to list the nodes running the CSI node", logger.Err(err), slog.String("localStorageClass", lsc.Name))
+			return true, err
+		}
+		csiWarning = slv.LVMVolumeGroupsOutsideCSINodesMessage(lvgsOnNodesWithoutCSI(lvgList, effectiveLVGs, csiNodes))
+	}
+
 	recType, err := identifyReconcileFunc(scList, lsc, effectiveLVGs, ignoredLabelPrefixes)
 	if err != nil {
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -364,15 +405,24 @@ func RunEventReconcile(ctx context.Context, cl client.Client, log logger.Logger,
 	switch recType {
 	case CreateReconcile:
 		log.Debug("running the create reconcile", "localStorageClass", lsc.Name)
-		return reconcileLSCCreateFunc(ctx, cl, log, scList, lsc, lvgList, effectiveLVGs, ignoredLabelPrefixes)
+		return reconcileLSCCreateFunc(ctx, cl, log, scList, lsc, lvgList, effectiveLVGs, ignoredLabelPrefixes, csiWarning)
 	case UpdateReconcile:
 		log.Debug("running the update reconcile", "localStorageClass", lsc.Name)
-		return reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc, lvgList, effectiveLVGs, ignoredLabelPrefixes)
+		return reconcileLSCUpdateFunc(ctx, cl, log, scList, lsc, lvgList, effectiveLVGs, ignoredLabelPrefixes, csiWarning)
 	case DeleteReconcile:
 		log.Debug("running the delete reconcile", "localStorageClass", lsc.Name)
 		return reconcileLSCDeleteFunc(ctx, cl, log, scList, lsc)
 	default:
 		log.Debug("the LocalStorageClass should not be reconciled", "localStorageClass", lsc.Name)
+		// Nothing in the spec changed, but the nodes running the CSI node may
+		// have: keep the warning about the LVMVolumeGroups outside them current.
+		if lsc.DeletionTimestamp == nil && lsc.Status != nil &&
+			lsc.Status.Phase == CreatedStatusPhase && lsc.Status.Reason != csiWarning {
+			if err := setLocalStorageClassCreated(ctx, cl, lsc, csiWarning); err != nil {
+				log.Error("unable to update the LocalStorageClass status", logger.Err(err), slog.String("localStorageClass", lsc.Name))
+				return true, err
+			}
+		}
 	}
 
 	return false, nil

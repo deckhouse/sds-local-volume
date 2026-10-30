@@ -111,7 +111,7 @@ spec:
                     properties:
                       type:
                         description: |
-                          Тип условия. `Ready` принимает значение `True`, когда StorageClass создан и LVMVolumeGroups разрешены, и `False` — если проход reconcile завершился ошибкой (`reason: ReconcileFailed`) или ресурс удаляется (`reason: Deleting`). Пока контроллер не обработал ресурс в первый раз, условие отсутствует, а не имеет значение `Unknown`.
+                          Тип условия. `Ready` принимает значение `True`, когда StorageClass создан и LVMVolumeGroups разрешены, и `False` — если проход reconcile завершился ошибкой (`reason: ReconcileFailed`) или ресурс удаляется (`reason: Deleting`). Класс, у которого есть LVMVolumeGroups на узлах без CSI-узла модуля, остаётся `True` с `reason: LVMVolumeGroupsOutsideCSINodes`, а сами группы перечислены в сообщении: на них тома использовать нельзя. Пока контроллер не обработал ресурс в первый раз, условие отсутствует, а не имеет значение `Unknown`.
                       status:
                         description: |
                           Текущий статус условия.

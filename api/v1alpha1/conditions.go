@@ -39,6 +39,13 @@ const (
 	// modules; the shared helpers live in
 	// github.com/deckhouse/sds-common-lib/conditions.
 	ConditionTypeReady = "Ready"
+
+	// ConditionReasonLVMVolumeGroupsOutsideCSINodes is the reason of a Ready=True
+	// condition whose class has LVMVolumeGroups on nodes without the module's
+	// CSI node. The class works on its other groups, so it stays Ready; the
+	// reason of its own lets the partial state be filtered and alerted on
+	// rather than parsed out of the message.
+	ConditionReasonLVMVolumeGroupsOutsideCSINodes = "LVMVolumeGroupsOutsideCSINodes"
 )
 
 // LocalStorageClassConditionTypes is every condition type a LocalStorageClass

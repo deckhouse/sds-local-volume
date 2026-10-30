@@ -282,9 +282,12 @@ spec:
                       description: 'Condition type. `Ready` is `True` once the StorageClass
                         is in place and the LVMVolumeGroups resolve, and `False` when
                         a reconcile pass failed (`reason: ReconcileFailed`) or the
-                        resource is being deleted (`reason: Deleting`). Until the
-                        controller''s first pass over the resource the condition is
-                        absent rather than `Unknown`.'
+                        resource is being deleted (`reason: Deleting`). A class with
+                        LVMVolumeGroups on nodes without the module''s CSI node stays
+                        `True` with `reason: LVMVolumeGroupsOutsideCSINodes` and the
+                        groups listed in the message: volumes cannot be used on those
+                        groups. Until the controller''s first pass over the resource
+                        the condition is absent rather than `Unknown`.'
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string

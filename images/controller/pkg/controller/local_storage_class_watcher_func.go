@@ -234,6 +234,7 @@ func reconcileLSCUpdateFunc(
 	lvgList *snc.LVMVolumeGroupList,
 	effectiveLVGs []slv.LocalStorageClassLVG,
 	ignoredLabelPrefixes []string,
+	csiWarning string,
 ) (bool, error) {
 	log = log.Named("update").With("localStorageClass", lsc.Name)
 
@@ -308,7 +309,7 @@ func reconcileLSCUpdateFunc(
 		log.Info("recreated the StorageClass", "storageClass", newSC.Name)
 	}
 
-	err = updateLocalStorageClassPhase(ctx, cl, lsc, CreatedStatusPhase, "")
+	err = setLocalStorageClassCreated(ctx, cl, lsc, csiWarning)
 	if err != nil {
 		log.Error("unable to update the LocalStorageClass status", logger.Err(err))
 		return true, err
@@ -526,6 +527,7 @@ func reconcileLSCCreateFunc(
 	lvgList *snc.LVMVolumeGroupList,
 	effectiveLVGs []slv.LocalStorageClassLVG,
 	ignoredLabelPrefixes []string,
+	csiWarning string,
 ) (bool, error) {
 	log = log.Named("create").With("localStorageClass", lsc.Name)
 
@@ -587,7 +589,7 @@ func reconcileLSCCreateFunc(
 	}
 	log.Debug("StorageClass finalizer addition result", "finalizer", LocalStorageClassFinalizerName, "storageClass", sc.Name, "added", added)
 
-	err = updateLocalStorageClassPhase(ctx, cl, lsc, CreatedStatusPhase, "")
+	err = setLocalStorageClassCreated(ctx, cl, lsc, csiWarning)
 	if err != nil {
 		log.Error("unable to update the LocalStorageClass status", logger.Err(err))
 		return true, err
