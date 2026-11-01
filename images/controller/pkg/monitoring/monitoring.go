@@ -302,7 +302,7 @@ func Register(st metricsstorage.Storage) error {
 	if _, err := st.RegisterGauge(
 		OrphanedLVMLogicalVolumeSnapshotUsedBytes,
 		[]string{LabelName, LabelLVMLogicalVolume, LabelState, LabelReason},
-		options.WithHelp("Space consumed by a single LVMLogicalVolumeSnapshot that has been asked to be deleted and still carries this module's finalizer, in bytes. The reason label says why a reclaim is refused, and is empty when it is not."),
+		options.WithHelp("Space mapped by a single LVMLogicalVolumeSnapshot that has been asked to be deleted and still carries this module's finalizer, in bytes, as reported when the snapshot was created. Blocks shared with the origin are included, so it is not the space deleting the snapshot would free. The reason label says why a reclaim is refused, and is empty when it is not."),
 	); err != nil {
 		return fmt.Errorf("register %s: %w", OrphanedLVMLogicalVolumeSnapshotUsedBytes, err)
 	}

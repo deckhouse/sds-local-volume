@@ -1235,10 +1235,11 @@ func llvAllocatedBytes(llv *snc.LVMLogicalVolume) float64 {
 	return float64(llv.Status.ActualSize.Value())
 }
 
-// llvsUsedBytes returns the space a snapshot actually consumes, as last reported
-// by the node agent. A snapshot is always thin, so unlike an LVMLogicalVolume it
-// has a meaningful used size and that is what is reported rather than its
-// nominal one.
+// llvsUsedBytes returns the space a snapshot maps, as reported by the node agent
+// when the snapshot was created. A snapshot is always thin, so the number counts
+// the blocks it shares with its origin as well and does not grow as the origin is
+// written to: it is not the space deleting the snapshot would free. It is still
+// what is reported rather than the nominal size, which says even less.
 func llvsUsedBytes(llvs *snc.LVMLogicalVolumeSnapshot) float64 {
 	if llvs.Status == nil {
 		return 0
