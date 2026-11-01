@@ -157,3 +157,22 @@ The value is a whole number of percent between 0 and 50; an invalid one is rejec
 The reserve applies only to volumes created after the annotation was set — filesystems that already exist keep the reserve they were created with. Only the ext filesystems keep blocks for the superuser: with `fsType: xfs` the annotation is ignored, and the webhook returns a warning saying so.
 
 Changing the annotation makes the controller recreate the StorageClass, because `parameters` of an existing StorageClass are immutable in Kubernetes. Existing volumes and PVCs are not affected.
+
+## Why does the `D8SdsLocalVolumeLocalStorageClassNotReady` alert fire?
+
+The `Ready` condition of a LocalStorageClass has not been `True` for 15 minutes. Read the condition to see which of the two causes applies:
+
+```shell
+d8 k get lsc <lsc-name> -o jsonpath='{.status.conditions[?(@.type=="Ready")]}'
+```
+
+- `reason: ReconcileFailed` — the controller could not bring the class to its spec, and the message says why. Fix the spec or the LVMVolumeGroups it refers to; the controller retries on its own.
+- `reason: Deleting` — the class was asked to be deleted, and a finalizer of another controller still holds it. The module has already deleted its StorageClass. Look for the cause on the side of the controller that owns the finalizer rather than removing the finalizer by hand.
+
+If the command prints nothing, the controller has not been able to write the status of the class. The controller log says why:
+
+```shell
+d8 k -n d8-sds-local-volume logs deploy/controller -c controller --tail=200 | grep <lsc-name>
+```
+
+A class whose LVMVolumeGroups are partly on nodes without the module's CSI node stays `Ready` with `reason: LVMVolumeGroupsOutsideCSINodes` and does not trigger the alert.

@@ -4,9 +4,11 @@ date: "2026-xx-xx"
 summary: ""
 highlights: []
 
+improvements:
+  - "New alert `D8SdsLocalVolumeLocalStorageClassNotReady` fires when the `Ready` condition of a LocalStorageClass has not been `True` for 15 minutes: the controller could not apply the class (`reason: ReconcileFailed`), or another controller's finalizer holds the class in its deletion (`reason: Deleting`). The alert reads the existing metric `sds_local_volume_local_storage_class_ready`."
+
 # Optional sections — delete rather than leave empty.
 # new_features: []
-# improvements: []
 # fixes: []
 # security: []
 # breaking: []
