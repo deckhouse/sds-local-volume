@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"os"
 
-	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
@@ -73,11 +72,10 @@ func initFlags() (config, error) {
 }
 
 const (
-	port                  = ":8443"
-	PodSchedulerMutatorID = "PodSchedulerMutation"
-	LSCValidatorID        = "LSCValidator"
-	SCValidatorID         = "SCValidator"
-	LVGValidatorID        = "LVGValidator"
+	port           = ":8443"
+	LSCValidatorID = "LSCValidator"
+	SCValidatorID  = "SCValidator"
+	LVGValidatorID = "LVGValidator"
 )
 
 func main() {
@@ -98,12 +96,6 @@ func main() {
 	// library's own messages into the same output and format as ours.
 	kwhLogger := logger.NewKubewebhookLogger(log)
 
-	podSchedulerMutatingWebHookHandler, err := handlers.GetMutatingWebhookHandler(handlers.PodSchedulerMutate, PodSchedulerMutatorID, &corev1.Pod{}, kwhLogger)
-	if err != nil {
-		log.Error("unable to create the pod scheduler mutating webhook handler", logger.Err(err))
-		os.Exit(1)
-	}
-
 	lscValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LSCValidate(log), LSCValidatorID, &slv.LocalStorageClass{}, kwhLogger)
 	if err != nil {
 		log.Error("unable to create the LocalStorageClass validating webhook handler", logger.Err(err))
@@ -123,7 +115,6 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/pod-scheduler-mutate", podSchedulerMutatingWebHookHandler)
 	mux.Handle("/lsc-validate", lscValidatingWebhookHandler)
 	mux.Handle("/sc-validate", scValidatingWebhookHandler)
 	mux.Handle("/lvg-validate", lvgValidatingWebhookHandler)
