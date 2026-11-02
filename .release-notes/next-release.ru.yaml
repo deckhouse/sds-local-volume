@@ -6,6 +6,7 @@ highlights: []
 
 improvements:
   - "Новый алерт `D8SdsLocalVolumeLocalStorageClassNotReady` срабатывает, когда условие `Ready` у LocalStorageClass 15 минут не в статусе `True`: контроллер не смог применить класс (`reason: ReconcileFailed`) или удаление класса удерживает финализатор другого контроллера (`reason: Deleting`). Алерт строится на уже существующей метрике `sds_local_volume_local_storage_class_ready`."
+  - "LocalStorageClass больше нельзя создать с именем StorageClass другого провижинера. Модуль называет свой StorageClass по имени LocalStorageClass, поэтому такой ресурс раньше создавался и оставался в состоянии `Failed`; теперь вебхук отклоняет его при создании и называет StorageClass, который занимает имя."
 
 # Необязательные разделы — пустые не оставлять, а удалять.
 # new_features: []

@@ -24,6 +24,8 @@ import (
 	"github.com/slok/kubewebhook/v2/pkg/model"
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -37,7 +39,7 @@ import (
 func LSCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 	log = log.Named("lsc-validator")
 
-	return func(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhvalidating.ValidatorResult, error) {
+	return func(ctx context.Context, arReview *model.AdmissionReview, obj metav1.Object) (*kwhvalidating.ValidatorResult, error) {
 		lsc, ok := obj.(*slv.LocalStorageClass)
 		if !ok {
 			// If not a storage class just continue the validation chain(if there is one) and do nothing.
@@ -76,6 +78,22 @@ func LSCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 			// took the webhook down for every request until the pod restarted.
 			log.Error("unable to build a kube client", logger.Err(err))
 			return nil, err
+		}
+
+		// The controller names the StorageClass after the LocalStorageClass, so
+		// a name held by a StorageClass of another provisioner could only ever
+		// leave the class Failed.
+		if arReview.Operation == model.OperationCreate {
+			sc, err := foreignStorageClass(ctx, cl, lsc.Name)
+			if err != nil {
+				log.Error("unable to check the StorageClass name", logger.Err(err))
+				return nil, err
+			}
+			if sc != nil {
+				errMsg := fmt.Sprintf("StorageClass %q already exists with provisioner %q; choose a different LocalStorageClass name", sc.Name, sc.Provisioner)
+				log.Info(errMsg)
+				return &kwhvalidating.ValidatorResult{Valid: false, Message: errMsg}, nil
+			}
 		}
 
 		if lsc.Spec.LVM == nil {
@@ -183,6 +201,24 @@ func LSCValidate(log logger.Logger) kwhvalidating.ValidatorFunc {
 
 		return &kwhvalidating.ValidatorResult{Valid: true, Warnings: warnings}, nil
 	}
+}
+
+// foreignStorageClass returns the StorageClass named name when it belongs to a
+// provisioner other than the module's, and nil when there is no such
+// StorageClass or it is the module's own.
+func foreignStorageClass(ctx context.Context, cl client.Client, name string) (*storagev1.StorageClass, error) {
+	sc := &storagev1.StorageClass{}
+	err := cl.Get(ctx, client.ObjectKey{Name: name}, sc)
+	if apierrors.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("unable to get the StorageClass %s: %w", name, err)
+	}
+	if sc.Provisioner == localCSIProvisioner {
+		return nil, nil
+	}
+	return sc, nil
 }
 
 // lvgsOnNodesWithoutCSI returns "<lvg> (<node>)", sorted, for every named
