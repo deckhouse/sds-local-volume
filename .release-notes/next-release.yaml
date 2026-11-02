@@ -7,6 +7,7 @@ highlights: []
 improvements:
   - "New alert `D8SdsLocalVolumeLocalStorageClassNotReady` fires when the `Ready` condition of a LocalStorageClass has not been `True` for 15 minutes: the controller could not apply the class (`reason: ReconcileFailed`), or another controller's finalizer holds the class in its deletion (`reason: Deleting`). The alert reads the existing metric `sds_local_volume_local_storage_class_ready`."
   - "A LocalStorageClass can no longer be created under the name of a StorageClass that belongs to another provisioner. The module names its StorageClass after the LocalStorageClass, so such a resource used to be created and then stay `Failed`; the webhook now rejects it at creation and names the StorageClass that holds the name."
+  - "Removing a thin pool from `spec.thinPools` of an LVMVolumeGroup is now rejected while a LocalStorageClass uses that thin pool, whether the class names the LVMVolumeGroup or selects it by labels. sds-node-configurator removes a thin pool dropped from the spec once it is empty, and the class would then point at a thin pool that is gone. The check does not block LVMVolumeGroup updates while the module's webhook is unavailable."
 
 # Optional sections — delete rather than leave empty.
 # new_features: []

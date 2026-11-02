@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	d8commonapi "github.com/deckhouse/sds-common-lib/api/v1alpha1"
+	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -54,23 +55,9 @@ func NewKubeClient(kubeconfigPath string) (client.Client, error) {
 		return nil, err
 	}
 
-	var (
-		resourcesSchemeFuncs = []func(*apiruntime.Scheme) error{
-			d8commonapi.AddToScheme,
-			snc.AddToScheme,
-			clientgoscheme.AddToScheme,
-			extv1.AddToScheme,
-			v1.AddToScheme,
-			sv1.AddToScheme,
-		}
-	)
-
-	scheme := apiruntime.NewScheme()
-	for _, f := range resourcesSchemeFuncs {
-		err = f(scheme)
-		if err != nil {
-			return nil, err
-		}
+	scheme, err := newScheme()
+	if err != nil {
+		return nil, err
 	}
 
 	clientOpts := client.Options{
@@ -78,6 +65,26 @@ func NewKubeClient(kubeconfigPath string) (client.Client, error) {
 	}
 
 	return client.New(config, clientOpts)
+}
+
+func newScheme() (*apiruntime.Scheme, error) {
+	resourcesSchemeFuncs := []func(*apiruntime.Scheme) error{
+		d8commonapi.AddToScheme,
+		snc.AddToScheme,
+		slv.AddToScheme,
+		clientgoscheme.AddToScheme,
+		extv1.AddToScheme,
+		v1.AddToScheme,
+		sv1.AddToScheme,
+	}
+
+	scheme := apiruntime.NewScheme()
+	for _, f := range resourcesSchemeFuncs {
+		if err := f(scheme); err != nil {
+			return nil, err
+		}
+	}
+	return scheme, nil
 }
 
 func GetMutatingWebhookHandler(mutationFunc func(ctx context.Context, _ *model.AdmissionReview, obj metav1.Object) (*kwhmutating.MutatorResult, error), mutatorID string, obj metav1.Object, logger log.Logger) (http.Handler, error) {

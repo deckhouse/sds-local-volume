@@ -28,6 +28,7 @@ import (
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/webhooks/handlers"
 	"github.com/deckhouse/sds-local-volume/images/webhooks/pkg/logger"
+	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
 type config struct {
@@ -76,6 +77,7 @@ const (
 	PodSchedulerMutatorID = "PodSchedulerMutation"
 	LSCValidatorID        = "LSCValidator"
 	SCValidatorID         = "SCValidator"
+	LVGValidatorID        = "LVGValidator"
 )
 
 func main() {
@@ -114,10 +116,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	lvgValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LVGValidate(log), LVGValidatorID, &snc.LVMVolumeGroup{}, kwhLogger)
+	if err != nil {
+		log.Error("unable to create the LVMVolumeGroup validating webhook handler", logger.Err(err))
+		os.Exit(1)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/pod-scheduler-mutate", podSchedulerMutatingWebHookHandler)
 	mux.Handle("/lsc-validate", lscValidatingWebhookHandler)
 	mux.Handle("/sc-validate", scValidatingWebhookHandler)
+	mux.Handle("/lvg-validate", lvgValidatingWebhookHandler)
 	mux.HandleFunc("/healthz", httpHandlerHealthz)
 
 	log.Info("listening", "port", port)
