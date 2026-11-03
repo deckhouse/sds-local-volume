@@ -1,0 +1,28 @@
+- name: kubernetes.sds_local_volume.node_manual_eviction
+  rules:
+    - alert: D8SdsLocalVolumeNodeNeedsManualEviction
+      expr: max by (node) (sds_local_volume_node_manual_eviction_required) == 1
+      # The controller sets the label on its next pass over the nodes after the
+      # selector stops matching, and an operator who is in the middle of taking
+      # the LVMVolumeGroups out of their classes clears it within minutes.
+      for: 15m
+      labels:
+        severity_level: "6"
+        tier: cluster
+      annotations:
+        plk_markup_format: "markdown"
+        plk_protocol_version: "1"
+        plk_create_group_if_not_exists__d8_sds_local_volume_node_manual_eviction: "D8SdsLocalVolumeNodeManualEviction,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        plk_grouped_by__d8_sds_local_volume_node_manual_eviction: "D8SdsLocalVolumeNodeManualEviction,tier=~tier,prometheus=deckhouse,kubernetes=~kubernetes"
+        summary: Node {{ $labels.node }} cannot leave sds-local-volume until its LVMVolumeGroups are taken out of LocalStorageClasses
+        description: |
+          The node `{{ $labels.node }}` no longer matches the `nodeSelector` of the `sds-local-volume` module, but some of its LVMVolumeGroups are still listed in LocalStorageClasses. The module keeps the CSI node plugin on the node and has labeled it `storage.deckhouse.io/sds-local-volume-need-manual-eviction`. The node stays in the module until they are taken out of the classes.
+
+          The recommended course of action:
+          1. Find the resources that hold the node. The controller has labeled them `storage.deckhouse.io/sds-local-volume-candidate-for-eviction`:
+             `d8 k get lvmvolumegroup,localstorageclass -l storage.deckhouse.io/sds-local-volume-candidate-for-eviction`
+             Only the LVMVolumeGroups of this node matter here: `d8 k get lvmvolumegroup -l storage.deckhouse.io/sds-local-volume-candidate-for-eviction -o custom-columns=NAME:.metadata.name,NODE:.status.nodes[*].name`
+          2. Move the data off the node: the PersistentVolumes on these LVMVolumeGroups are local to it and do not migrate on their own.
+          3. Remove the node's LVMVolumeGroups from `spec.lvm.lvmVolumeGroups` of each LocalStorageClass, or delete a class that is no longer needed. On its next pass the controller removes the module's labels from the node, and the CSI node plugin leaves it.
+
+          If the node was taken out of the module by mistake, return it to the module's `nodeSelector` instead: the labels are removed on the next pass.

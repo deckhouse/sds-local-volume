@@ -74,11 +74,12 @@ func RunLocalCSINodeWatcherController(
 				log.Debug("got the secret")
 
 				log.Debug("reconciling the local CSI nodes")
-				err = reconcileLocalCSINodes(ctx, cl, log, secret)
+				needEviction, err := reconcileLocalCSINodes(ctx, cl, log, secret)
 				if err != nil {
 					log.Error("unable to reconcile the local CSI nodes", logger.Err(err))
 					return reconcile.Result{}, err
 				}
+				metrics.SetNodesNeedingManualEviction(needEviction)
 				log.Debug("reconciled the local CSI nodes")
 
 				return reconcile.Result{
@@ -108,12 +109,14 @@ func getSecret(ctx context.Context, cl client.Client, namespace, name string) (*
 	return secret, err
 }
 
-func reconcileLocalCSINodes(ctx context.Context, cl client.Client, log logger.Logger, secret *v1.Secret) error {
+// reconcileLocalCSINodes returns the nodes that are left with the manual
+// eviction label after the pass.
+func reconcileLocalCSINodes(ctx context.Context, cl client.Client, log logger.Logger, secret *v1.Secret) ([]string, error) {
 	log.Debug("reading the node selector from the config")
 	nodeSelector, err := getNodeSelectorFromConfig(secret)
 	if err != nil {
 		log.Error("unable to read the node selector from the secret", logger.Err(err), slog.String("secretNamespace", secret.Namespace), slog.String("secretName", secret.Name))
-		return err
+		return nil, err
 	}
 	log.Trace("read the node selector", "nodeSelector", nodeSelector)
 
@@ -121,7 +124,7 @@ func reconcileLocalCSINodes(ctx context.Context, cl client.Client, log logger.Lo
 	nodesWithSelector, err := getKubernetesNodesBySelector(ctx, cl, nodeSelector)
 	if err != nil {
 		log.Error("unable to list the nodes matching the selector", logger.Err(err), slog.String("nodeSelector", fmt.Sprintf("%v", nodeSelector)))
-		return err
+		return nil, err
 	}
 	for _, n := range nodesWithSelector.Items {
 		log.Trace("node matched the selector", "nodeName", n.Name)
@@ -135,20 +138,25 @@ func reconcileLocalCSINodes(ctx context.Context, cl client.Client, log logger.Lo
 	nodes, err := getKubeNodes(ctx, cl)
 	if err != nil {
 		log.Error("unable to list all nodes", logger.Err(err))
-		return err
+		return nil, err
 	}
 	for _, n := range nodes.Items {
 		log.Trace("listed a node", "nodeName", n.Name)
 	}
 
-	reconcileLocalCSILabels(ctx, cl, log, nodes, nodeSelector)
+	needEviction := reconcileLocalCSILabels(ctx, cl, log, nodes, nodeSelector)
 	log.Debug("removed the label from the nodes that no longer match the selector", "label", localCsiNodeSelectorLabel)
 
-	return nil
+	return needEviction, nil
 }
 
-func reconcileLocalCSILabels(ctx context.Context, cl client.Client, log logger.Logger, nodes *v1.NodeList, selector map[string]string) {
+// reconcileLocalCSILabels returns the nodes that need manual eviction: the ones
+// that lost the module selector while their LVMVolumeGroups are still used by
+// LocalStorageClasses. A node whose dependents could not be listed keeps the
+// state its label shows.
+func reconcileLocalCSILabels(ctx context.Context, cl client.Client, log logger.Logger, nodes *v1.NodeList, selector map[string]string) []string {
 	var err error
+	var needEviction []string
 	for _, node := range nodes.Items {
 		log.Debug("reconciling a node", "nodeName", node.Name)
 		if labels.Set(selector).AsSelector().Matches(labels.Set(node.Labels)) {
@@ -169,6 +177,9 @@ func reconcileLocalCSILabels(ctx context.Context, cl client.Client, log logger.L
 		lvgsForManualEviction, lscsForManualEviction, err := getManuallyEvictedLVGsAndLSCs(ctx, cl, node)
 		if err != nil {
 			log.Error("unable to get the LVMVolumeGroups for manual eviction", logger.Err(err), slog.String("nodeName", node.Name))
+			if _, labelled := node.Labels[nodeManualEvictionLabel]; labelled {
+				needEviction = append(needEviction, node.Name)
+			}
 			continue
 		}
 
@@ -196,6 +207,7 @@ func reconcileLocalCSILabels(ctx context.Context, cl client.Client, log logger.L
 				fmt.Fprintf(&lscNames, "%s ", lsc.Name)
 			}
 			log.Warn("cannot remove the label: the node LVMVolumeGroups are still used by LocalStorageClasses", "label", localCsiNodeSelectorLabel, "nodeName", node.Name, "lvmVolumeGroups", lvgsNames.String(), "localStorageClasses", lscNames.String())
+			needEviction = append(needEviction, node.Name)
 
 			added, err := addLabelOnTheNodeIfNotExist(ctx, cl, node, nodeManualEvictionLabel)
 			if err != nil {
@@ -236,6 +248,8 @@ func reconcileLocalCSILabels(ctx context.Context, cl client.Client, log logger.L
 		}
 		log.Debug("reconciled a node", "nodeName", node.Name)
 	}
+
+	return needEviction
 }
 
 func addLabelOnTheLSCIfNotExist(ctx context.Context, cl client.Client, lsc slv.LocalStorageClass, label string) (bool, error) {

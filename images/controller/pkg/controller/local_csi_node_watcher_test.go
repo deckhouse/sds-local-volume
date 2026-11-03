@@ -166,8 +166,12 @@ func TestRunLocalCSINodeWatcherController(t *testing.T) {
 			}
 		}
 
-		err = reconcileLocalCSINodes(ctx, cl, log, secret)
+		needEviction, err := reconcileLocalCSINodes(ctx, cl, log, secret)
 		if assert.NoError(t, err) {
+			// Only the node whose LVMVolumeGroup a LocalStorageClass still uses
+			// is reported; the label left on test-node1 is cleared in this pass.
+			assert.Equal(t, []string{"test-node4"}, needEviction)
+
 			nodeList := &v1.NodeList{}
 			err = cl.List(ctx, nodeList)
 			if err != nil {

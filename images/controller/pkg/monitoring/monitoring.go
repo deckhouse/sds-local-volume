@@ -100,6 +100,14 @@ const (
 	// It carries the kind, because the two halves have different runbooks and an
 	// alert on the error outcome has to be able to say which one it is about.
 	CSIFinalizerRemovalsTotal = "sds_local_volume_csi_finalizer_removals_total"
+
+	// NodeManualEvictionRequired is 1 for every node that lost the module's node
+	// selector while its LVMVolumeGroups are still used by LocalStorageClasses:
+	// the node carries storage.deckhouse.io/sds-local-volume-need-manual-eviction,
+	// the CSI node plugin stays on it, and nothing proceeds until the operator
+	// takes the LVMVolumeGroups out of the classes. Nodes in that state are the
+	// only series, so a healthy cluster exports none.
+	NodeManualEvictionRequired = "sds_local_volume_node_manual_eviction_required"
 )
 
 // Label names.
@@ -113,6 +121,7 @@ const (
 	LabelKind             = "kind"
 	LabelLVMVolumeGroup   = "lvm_volume_group"
 	LabelLVMLogicalVolume = "lvm_logical_volume"
+	LabelNode             = "node"
 
 	// LabelLVMType is the LVMLogicalVolume's spec.type, and it is what makes the
 	// byte counts readable. The node agent reports LV_SIZE as the actual size, which
@@ -323,6 +332,14 @@ func Register(st metricsstorage.Storage) error {
 		return fmt.Errorf("register %s: %w", CSIFinalizerRemovalsTotal, err)
 	}
 
+	if _, err := st.RegisterGauge(
+		NodeManualEvictionRequired,
+		[]string{LabelNode},
+		options.WithHelp("1 for a node that left the module's node selector while its LVMVolumeGroups are still used by LocalStorageClasses, so its data has to be evicted by hand."),
+	); err != nil {
+		return fmt.Errorf("register %s: %w", NodeManualEvictionRequired, err)
+	}
+
 	return nil
 }
 
@@ -443,6 +460,27 @@ func (r Recorder) ForgetLocalStorageClass(name string) {
 // grouped metric added later.
 func localStorageClassGroup(name string) string {
 	return "local-storage-class/" + name
+}
+
+// nodeManualEvictionGroup holds the NodeManualEvictionRequired series. Every pass
+// over the nodes republishes the whole set, so a node that was dealt with stops
+// being exported.
+const nodeManualEvictionGroup = "node-manual-eviction"
+
+// SetNodesNeedingManualEviction publishes NodeManualEvictionRequired for exactly
+// the given nodes.
+func (r Recorder) SetNodesNeedingManualEviction(nodes []string) {
+	if r.st == nil {
+		return
+	}
+
+	grouped := r.st.Grouped()
+	grouped.ExpireGroupMetrics(nodeManualEvictionGroup)
+	for _, node := range nodes {
+		grouped.GaugeSet(nodeManualEvictionGroup, NodeManualEvictionRequired, 1, map[string]string{
+			LabelNode: node,
+		})
+	}
 }
 
 // lvmLogicalVolumeSweepGroup holds every series derived from a sweep over the

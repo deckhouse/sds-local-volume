@@ -374,3 +374,22 @@ func TestObserveCSIFinalizerRemovalSeparatesTheKinds(t *testing.T) {
 	assert.Contains(t, out, CSIFinalizerRemovalsTotal+"{kind="+KindLVMLogicalVolumeSnapshot+",result="+ResultSuccess+",}1")
 	assert.NotContains(t, out, CSIFinalizerRemovalsTotal+"{kind="+KindLVMLogicalVolumeSnapshot+",result="+ResultError+",}")
 }
+
+func TestSetNodesNeedingManualEvictionKeepsOnlyTheCurrentNodes(t *testing.T) {
+	rec, scrape := newTestRecorder(t)
+
+	rec.SetNodesNeedingManualEviction([]string{"worker-1", "worker-2"})
+	out := scrape()
+	assert.Contains(t, out, NodeManualEvictionRequired+"{node=worker-1,}1")
+	assert.Contains(t, out, NodeManualEvictionRequired+"{node=worker-2,}1")
+
+	// The next pass found worker-1 dealt with; its series must go, or the alert
+	// would keep firing for a node that no longer needs anything.
+	rec.SetNodesNeedingManualEviction([]string{"worker-2"})
+	out = scrape()
+	assert.NotContains(t, out, "node=worker-1")
+	assert.Contains(t, out, NodeManualEvictionRequired+"{node=worker-2,}1")
+
+	rec.SetNodesNeedingManualEviction(nil)
+	assert.NotContains(t, scrape(), NodeManualEvictionRequired+"{")
+}

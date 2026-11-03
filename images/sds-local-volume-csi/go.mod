@@ -6,7 +6,7 @@ require (
 	github.com/deckhouse/sds-common-lib v0.17.0
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20260817195343-682df4d51ffd
 	github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-20260817195343-682df4d51ffd
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20261101165458-cdb3589edada
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20261102083231-e8c1a394a620
 	github.com/container-storage-interface/spec v1.11.0
 	github.com/deckhouse/deckhouse/pkg/log v0.2.1
 	github.com/deckhouse/deckhouse/pkg/metrics-storage v0.3.0

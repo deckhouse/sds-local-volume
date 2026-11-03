@@ -267,7 +267,7 @@ If the `csi-node` pod remains on the node after removing labels:
 {{< alert level="warning" >}}
 Note that [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) and [LocalStorageClass](cr.html#localstorageclass) resources that prevent the node from being removed from module management will display the `storage.deckhouse.io/sds-local-volume-candidate-for-eviction` label.
 
-The node itself will have the `storage.deckhouse.io/sds-local-volume-need-manual-eviction` label.
+The node itself will have the `storage.deckhouse.io/sds-local-volume-need-manual-eviction` label. While it does, the controller exports `sds_local_volume_node_manual_eviction_required{node="<node-name>"}`, and after 15 minutes the `D8SdsLocalVolumeNodeNeedsManualEviction` alert fires with the steps to resolve it.
 {{< /alert >}}
 
 ## Creating thin storage

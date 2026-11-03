@@ -267,7 +267,7 @@ d8 k annotate storageclasses.storage.k8s.io <storageClassName> storageclass.kube
 {{< alert level="warning" >}}
 Обратите внимание, что на ресурсах [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) и [LocalStorageClass](cr.html#localstorageclass), из-за которых не удается вывести узел из-под управления модуля, будет отображена метка `storage.deckhouse.io/sds-local-volume-candidate-for-eviction`.
 
-На самом узле будет присутствовать метка `storage.deckhouse.io/sds-local-volume-need-manual-eviction`.
+На самом узле будет присутствовать метка `storage.deckhouse.io/sds-local-volume-need-manual-eviction`. Пока она есть, контроллер экспортирует `sds_local_volume_node_manual_eviction_required{node="<имя-узла>"}`, а через 15 минут срабатывает алерт `D8SdsLocalVolumeNodeNeedsManualEviction` с шагами для устранения.
 {{< /alert >}}
 
 ## Создание thin-хранилища
