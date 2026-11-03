@@ -332,11 +332,11 @@ func WaitForStatusUpdate(ctx context.Context, kc client.Client, log logger.Logge
 			log.Trace("polled the LVMLogicalVolume", "attempt", attemptCounter, "status", fmt.Sprintf("%+v", llv.Status), "llv", fmt.Sprintf("%+v", llv))
 
 			if llv.DeletionTimestamp != nil {
-				return nil, attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: LVMLogicalVolume is being deleted", lvmLogicalVolumeName)
+				return nil, attemptCounter, fmt.Errorf("failed to create the logical volume of LVMLogicalVolume %s, reason: LVMLogicalVolume is being deleted", lvmLogicalVolumeName)
 			}
 
 			if llv.Status.Phase == LLVStatusFailed {
-				return nil, attemptCounter, fmt.Errorf("failed to create LVM logical volume on node for LVMLogicalVolume %s, reason: %s", lvmLogicalVolumeName, llv.Status.Reason)
+				return nil, attemptCounter, fmt.Errorf("failed to create the logical volume of LVMLogicalVolume %s, reason: %s", lvmLogicalVolumeName, llv.Status.Reason)
 			}
 
 			if llv.Status.Phase == LLVStatusCreated {

@@ -17,10 +17,16 @@ limitations under the License.
 package driver
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-node-configurator/api/v1alpha1"
@@ -128,5 +134,31 @@ func TestResolveCapacityBytes(t *testing.T) {
 		got, fromStatus := resolveCapacityBytes(nil, fallback)
 		assert.False(t, fromStatus)
 		assert.Equal(t, fallback.Value(), got)
+	})
+}
+
+func TestErrOnLVG(t *testing.T) {
+	lvg := &v1alpha1.LVMVolumeGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "vg-worker-1"},
+		Spec:       v1alpha1.LVMVolumeGroupSpec{Local: v1alpha1.LVMVolumeGroupLocalSpec{NodeName: "worker-1"}},
+	}
+
+	t.Run("names_the_lvg_and_the_node", func(t *testing.T) {
+		err := errOnLVG(lvg, errors.New("failed to create the logical volume of LVMLogicalVolume pvc-1, reason: no space"))
+		assert.EqualError(t, err, "LVMVolumeGroup vg-worker-1 on node worker-1: failed to create the logical volume of LVMLogicalVolume pvc-1, reason: no space")
+	})
+
+	t.Run("keeps_the_grpc_code_of_a_status_error", func(t *testing.T) {
+		err := errOnLVG(lvg, status.Errorf(codes.Internal, "requested size: 2Gi is greater than free space: 1Gi"))
+		assert.Equal(t, codes.Internal, status.Code(err))
+		assert.Contains(t, status.Convert(err).Message(), "on node worker-1")
+	})
+
+	t.Run("keeps_a_context_error_recognizable", func(t *testing.T) {
+		// grpc-go maps a handler error that is not a status through
+		// status.FromContextError, which looks through the wrapping.
+		err := errOnLVG(lvg, fmt.Errorf("wait: %w", context.DeadlineExceeded))
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.Equal(t, codes.DeadlineExceeded, status.FromContextError(err).Code())
 	})
 }

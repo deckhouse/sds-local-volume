@@ -78,6 +78,14 @@ func fitsFreeSpace(bindingMode, lvmType string, alignedSize, freeSpace resource.
 	return alignedSize.Value() <= freeSpace.Value()
 }
 
+// errOnLVG names the LVMVolumeGroup and its node in an error of a volume
+// operation. The error text ends up in the PVC event, and without the node it is
+// not clear where to look for the agent log. The error is wrapped, so a gRPC
+// status or a context error inside keeps its code.
+func errOnLVG(lvg *v1alpha1.LVMVolumeGroup, err error) error {
+	return fmt.Errorf("LVMVolumeGroup %s on node %s: %w", lvg.Name, lvg.Spec.Local.NodeName, err)
+}
+
 // resolveCapacityBytes returns the capacity to report for a created or resized
 // volume: the size that actually exists on the node rather than the size that
 // was asked for.
@@ -292,7 +300,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		log.Info("selected an LVMVolumeGroup", "lvg", fmt.Sprintf("%+v", selectedLVG))
 		if err != nil {
 			log.Error("unable to select an LVMVolumeGroup", logger.Err(err), slog.String("preferredNode", preferredNode))
-			return nil, status.Errorf(codes.Internal, "error during SelectLVG")
+			return nil, status.Errorf(codes.Internal, "error during SelectLVG: %v", err)
 		}
 
 		// Align the requested size to the LVM extent boundary so that Spec.Size and
@@ -307,9 +315,11 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		*llvSize = alignedLlvSize
 
 		if !fitsFreeSpace(BindingMode, LvmType, *llvSize, maxFreeSpace) {
-			return nil, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), maxFreeSpace.String())
+			return nil, errOnLVG(selectedLVG, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), maxFreeSpace.String()))
 		}
 	}
+
+	log = log.With("lvg", selectedLVG.Name, "node", selectedLVG.Spec.Local.NodeName)
 
 	volumeCleanup := request.Parameters[LVMVolumeCleanupParamKey]
 	if !feature.VolumeCleanupEnabled() && volumeCleanup != "" {
@@ -337,7 +347,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			log.Info("the LVMLogicalVolume already exists, skipping creation", "llvName", llvName)
 		} else {
 			log.Error("unable to create the LVMLogicalVolume", logger.Err(err), slog.String("llvName", llvName))
-			return nil, err
+			return nil, errOnLVG(selectedLVG, err)
 		}
 	}
 	log.Trace("created the LVMLogicalVolume")
@@ -354,7 +364,7 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		}
 
 		log.Error("unable to create the volume", logger.Err(err))
-		return nil, err
+		return nil, errOnLVG(selectedLVG, err)
 	}
 	log.Trace("the LVMLogicalVolume became ready", "attempts", attemptCounter)
 
@@ -517,6 +527,8 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 		return nil, status.Errorf(codes.Internal, "error getting LVMVolumeGroup: %v", err)
 	}
 
+	log = log.With("lvg", lvg.Name, "node", lvg.Spec.Local.NodeName)
+
 	requestCapacity := resource.NewQuantity(request.CapacityRange.GetRequiredBytes(), resource.BinarySI)
 	log.Trace("requested capacity", "requestCapacity", requestCapacity.String())
 
@@ -541,7 +553,7 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 
 		if lvgFreeSpace.Value() < (alignedRequestCapacity.Value() - llv.Status.ActualSize.Value()) {
 			log.Error("the requested size exceeds the free space of the LVMVolumeGroup", slog.String("alignedRequestSize", alignedRequestCapacity.String()), slog.String("lvgFreeSpace", lvgFreeSpace.String()))
-			return nil, status.Errorf(codes.Internal, "requested size: %s is greater than the capacity of the LVMVolumeGroup: %s", alignedRequestCapacity.String(), lvgFreeSpace.String())
+			return nil, errOnLVG(lvg, status.Errorf(codes.Internal, "requested size: %s is greater than the capacity of the LVMVolumeGroup: %s", alignedRequestCapacity.String(), lvgFreeSpace.String()))
 		}
 	}
 
@@ -549,13 +561,13 @@ func (d *Driver) ControllerExpandVolume(ctx context.Context, request *csi.Contro
 	err = utils.ExpandLVMLogicalVolume(ctx, d.cl, llv, requestCapacity.String())
 	if err != nil {
 		log.Error("unable to update the LVMLogicalVolume", logger.Err(err))
-		return nil, status.Errorf(codes.Internal, "error updating LVMLogicalVolume: %v", err)
+		return nil, errOnLVG(lvg, status.Errorf(codes.Internal, "error updating LVMLogicalVolume: %v", err))
 	}
 
 	updatedLLV, attemptCounter, err := utils.WaitForStatusUpdate(ctx, d.cl, log, llv.Name, llv.Namespace, *requestCapacity, utils.SafeExtentSize(lvg.Status.ExtentSize))
 	if err != nil {
 		log.Error("the resized LVMLogicalVolume did not become ready", logger.Err(err))
-		return nil, err
+		return nil, errOnLVG(lvg, err)
 	}
 	log.Info("the LVMLogicalVolume was resized", "attempts", attemptCounter)
 

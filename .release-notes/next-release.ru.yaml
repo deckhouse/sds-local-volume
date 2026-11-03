@@ -8,6 +8,7 @@ improvements:
   - "Новый алерт `D8SdsLocalVolumeLocalStorageClassNotReady` срабатывает, когда условие `Ready` у LocalStorageClass 15 минут не в статусе `True`: контроллер не смог применить класс (`reason: ReconcileFailed`) или удаление класса удерживает финализатор другого контроллера (`reason: Deleting`). Алерт строится на уже существующей метрике `sds_local_volume_local_storage_class_ready`."
   - "LocalStorageClass больше нельзя создать с именем StorageClass другого провижинера. Модуль называет свой StorageClass по имени LocalStorageClass, поэтому такой ресурс раньше создавался и оставался в состоянии `Failed`; теперь вебхук отклоняет его при создании и называет StorageClass, который занимает имя."
   - "Удаление thin pool из `spec.thinPools` LVMVolumeGroup теперь отклоняется, пока его использует LocalStorageClass — по имени LVMVolumeGroup или через селектор меток. sds-node-configurator удаляет убранный из spec thin pool, как только он опустел, и класс ссылался бы на thin pool, которого больше нет. Пока вебхук модуля недоступен, проверка не блокирует изменения LVMVolumeGroup."
+  - "Ошибки создания и расширения тома называют LVMVolumeGroup и её узел, поэтому по событию PVC, которую не удалось создать или расширить, видно, где читать лог агента. Ошибка выбора LVMVolumeGroup теперь содержит причину, например узел, на котором нет LVMVolumeGroup из StorageClass. Лог CSI-контроллера после выбора LVMVolumeGroup добавляет поля `lvg` и `node` в каждую строку операции с томом."
 
 # Необязательные разделы — пустые не оставлять, а удалять.
 # new_features: []
