@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -385,9 +386,19 @@ func SafeExtentSize(extentSize resource.Quantity) resource.Quantity {
 	return lvmDefaultExtentSize
 }
 
+// GetNodeWithMaxFreeSpace picks the node of the Ready LVMVolumeGroup with the
+// most free space. An LVMVolumeGroup that is not Ready is skipped: Immediate
+// binding does not go through the scheduler extender, which is what keeps such
+// groups out of WaitForFirstConsumer placement.
 func GetNodeWithMaxFreeSpace(lvgs []snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
 	var maxFreeSpace int64
+	var notReady []string
 	for _, lvg := range lvgs {
+		if lvg.Status.Phase != snc.PhaseReady {
+			notReady = append(notReady, fmt.Sprintf("%s (%s)", lvg.Name, lvgPhase(lvg)))
+			continue
+		}
+
 		switch lvmType {
 		case internal.LVMTypeThick:
 			freeSpace = lvg.Status.VGFree
@@ -408,7 +419,18 @@ func GetNodeWithMaxFreeSpace(lvgs []snc.LVMVolumeGroup, storageClassLVGParameter
 		}
 	}
 
+	if len(notReady) == len(lvgs) && len(lvgs) > 0 {
+		return "", resource.Quantity{}, fmt.Errorf("none of the LVMVolumeGroups of the storage class is Ready: %s", strings.Join(notReady, ", "))
+	}
+
 	return nodeName, *resource.NewQuantity(maxFreeSpace, resource.BinarySI), nil
+}
+
+func lvgPhase(lvg snc.LVMVolumeGroup) string {
+	if lvg.Status.Phase == "" {
+		return "no phase"
+	}
+	return lvg.Status.Phase
 }
 
 func GetLVMVolumeGroup(ctx context.Context, kc client.Client, lvgName string) (*snc.LVMVolumeGroup, error) {
@@ -543,12 +565,19 @@ func GetLLVSpec(
 	return lvmLogicalVolumeSpec
 }
 
+// SelectLVG returns the LVMVolumeGroup of the storage class on the node. It
+// refuses one that is not Ready: with WaitForFirstConsumer the scheduler
+// extender keeps such groups out of placement, but it is registered with
+// failurePolicy Ignore, so a node can still be chosen without it.
 func SelectLVG(storageClassLVGs []snc.LVMVolumeGroup, nodeName string) (*snc.LVMVolumeGroup, error) {
 	for i := 0; i < len(storageClassLVGs); i++ {
 		if len(storageClassLVGs[i].Status.Nodes) == 0 {
 			continue
 		}
 		if storageClassLVGs[i].Status.Nodes[0].Name == nodeName {
+			if storageClassLVGs[i].Status.Phase != snc.PhaseReady {
+				return nil, fmt.Errorf("[SelectLVG] LVMVolumeGroup %s on node %s is not Ready (%s)", storageClassLVGs[i].Name, nodeName, lvgPhase(storageClassLVGs[i]))
+			}
 			return &storageClassLVGs[i], nil
 		}
 	}

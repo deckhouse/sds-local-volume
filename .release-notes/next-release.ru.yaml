@@ -11,9 +11,11 @@ improvements:
   - "Ошибки создания и расширения тома называют LVMVolumeGroup и её узел, поэтому по событию PVC, которую не удалось создать или расширить, видно, где читать лог агента. Ошибка выбора LVMVolumeGroup теперь содержит причину, например узел, на котором нет LVMVolumeGroup из StorageClass. Лог CSI-контроллера после выбора LVMVolumeGroup добавляет поля `lvg` и `node` в каждую строку операции с томом."
   - "Новый алерт `D8SdsLocalVolumeNodeNeedsManualEviction` срабатывает, когда узел 15 минут остаётся в модуле после выхода из его `nodeSelector`, потому что его LVMVolumeGroup всё ещё указаны в LocalStorageClass. На таком узле стоит метка `storage.deckhouse.io/sds-local-volume-need-manual-eviction` и остаётся CSI-плагин узла; раньше об этом сообщало только предупреждение в логе контроллера. Алерт объясняет, как найти LVMVolumeGroup и LocalStorageClass, которые удерживают узел, и как его освободить. Он читает новую метрику контроллера `sds_local_volume_node_manual_eviction_required{node}`."
 
+fixes:
+  - "CSI-контроллер мог создать том на LVMVolumeGroup не в фазе `Ready`. При `volumeBindingMode: Immediate` он выбирал узел с наибольшим свободным местом среди всех LVMVolumeGroup StorageClass независимо от их фазы, а при `WaitForFirstConsumer` брал LVMVolumeGroup выбранного узла, не глядя на фазу, — это имело значение, пока был недоступен scheduler extender, зарегистрированный с `failurePolicy: Ignore`. Теперь LVMVolumeGroup не в фазе `Ready` пропускаются при выборе узла, и том на такой группе не создаётся: ошибка называет LVMVolumeGroup, её узел и фазу."
+
 # Необязательные разделы — пустые не оставлять, а удалять.
 # new_features: []
-# fixes: []
 # security: []
 # breaking: []
 # upgrade_notes: []
