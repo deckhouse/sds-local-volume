@@ -508,6 +508,7 @@ func (d *Driver) ControllerGetCapabilities(_ context.Context, _ *csi.ControllerG
 
 	if feature.SnapshotsEnabled() {
 		capabilities = append(capabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
+		capabilities = append(capabilities, listSnapshotsCapabilities...)
 	}
 
 	csiCaps := make([]*csi.ControllerServiceCapability, len(capabilities))

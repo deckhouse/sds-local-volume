@@ -163,6 +163,96 @@ echo "Data migration completed"
 
    Команда выводит список всех снимков и их текущий статус.
 
+## Использование существующего снимка (статический VolumeSnapshotContent)
+
+{{< alert level="warning" >}}
+Сценарий доступен в тех же редакциях, что и снимки томов, и только для LVM-thin томов.
+{{< /alert >}}
+
+VolumeSnapshot можно привязать к уже существующему снимку через VolumeSnapshotContent, созданный вручную (в [документации Kubernetes](https://kubernetes.io/docs/concepts/storage/volume-snapshots/) такой снимок называется pre-provisioned — заранее подготовленный). Так можно вернуть в работу снимок, который политика `Retain` сохранила после удаления его VolumeSnapshot.
+
+Как модуль обрабатывает такой VolumeSnapshotContent:
+
+- Идентификатор снимка (`spec.source.snapshotHandle`) — это имя ресурса [LVMLogicalVolumeSnapshot](/modules/sds-node-configurator/cr.html#lvmlogicalvolumesnapshot). Для снимка, созданного через VolumeSnapshot, он записан в поле `status.snapshotHandle` его VolumeSnapshotContent.
+- Идентификатор проверяется: VolumeSnapshot переходит в `readyToUse: true`, только если LVMLogicalVolumeSnapshot с таким именем существует и находится в фазе `Created`, а его `restoreSize` равен `status.size` этого LVMLogicalVolumeSnapshot. Если такого LVMLogicalVolumeSnapshot нет, ошибка отображается в `status.error` у VolumeSnapshotContent, и VolumeSnapshot не становится готовым.
+- Том из снимка восстанавливается на том узле, где находится снимок (`status.nodeName` у LVMLogicalVolumeSnapshot), в той же LVMVolumeGroup. PVC должен использовать Thin StorageClass, в который входит эта LVMVolumeGroup, и запрашивать размер не меньше `restoreSize`.
+- `deletionPolicy` определяет, что происходит со снимком при удалении VolumeSnapshotContent. При `Delete` LVMLogicalVolumeSnapshot и логический том на узле удаляются вместе с ним. При `Retain` они сохраняются: когда снимок станет не нужен, удалите LVMLogicalVolumeSnapshot командой `d8 k delete lvmlogicalvolumesnapshot <name>`. Пока снимок существует, том, с которого он снят, нельзя удалить полностью.
+
+Чтобы сохранить снимок и привязать к нему новый VolumeSnapshot, выполните следующие действия:
+
+1. До удаления VolumeSnapshot переключите его VolumeSnapshotContent на `Retain` (класс `sds-local-volume-snapshot-class` создает их с `Delete`) и получите идентификатор снимка:
+
+   ```shell
+   CONTENT=$(d8 k -n <namespace-name> get volumesnapshot <snapshot-name> -o jsonpath='{.status.boundVolumeSnapshotContentName}')
+   d8 k patch volumesnapshotcontent "$CONTENT" --type merge -p '{"spec":{"deletionPolicy":"Retain"}}'
+   d8 k get volumesnapshotcontent "$CONTENT" -o jsonpath='{.status.snapshotHandle}'
+   ```
+
+   После удаления VolumeSnapshot и VolumeSnapshotContent ресурс LVMLogicalVolumeSnapshot остается. Идентификатор уже сохраненного снимка — имя его LVMLogicalVolumeSnapshot:
+
+   ```shell
+   d8 k get lvmlogicalvolumesnapshot
+   ```
+
+1. Создайте VolumeSnapshotContent с этим идентификатором и привязанный к нему VolumeSnapshot:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: snapshot.storage.k8s.io/v1
+   kind: VolumeSnapshotContent
+   metadata:
+     name: my-snapshot-content
+   spec:
+     deletionPolicy: Retain
+     driver: local.csi.storage.deckhouse.io
+     source:
+       snapshotHandle: <llvs-name> # Имя LVMLogicalVolumeSnapshot
+     volumeSnapshotRef:
+       name: my-snapshot
+       namespace: <namespace-name> # Пространство имен VolumeSnapshot ниже
+   ---
+   apiVersion: snapshot.storage.k8s.io/v1
+   kind: VolumeSnapshot
+   metadata:
+     name: my-snapshot
+     namespace: <namespace-name>
+   spec:
+     source:
+       volumeSnapshotContentName: my-snapshot-content
+   EOF
+   ```
+
+1. Проверьте, что снимок готов и у него есть размер:
+
+   ```shell
+   d8 k -n <namespace-name> get volumesnapshot my-snapshot
+   ```
+
+   В столбце `READYTOUSE` должно быть `true`, столбец `RESTORESIZE` не должен быть пустым.
+
+1. Восстановите из него том:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: v1
+   kind: PersistentVolumeClaim
+   metadata:
+     name: my-restored-pvc
+     namespace: <namespace-name>
+   spec:
+     accessModes:
+       - ReadWriteOnce
+     storageClassName: <storage-class-name> # Thin StorageClass, в который входит LVMVolumeGroup снимка
+     resources:
+       requests:
+         storage: <size> # Не меньше restoreSize у VolumeSnapshot
+     dataSourceRef:
+       apiGroup: snapshot.storage.k8s.io
+       kind: VolumeSnapshot
+       name: my-snapshot
+   EOF
+   ```
+
 ## Назначение StorageClass по умолчанию
 
 Добавьте аннотацию `storageclass.kubernetes.io/is-default-class: "true"` в соответствующий ресурс StorageClass:

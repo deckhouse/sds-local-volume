@@ -163,6 +163,96 @@ To create a volume snapshot, follow these steps:
 
    The command outputs a list of all snapshots and their current status.
 
+## Using an existing snapshot (static VolumeSnapshotContent)
+
+{{< alert level="warning" >}}
+The scenario is available in the same editions as volume snapshots and only for LVM-thin volumes.
+{{< /alert >}}
+
+A VolumeSnapshot can be bound to a snapshot that already exists through a VolumeSnapshotContent created by hand (a pre-provisioned snapshot in terms of the [Kubernetes documentation](https://kubernetes.io/docs/concepts/storage/volume-snapshots/)). This brings back a snapshot that the `Retain` policy kept after its VolumeSnapshot was deleted.
+
+How the module handles such a VolumeSnapshotContent:
+
+- The snapshot handle (`spec.source.snapshotHandle`) is the name of the [LVMLogicalVolumeSnapshot](/modules/sds-node-configurator/cr.html#lvmlogicalvolumesnapshot) resource. For a snapshot taken through a VolumeSnapshot, it is the `status.snapshotHandle` field of its VolumeSnapshotContent.
+- The handle is checked: the VolumeSnapshot becomes `readyToUse: true` only when an LVMLogicalVolumeSnapshot with this name exists and is in the `Created` phase, and its `restoreSize` is the `status.size` of the LVMLogicalVolumeSnapshot. If there is no such LVMLogicalVolumeSnapshot, the error is shown in `status.error` of the VolumeSnapshotContent and the VolumeSnapshot does not become ready.
+- A volume is restored from the snapshot on the node the snapshot is on (`status.nodeName` of the LVMLogicalVolumeSnapshot), in the same LVMVolumeGroup. The PVC must use a Thin StorageClass that includes this LVMVolumeGroup and request at least `restoreSize`.
+- `deletionPolicy` decides what happens to the snapshot when the VolumeSnapshotContent is deleted. With `Delete`, the LVMLogicalVolumeSnapshot and the logical volume on the node are deleted together with it. With `Retain`, they are kept: delete the LVMLogicalVolumeSnapshot with `d8 k delete lvmlogicalvolumesnapshot <name>` once the snapshot is no longer needed. While a snapshot exists, the volume it was taken from cannot be fully deleted.
+
+To keep a snapshot and bind a new VolumeSnapshot to it, follow these steps:
+
+1. Before deleting the VolumeSnapshot, switch its VolumeSnapshotContent to `Retain` (the `sds-local-volume-snapshot-class` class creates them with `Delete`) and get the snapshot handle:
+
+   ```shell
+   CONTENT=$(d8 k -n <namespace-name> get volumesnapshot <snapshot-name> -o jsonpath='{.status.boundVolumeSnapshotContentName}')
+   d8 k patch volumesnapshotcontent "$CONTENT" --type merge -p '{"spec":{"deletionPolicy":"Retain"}}'
+   d8 k get volumesnapshotcontent "$CONTENT" -o jsonpath='{.status.snapshotHandle}'
+   ```
+
+   Once the VolumeSnapshot and the VolumeSnapshotContent are deleted, the LVMLogicalVolumeSnapshot stays. The handle of a snapshot that is already retained is the name of its LVMLogicalVolumeSnapshot:
+
+   ```shell
+   d8 k get lvmlogicalvolumesnapshot
+   ```
+
+1. Create a VolumeSnapshotContent with the handle and a VolumeSnapshot bound to it:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: snapshot.storage.k8s.io/v1
+   kind: VolumeSnapshotContent
+   metadata:
+     name: my-snapshot-content
+   spec:
+     deletionPolicy: Retain
+     driver: local.csi.storage.deckhouse.io
+     source:
+       snapshotHandle: <llvs-name> # Name of the LVMLogicalVolumeSnapshot
+     volumeSnapshotRef:
+       name: my-snapshot
+       namespace: <namespace-name> # Namespace of the VolumeSnapshot below
+   ---
+   apiVersion: snapshot.storage.k8s.io/v1
+   kind: VolumeSnapshot
+   metadata:
+     name: my-snapshot
+     namespace: <namespace-name>
+   spec:
+     source:
+       volumeSnapshotContentName: my-snapshot-content
+   EOF
+   ```
+
+1. Check that the snapshot is ready and has a size:
+
+   ```shell
+   d8 k -n <namespace-name> get volumesnapshot my-snapshot
+   ```
+
+   The `READYTOUSE` column must be `true` and `RESTORESIZE` must not be empty.
+
+1. Restore a volume from it:
+
+   ```shell
+   d8 k apply -f -<<EOF
+   apiVersion: v1
+   kind: PersistentVolumeClaim
+   metadata:
+     name: my-restored-pvc
+     namespace: <namespace-name>
+   spec:
+     accessModes:
+       - ReadWriteOnce
+     storageClassName: <storage-class-name> # Thin StorageClass that includes the LVMVolumeGroup of the snapshot
+     resources:
+       requests:
+         storage: <size> # Not less than restoreSize of the VolumeSnapshot
+     dataSourceRef:
+       apiGroup: snapshot.storage.k8s.io
+       kind: VolumeSnapshot
+       name: my-snapshot
+   EOF
+   ```
+
 ## Setting StorageClass as default
 
 Add the `storageclass.kubernetes.io/is-default-class: "true"` annotation to the corresponding StorageClass resource:
