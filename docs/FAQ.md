@@ -11,9 +11,9 @@ Use LVM (Thick) if you need maximum performance comparable to the drive's perfor
 Use LVM-thin if you need to use overprovisioning. LVM-thin performance is lower than LVM.
 
 {{< alert level="warning" >}}
-Use overprovisioning in LVM-thin with caution. Monitor the available space in the pool. The cluster monitoring system has separate events when the pool reaches 20%, 10%, 5%, and 1% free space.
+How far a thin pool can be overprovisioned is set by the `allocationLimit` field of the thin pool in the [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resource: the total size of the volumes and snapshots in the pool may not exceed the pool size multiplied by this value. The default is `150%`, which allows overprovisioning. Set `100%` to turn it off: a volume, an expansion or a snapshot that does not fit is then refused instead of being created. For details, see [How does allocationLimit of a thin pool work, and can I change it?](/modules/sds-node-configurator/faq.html#how-does-allocationlimit-of-a-thin-pool-work-and-can-i-change-it).
 
-If there is no free space in the pool, module degradation and data loss may occur.
+With a limit above `100%`, monitor the free space in the pool, for example with the `sds_node_configurator_lvm_thin_pool_used_percent` and `sds_node_configurator_lvm_thin_pool_metadata_used_percent` metrics. If there is no free space in the pool, module degradation and data loss may occur.
 {{< /alert >}}
 
 ## Why can't I create a PVC on the selected node?
