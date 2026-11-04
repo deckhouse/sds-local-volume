@@ -40,9 +40,9 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/deckhouse/sds-common-lib/conditions"
+	"github.com/deckhouse/sds-common-lib/logger"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
-	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/monitoring"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )

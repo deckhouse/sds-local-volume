@@ -29,8 +29,8 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 
+	"github.com/deckhouse/sds-common-lib/logger"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 	"github.com/deckhouse/sds-local-volume/lib/go/common/pkg/feature"
 	"github.com/deckhouse/sds-node-configurator/api/v1alpha1"

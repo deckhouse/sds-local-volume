@@ -24,9 +24,10 @@ import (
 
 	storagev1 "k8s.io/api/storage/v1"
 
+	"github.com/deckhouse/sds-common-lib/logger"
+	"github.com/deckhouse/sds-common-lib/logger/kwhlogger"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/webhooks/handlers"
-	"github.com/deckhouse/sds-local-volume/images/webhooks/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -94,7 +95,7 @@ func main() {
 
 	// kubewebhook takes its own logger interface; this adapter routes the
 	// library's own messages into the same output and format as ours.
-	kwhLogger := logger.NewKubewebhookLogger(log)
+	kwhLogger := kwhlogger.New(log)
 
 	lscValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LSCValidate(log), LSCValidatorID, &slv.LocalStorageClass{}, kwhLogger)
 	if err != nil {

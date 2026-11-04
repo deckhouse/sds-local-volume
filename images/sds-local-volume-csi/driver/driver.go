@@ -35,9 +35,9 @@ import (
 	"google.golang.org/grpc"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/deckhouse/sds-common-lib/logger"
 	"github.com/deckhouse/sds-common-lib/monitoring/csimetrics"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 )
 
@@ -100,7 +100,7 @@ func NewDriver(csiAddress, driverName, address string, nodeName *string, log log
 		waitActionTimeout: defaultWaitActionTimeout,
 		cl:                cl,
 		storeManager:      st,
-		inFlight:          internal.NewInFlight(),
+		inFlight:          internal.NewInFlight(log),
 	}, nil
 }
 

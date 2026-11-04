@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/deckhouse/sds-common-lib/logger"
 )
 
 // TestDurationFromEnv pins the contract the chart relies on: the variable is left
@@ -94,5 +96,20 @@ func TestNewConfigReadsTheGracePeriod(t *testing.T) {
 	t.Run("configured", func(t *testing.T) {
 		t.Setenv(LLVOrphanGracePeriodEnvName, "5m")
 		assert.Equal(t, 5*time.Minute, NewConfig().LLVOrphanGracePeriod)
+	})
+}
+
+// TestNewConfigReadsTheLogLevel checks the wiring to the shared logger and pins the
+// fallback, which is this module's choice: lib-helm always sets LOG_LEVEL, so an
+// unset value only happens outside the chart, and it has always meant Info.
+func TestNewConfigReadsTheLogLevel(t *testing.T) {
+	t.Run("unset", func(t *testing.T) {
+		t.Setenv(logger.EnvLogLevel, "")
+		assert.Equal(t, logger.InfoLevel, NewConfig().Loglevel)
+	})
+
+	t.Run("configured", func(t *testing.T) {
+		t.Setenv(logger.EnvLogLevel, "4")
+		assert.Equal(t, logger.TraceLevel, NewConfig().Loglevel)
 	})
 }

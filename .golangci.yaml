@@ -17,11 +17,11 @@ linters:
     - whitespace
   settings:
     sloglint:
-      # Scope: sloglint and govet's slog analyzer recognise log/slog and types
-      # embedding *slog.Logger, which covers deckhouse/pkg/log. They do NOT see
-      # calls made through the module's own logger.Logger wrapper, so these rules
-      # guard the logger package and any direct pkg/log use, not the ~360
-      # wrapper call sites.
+      # sloglint and govet's slog analyzer match a call by its callee. Info, Debug
+      # and Warn are promoted from the *slog.Logger that sds-common-lib's
+      # logger.Logger embeds, so they are checked at every call site here. Error
+      # and Fatal are declared by pkg/log itself and Trace by logger.Logger, and
+      # neither linter sees those.
       #
       # no-mixed-args is on by default and is the rule that matters most here: it
       # allows a pure-attribute call such as log.Error(msg, log.Err(err)) and a

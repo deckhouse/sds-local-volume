@@ -20,7 +20,7 @@ package internal
 import (
 	"sync"
 
-	"k8s.io/klog/v2"
+	"github.com/deckhouse/sds-common-lib/logger"
 )
 
 // Idempotent is the interface required to manage in flight requests.
@@ -40,13 +40,15 @@ const (
 type InFlight struct {
 	mux      *sync.Mutex
 	inFlight map[string]bool
+	log      logger.Logger
 }
 
 // NewInFlight instanciates a InFlight structures.
-func NewInFlight() *InFlight {
+func NewInFlight(log logger.Logger) *InFlight {
 	return &InFlight{
 		mux:      &sync.Mutex{},
 		inFlight: make(map[string]bool),
+		log:      log,
 	}
 }
 
@@ -72,5 +74,5 @@ func (db *InFlight) Delete(key string) {
 	defer db.mux.Unlock()
 
 	delete(db.inFlight, key)
-	klog.V(4).InfoS("Node Service: volume operation finished", "key", key)
+	db.log.Trace("Node Service: volume operation finished", "key", key)
 }

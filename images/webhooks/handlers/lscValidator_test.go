@@ -24,8 +24,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/deckhouse/sds-common-lib/fsreserve"
+	"github.com/deckhouse/sds-common-lib/logger"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	"github.com/deckhouse/sds-local-volume/images/webhooks/pkg/logger"
 )
 
 func TestLSCValidate_DeletingClassIsNotValidated(t *testing.T) {

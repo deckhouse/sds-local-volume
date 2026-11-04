@@ -30,15 +30,15 @@ import (
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/deckhouse/sds-common-lib/logger"
 	"github.com/deckhouse/sds-common-lib/monitoring/csimetrics"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/config"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/driver"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/kubutils"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -53,11 +53,15 @@ var (
 	}
 )
 
-func healthHandler(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, err := fmt.Fprint(w, "OK")
-	if err != nil {
-		klog.Fatalf("Error while generating healthcheck, err: %s", err.Error())
+// healthHandler answers the kubelet probes. A failed write only means the prober
+// went away before reading the answer, so it is logged rather than taken as a
+// reason to stop the driver.
+func healthHandler(log logger.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, err := fmt.Fprint(w, "OK"); err != nil {
+			log.Error("unable to write the health check response", logger.Err(err))
+		}
 	}
 }
 
@@ -66,7 +70,7 @@ func main() {
 
 	cfgParams, err := config.NewConfig()
 	if err != nil {
-		klog.Fatalf("unable to create NewConfig, err: %s", err.Error())
+		fmt.Fprintf(os.Stderr, "unable to create NewConfig, err: %s\n", err.Error())
 		os.Exit(1)
 	}
 
@@ -75,6 +79,10 @@ func main() {
 		fmt.Printf("unable to create NewLogger, err: %v\n", err)
 		os.Exit(1)
 	}
+
+	// The controller-runtime client logs API warnings through its global logger;
+	// without this they are dropped.
+	ctrllog.SetLogger(log.GetLogger())
 
 	log.Info("starting sds-local-volume-csi", "version", cfgParams.Version)
 
@@ -99,8 +107,8 @@ func main() {
 		Scheme: scheme,
 	})
 
-	http.HandleFunc("/healthz", healthHandler)
-	http.HandleFunc("/readyz", healthHandler)
+	http.HandleFunc("/healthz", healthHandler(log))
+	http.HandleFunc("/readyz", healthHandler(log))
 	go func() {
 		err = http.ListenAndServe(cfgParams.HealthProbeBindAddress, nil)
 		if err != nil {

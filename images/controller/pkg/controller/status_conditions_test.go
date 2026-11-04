@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/deckhouse/sds-common-lib/conditions"
+	"github.com/deckhouse/sds-common-lib/logger"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 )
 
 const testLSCName = "lsc-1"

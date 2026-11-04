@@ -40,7 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
+	"github.com/deckhouse/sds-common-lib/logger"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/monitoring"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )

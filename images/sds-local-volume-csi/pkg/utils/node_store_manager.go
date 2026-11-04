@@ -28,8 +28,8 @@ import (
 	utilexec "k8s.io/utils/exec"
 
 	"github.com/deckhouse/sds-common-lib/fsreserve"
+	"github.com/deckhouse/sds-common-lib/logger"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 )
 
 // ErrNotMounted is returned by ResizeFS when nothing is mounted at the target.

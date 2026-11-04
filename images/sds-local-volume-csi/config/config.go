@@ -21,13 +21,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/deckhouse/sds-common-lib/logger"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/driver"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 )
 
 const (
 	NodeName                             = "KUBE_NODE_NAME"
-	LogLevel                             = "LOG_LEVEL"
 	DefaultHealthProbeBindAddressEnvName = "HEALTH_PROBE_BIND_ADDRESS"
 	DefaultHealthProbeBindAddress        = ":8081"
 	MetricsBindAddressEnvName            = "METRICS_BIND_ADDRESS"
@@ -63,12 +62,7 @@ func NewConfig() (*Options, error) {
 		opts.MetricsBindAddress = DefaultMetricsBindAddress
 	}
 
-	loglevel := os.Getenv(LogLevel)
-	if loglevel == "" {
-		opts.Loglevel = logger.InfoLevel
-	} else {
-		opts.Loglevel = logger.Verbosity(loglevel)
-	}
+	opts.Loglevel = logger.VerbosityFromEnv(logger.InfoLevel)
 
 	opts.Version = "dev"
 

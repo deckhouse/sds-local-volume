@@ -34,8 +34,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/deckhouse/sds-common-lib/fsreserve"
+	"github.com/deckhouse/sds-common-lib/logger"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/utils"
 )
 

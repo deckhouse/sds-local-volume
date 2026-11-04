@@ -22,11 +22,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
+	"github.com/deckhouse/sds-common-lib/logger"
 )
 
 const (
-	LogLevel                             = "LOG_LEVEL"
 	RequeueInterval                      = "REQUEUE_INTERVAL"
 	ConfigSecretName                     = "d8-sds-local-volume-controller-config"
 	ControllerNamespaceEnv               = "CONTROLLER_NAMESPACE"
@@ -77,12 +76,7 @@ type Options struct {
 func NewConfig() *Options {
 	var opts Options
 
-	loglevel := os.Getenv(LogLevel)
-	if loglevel == "" {
-		opts.Loglevel = logger.InfoLevel
-	} else {
-		opts.Loglevel = logger.Verbosity(loglevel)
-	}
+	opts.Loglevel = logger.VerbosityFromEnv(logger.InfoLevel)
 
 	opts.HealthProbeBindAddress = os.Getenv(DefaultHealthProbeBindAddressEnvName)
 	if opts.HealthProbeBindAddress == "" {

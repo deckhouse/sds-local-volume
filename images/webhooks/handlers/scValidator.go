@@ -27,7 +27,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/deckhouse/sds-local-volume/images/webhooks/pkg/logger"
+	"github.com/deckhouse/sds-common-lib/logger"
 )
 
 const (

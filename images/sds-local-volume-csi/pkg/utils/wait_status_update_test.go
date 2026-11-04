@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
+	"github.com/deckhouse/sds-common-lib/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 

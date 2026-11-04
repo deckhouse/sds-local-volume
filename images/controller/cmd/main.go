@@ -32,15 +32,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"github.com/deckhouse/sds-common-lib/logger"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/controller"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/kubutils"
-	"github.com/deckhouse/sds-local-volume/images/controller/pkg/logger"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/monitoring"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
@@ -68,7 +69,11 @@ func main() {
 
 	log.Info("starting the sds-local-volume controller", "goVersion", goruntime.Version(), "os", goruntime.GOOS, "arch", goruntime.GOARCH)
 
-	log.Info("configuration loaded", config.LogLevel, string(cfgParams.Loglevel), config.RequeueInterval, cfgParams.RequeueStorageClassInterval)
+	// controller-runtime's own packages log through its global logger rather than
+	// the one handed to the manager; without this their records are dropped.
+	ctrllog.SetLogger(log.GetLogger())
+
+	log.Info("configuration loaded", logger.EnvLogLevel, string(cfgParams.Loglevel), config.RequeueInterval, cfgParams.RequeueStorageClassInterval)
 
 	kConfig, err := kubutils.KubernetesDefaultConfigCreate()
 	if err != nil {

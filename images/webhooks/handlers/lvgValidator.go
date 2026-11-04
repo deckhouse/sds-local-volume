@@ -28,8 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
+	"github.com/deckhouse/sds-common-lib/logger"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
-	"github.com/deckhouse/sds-local-volume/images/webhooks/pkg/logger"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
