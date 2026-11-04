@@ -1,4 +1,4 @@
-//go:build !ee
+//go:build ce
 
 /*
 Copyright 2026 Flant JSC
@@ -20,6 +20,6 @@ package driver
 
 import "github.com/container-storage-interface/spec/lib/go/csi"
 
-// ListSnapshots is implemented in the ee build only; elsewhere it stays
-// Unimplemented and is not advertised.
+// The ce build has no snapshot RPCs: ListSnapshots stays Unimplemented and is
+// not advertised.
 var listSnapshotsCapabilities []csi.ControllerServiceCapability_RPC_Type
