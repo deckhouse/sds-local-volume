@@ -135,6 +135,18 @@ func main() {
 	}
 	log.Info("manager created")
 
+	lscLVGCollector := monitoring.NewLocalStorageClassLVGCollector(
+		controller.LocalStorageClassLVGs(mgr.GetCache()),
+		mgr.Elected(),
+		func(err error) {
+			log.Error("unable to list the LocalStorageClass LVMVolumeGroups for the metrics", logger.Err(err))
+		},
+	)
+	if err = ctrlmetrics.Registry.Register(lscLVGCollector); err != nil {
+		log.Error("unable to register the LocalStorageClass LVMVolumeGroup metrics", logger.Err(err))
+		os.Exit(1)
+	}
+
 	if _, err = controller.RunLocalStorageClassWatcherController(mgr, *cfgParams, log, metrics); err != nil {
 		log.Error("unable to run the controller", logger.Err(err), slog.String("controller", controller.LocalStorageClassCtrlName))
 		os.Exit(1)

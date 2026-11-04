@@ -32,6 +32,29 @@
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$ds_prometheus"
+        },
+        "definition": "label_values(sds_local_volume_local_storage_class_lvg_info, storage_class)",
+        "hide": 0,
+        "includeAll": false,
+        "label": "LocalStorageClass",
+        "multi": false,
+        "name": "storage_class",
+        "options": [],
+        "query": {
+          "query": "label_values(sds_local_volume_local_storage_class_lvg_info, storage_class)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
       }
     ]
   },
@@ -1129,6 +1152,613 @@
               "name": "LocalStorageClass",
               "phase": "Phase"
             }
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Capacity by LocalStorageClass",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 62
+      },
+      "collapsed": false
+    },
+    {
+      "type": "stat",
+      "title": "Thick: volume group size",
+      "description": "Total size of the volume groups of the selected LocalStorageClass. Empty for a Thin class.",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 63
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(sds_node_configurator_lvg_vg_size_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"}))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Thick: free",
+      "description": "Free space left in the volume groups of the selected LocalStorageClass: what new Thick volumes of the class can still take. Empty for a Thin class.",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 63
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(sds_node_configurator_lvg_vg_free_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"}))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Thick: used",
+      "description": "Share of the volume groups of the selected LocalStorageClass that is taken. It counts everything in the volume groups, not only the volumes of the class: thin pools and the volumes of other classes on the same volume groups as well. Empty for a Thin class.",
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 63
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "1 - sum(sds_node_configurator_lvg_vg_free_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"})) / sum(sds_node_configurator_lvg_vg_size_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"}))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.8
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Thin: pool size",
+      "description": "Total size of the thin pools of the selected LocalStorageClass. Empty for a Thick class.",
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 0,
+        "y": 67
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum((sds_node_configurator_lvg_thin_pool_actual_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Thin: allocated to volumes",
+      "description": "Sum of the sizes of the volumes created in the thin pools of the selected LocalStorageClass: the virtual size they were requested with, not the data written into them. Empty for a Thick class.",
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 5,
+        "y": 67
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum((sds_node_configurator_lvg_thin_pool_allocated_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Thin: allocation limit",
+      "description": "How much can be allocated to volumes in the thin pools of the selected LocalStorageClass: the pool size times the allocationLimit of each thin pool of the LVMVolumeGroup (150% by default). Empty for a Thick class.",
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 10,
+        "y": 67
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum((sds_node_configurator_lvg_thin_pool_allocation_limit_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Thin: free by allocationLimit",
+      "description": "What new volumes of the selected LocalStorageClass can still be given: allocation limit minus allocated, per thin pool, a pool already past its limit counting as zero. This is the space the module provisions against, so overprovisioning is taken into account. It says nothing about the data the pool can still hold; see Thin: data used. Empty for a Thick class.",
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 15,
+        "y": 67
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum((clamp_min(sds_node_configurator_lvg_thin_pool_allocation_limit_bytes - sds_node_configurator_lvg_thin_pool_allocated_size_bytes, 0)) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Thin: data used",
+      "description": "Share of the thin pools of the selected LocalStorageClass filled with data. A thin pool that fills up stops every volume in it, whatever the allocation figures say. Empty for a Thick class.",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 67
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum((sds_node_configurator_lvg_thin_pool_used_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"})) / sum((sds_node_configurator_lvg_thin_pool_actual_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.8
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Capacity of the class over time",
+      "description": "Thick series are the volume groups of the class, Thin series its thin pools; only one of the two sets has data for a given class.",
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 71
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(sds_node_configurator_lvg_vg_size_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"}))",
+          "legendFormat": "Thick: volume group size",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(sds_node_configurator_lvg_vg_free_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"}))",
+          "legendFormat": "Thick: free",
+          "refId": "B"
+        },
+        {
+          "expr": "sum((sds_node_configurator_lvg_thin_pool_actual_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "legendFormat": "Thin: pool size",
+          "refId": "C"
+        },
+        {
+          "expr": "sum((sds_node_configurator_lvg_thin_pool_allocation_limit_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "legendFormat": "Thin: allocation limit",
+          "refId": "D"
+        },
+        {
+          "expr": "sum((sds_node_configurator_lvg_thin_pool_allocated_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "legendFormat": "Thin: allocated to volumes",
+          "refId": "E"
+        },
+        {
+          "expr": "sum((sds_node_configurator_lvg_thin_pool_used_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "legendFormat": "Thin: data used",
+          "refId": "F"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "LVMVolumeGroups without capacity data",
+      "description": "LVMVolumeGroups (thin pools for a Thin class) the selected LocalStorageClass uses that sds-node-configurator reports no capacity for: the LVMVolumeGroup does not exist, its volume group or thin pool has not been created yet, or the agent on its node is not running. The figures above leave them out.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 71
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "((count(max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"}) unless on (lvg_name) sds_node_configurator_lvg_vg_size_bytes)) or vector(0)) + ((count(max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}) unless on (lvg_name, thin_pool) sds_node_configurator_lvg_thin_pool_actual_size_bytes)) or vector(0))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Volume groups and thin pools of the class",
+      "description": "One row per LVMVolumeGroup of the selected LocalStorageClass, and per thin pool for a Thin class. For a Thick class Size and Free are those of the volume group and Used is the difference. For a Thin class Size is the thin pool, Allocated the virtual size of its volumes, Allocation limit the pool size times allocationLimit, Free what is left under that limit, and Used the data written into the pool.",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 79
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "max by (node, lvg_name, volume_group, thin_pool) (sds_node_configurator_lvg_vg_size_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"}) or (sds_node_configurator_lvg_thin_pool_actual_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "format": "table",
+          "instant": true,
+          "refId": "Size"
+        },
+        {
+          "expr": "max by (node, lvg_name, volume_group, thin_pool) ((sds_node_configurator_lvg_thin_pool_allocated_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "format": "table",
+          "instant": true,
+          "refId": "Allocated"
+        },
+        {
+          "expr": "max by (node, lvg_name, volume_group, thin_pool) ((sds_node_configurator_lvg_thin_pool_allocation_limit_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "format": "table",
+          "instant": true,
+          "refId": "Limit"
+        },
+        {
+          "expr": "max by (node, lvg_name, volume_group, thin_pool) (sds_node_configurator_lvg_vg_free_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"}) or (clamp_min(sds_node_configurator_lvg_thin_pool_allocation_limit_bytes - sds_node_configurator_lvg_thin_pool_allocated_size_bytes, 0)) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "format": "table",
+          "instant": true,
+          "refId": "Free"
+        },
+        {
+          "expr": "max by (node, lvg_name, volume_group, thin_pool) (((sds_node_configurator_lvg_vg_size_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"})) - (sds_node_configurator_lvg_vg_free_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"}))) or (sds_node_configurator_lvg_thin_pool_used_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "format": "table",
+          "instant": true,
+          "refId": "Used"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "footer": {
+          "countRows": false,
+          "fields": [
+            "Size",
+            "Allocated",
+            "Allocation limit",
+            "Free",
+            "Used"
+          ],
+          "reducer": [
+            "sum"
+          ],
+          "show": true
+        },
+        "showHeader": true
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "node": 0,
+              "lvg_name": 1,
+              "volume_group": 2,
+              "thin_pool": 3,
+              "Value #Size": 4,
+              "Value #Allocated": 5,
+              "Value #Limit": 6,
+              "Value #Free": 7,
+              "Value #Used": 8
+            },
+            "renameByName": {
+              "node": "Node",
+              "lvg_name": "LVMVolumeGroup",
+              "volume_group": "Volume group",
+              "thin_pool": "Thin pool",
+              "Value #Size": "Size",
+              "Value #Allocated": "Allocated",
+              "Value #Limit": "Allocation limit",
+              "Value #Free": "Free",
+              "Value #Used": "Used"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "desc": false,
+                "field": "Node"
+              }
+            ]
           }
         }
       ]

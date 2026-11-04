@@ -4,6 +4,9 @@ date: "2026-xx-xx"
 summary: ""
 highlights: []
 
+new_features:
+  - "На дашборде Grafana «SDS Local Volume» появилась строка «Capacity by LocalStorageClass» с ёмкостью LocalStorageClass: выберите класс и смотрите размер, свободное место и занятую долю его групп томов для класса `Thick` либо размер его thin-пулов, объём, выделенный томам, предел выделения, место, свободное с учётом `allocationLimit`, и долю, заполненную данными, для класса `Thin` — в сумме и по каждому узлу и LVMVolumeGroup. Свободное место класса `Thin` — это предел выделения за вычетом выделенного томам, та же величина, которую модуль проверяет при создании тома, поэтому overprovisioning (выделение томам больше места, чем есть в пуле) учтён. Строка построена на новой метрике контроллера `sds_local_volume_local_storage_class_lvg_info{storage_class, lvg_name, thin_pool}`, которая связывает каждый LocalStorageClass с его LVMVolumeGroup и thin-пулами, и на метриках ёмкости LVMVolumeGroup из sds-node-configurator."
+
 improvements:
   - "Новый алерт `D8SdsLocalVolumeLocalStorageClassNotReady` срабатывает, когда условие `Ready` у LocalStorageClass 15 минут не в статусе `True`: контроллер не смог применить класс (`reason: ReconcileFailed`) или удаление класса удерживает финализатор другого контроллера (`reason: Deleting`). Алерт строится на уже существующей метрике `sds_local_volume_local_storage_class_ready`."
   - "LocalStorageClass больше нельзя создать с именем StorageClass другого провижинера. Модуль называет свой StorageClass по имени LocalStorageClass, поэтому такой ресурс раньше создавался и оставался в состоянии `Failed`; теперь вебхук отклоняет его при создании и называет StorageClass, который занимает имя."
@@ -16,7 +19,6 @@ fixes:
   - "При `volumeBindingMode: Immediate` том LVM-thin, превышающий доступное место в своём thin pool, больше не превращается в LVMLogicalVolume, который узел отклоняет с ошибкой `not enough space`, а CSI-контроллер удаляет, и так при каждой повторной попытке провижинера. Теперь CSI-контроллер сравнивает запрос с доступным местом thin pool, в котором уже учтён `allocationLimit`, и оставляет PVC в состоянии `Pending` с событием, где названы thin pool, его доступное место и `allocationLimit`. Ошибка возвращается с кодом `ResourceExhausted`, как и ошибки для не помещающегося Thick-тома и для StorageClass, в LVMVolumeGroup которого не осталось места совсем; в последнем случае раньше приходила ошибка `no LVMVolumeGroup found for node`."
 
 # Необязательные разделы — пустые не оставлять, а удалять.
-# new_features: []
 # security: []
 # breaking: []
 # upgrade_notes: []

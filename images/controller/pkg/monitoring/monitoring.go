@@ -108,6 +108,13 @@ const (
 	// takes the LVMVolumeGroups out of the classes. Nodes in that state are the
 	// only series, so a healthy cluster exports none.
 	NodeManualEvictionRequired = "sds_local_volume_node_manual_eviction_required"
+
+	// LocalStorageClassLVGInfo is 1 for every LVMVolumeGroup a LocalStorageClass
+	// provisions on, and for a Thin class for the thin pool in it. It carries no
+	// capacity of its own: sds-node-configurator exports that per LVMVolumeGroup,
+	// and this series is what a query joins it with to read the capacity of a
+	// class. See NewLocalStorageClassLVGCollector for how it is kept current.
+	LocalStorageClassLVGInfo = "sds_local_volume_local_storage_class_lvg_info"
 )
 
 // Label names.
@@ -129,6 +136,15 @@ const (
 	// the virtual size, unrelated to the thin pool's consumption. Summing across
 	// types would present overprovisioning as allocated space.
 	LabelLVMType = "type"
+
+	// LabelStorageClass, LabelLVGName and LabelThinPool label
+	// LocalStorageClassLVGInfo. The last two are spelled the way the
+	// sds_node_configurator_lvg_* series spell them, rather than after
+	// LabelLVMVolumeGroup, so that a join needs no label_replace. LabelThinPool is
+	// empty for a Thick class.
+	LabelStorageClass = "storage_class"
+	LabelLVGName      = "lvg_name"
+	LabelThinPool     = "thin_pool"
 )
 
 // Values of the LabelKind label.

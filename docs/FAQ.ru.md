@@ -176,3 +176,26 @@ d8 k -n d8-sds-local-volume logs deploy/controller -c controller --tail=200 | gr
 ```
 
 Класс, часть LVMVolumeGroup которого находится на узлах без CSI-узла модуля, остаётся `Ready` с причиной `LVMVolumeGroupsOutsideCSINodes` и алерт не вызывает.
+
+## Как посмотреть, сколько места осталось у LocalStorageClass?
+
+Откройте дашборд Grafana «SDS Local Volume», выберите класс в переменной «LocalStorageClass» вверху и смотрите строку «Capacity by LocalStorageClass»:
+
+- Для класса `Thick` — размер его групп томов, свободное место в них и занятую долю. Доля учитывает всё, что лежит в группах томов, в том числе thin-пулы и тома других классов на тех же LVMVolumeGroup.
+- Для класса `Thin` — размер его thin-пулов, объём, выделенный томам, предел выделения, место, свободное с учётом `allocationLimit`, и долю пулов, заполненную данными. Место, свободное с учётом `allocationLimit`, — это размер пула, умноженный на `allocationLimit` thin-пула в LVMVolumeGroup (по умолчанию 150%), за вычетом запрошенных размеров уже созданных в пуле томов; считается по каждому thin-пулу. Столько ещё можно выдать новым томам класса — это та же величина, которую модуль проверяет при создании тома, поэтому overprovisioning (выделение томам больше места, чем есть в пуле) учтён. О том, сколько данных пул ещё вместит, эта величина не говорит: следите за долей, заполненной данными, потому что переполнение thin-пула останавливает все тома в нём.
+- Таблица внизу строки показывает те же величины по каждому узлу и LVMVolumeGroup.
+- «LVMVolumeGroups without capacity data» — число LVMVolumeGroup класса (для класса `Thin` — thin-пулов), по которым sds-node-configurator не сообщает ёмкость: LVMVolumeGroup не существует, её группа томов или thin-пул ещё не созданы либо агент на её узле не работает. В итоговые суммы они не входят.
+
+Ёмкость берётся из метрик sds-node-configurator `sds_node_configurator_lvg_vg_size_bytes`, `sds_node_configurator_lvg_vg_free_bytes` и `sds_node_configurator_lvg_thin_pool_*_bytes` с лейблами LVMVolumeGroup. С классами их связывает метрика модуля `sds_local_volume_local_storage_class_lvg_info`: значение `1` для каждой LVMVolumeGroup, на которой класс создаёт тома, с лейблами `storage_class`, `lvg_name` и `thin_pool` (пустой для класса `Thick`). Записи с `labelSelector` разворачиваются так же, как для StorageClass, а серии следуют за изменениями класса и меток LVMVolumeGroup; удалённый класс перестаёт публиковаться.
+
+Чтобы использовать метрику в своих запросах, выберите один класс и соединяйте ряды по `lvg_name`, а для класса `Thin` — ещё и по `thin_pool`. Например, свободное место класса `Thick`:
+
+```text
+sum(
+  sds_node_configurator_lvg_vg_free_bytes
+  * on (lvg_name) group_left (storage_class)
+  max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class="<lsc-name>", thin_pool=""})
+)
+```
+
+Класс нужно выбрать заранее: одна LVMVolumeGroup может использоваться несколькими классами, а соединение падает, если справа на одну LVMVolumeGroup приходится больше одной серии. `max by` сохраняет работоспособность запроса, пока у контроллера меняется лидер.

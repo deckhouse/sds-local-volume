@@ -176,3 +176,26 @@ d8 k -n d8-sds-local-volume logs deploy/controller -c controller --tail=200 | gr
 ```
 
 A class whose LVMVolumeGroups are partly on nodes without the module's CSI node stays `Ready` with `reason: LVMVolumeGroupsOutsideCSINodes` and does not trigger the alert.
+
+## How do I see how much space a LocalStorageClass has left?
+
+Open the "SDS Local Volume" Grafana dashboard, pick the class in the "LocalStorageClass" variable at the top, and read the "Capacity by LocalStorageClass" row:
+
+- For a `Thick` class: the size of its volume groups, their free space, and the share used. The share counts everything in the volume groups, thin pools and volumes of other classes on the same LVMVolumeGroups included.
+- For a `Thin` class: the size of its thin pools, the size allocated to volumes, the allocation limit, the space free by `allocationLimit`, and the share of the pools filled with data. The space free by `allocationLimit` is the pool size multiplied by `allocationLimit` of the thin pool in the LVMVolumeGroup (150% by default), less the requested sizes of the volumes already in the pool, counted per thin pool. It is what new volumes of the class can still be given — the same figure the module checks when it creates a volume — so overprovisioning is taken into account. It says nothing about the data the pool can still hold: watch the share filled with data, because a thin pool that fills up stops every volume in it.
+- The table at the bottom of the row shows the same figures per node and LVMVolumeGroup.
+- "LVMVolumeGroups without capacity data" counts the LVMVolumeGroups of the class (thin pools for a `Thin` class) that sds-node-configurator reports no capacity for: the LVMVolumeGroup does not exist, its volume group or thin pool has not been created yet, or the agent on its node is not running. The totals leave them out.
+
+The capacity comes from the sds-node-configurator metrics `sds_node_configurator_lvg_vg_size_bytes`, `sds_node_configurator_lvg_vg_free_bytes` and `sds_node_configurator_lvg_thin_pool_*_bytes`, which are labeled by LVMVolumeGroup. The module ties them to classes with the `sds_local_volume_local_storage_class_lvg_info` metric: `1` for every LVMVolumeGroup a class provisions on, with the labels `storage_class`, `lvg_name` and `thin_pool` (empty for a `Thick` class). `labelSelector` entries are resolved the same way as for the StorageClass, and the series follow changes to the class and to the labels of the LVMVolumeGroups; a deleted class stops being exported.
+
+To use the metric in your own queries, pick one class and join on `lvg_name`, adding `thin_pool` for a `Thin` class. For example, the free space of a `Thick` class:
+
+```text
+sum(
+  sds_node_configurator_lvg_vg_free_bytes
+  * on (lvg_name) group_left (storage_class)
+  max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class="<lsc-name>", thin_pool=""})
+)
+```
+
+Pick the class first: one LVMVolumeGroup can be used by several classes, and the join fails when the right-hand side has more than one series per LVMVolumeGroup. `max by` keeps the join working while the controller changes its leader.

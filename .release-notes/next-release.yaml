@@ -4,6 +4,9 @@ date: "2026-xx-xx"
 summary: ""
 highlights: []
 
+new_features:
+  - "The \"SDS Local Volume\" Grafana dashboard shows the capacity of a LocalStorageClass in the new \"Capacity by LocalStorageClass\" row: pick a class and read the size, free space and share used of its volume groups for a `Thick` class, or the size of its thin pools, the size allocated to volumes, the allocation limit, the space free by `allocationLimit` and the share filled with data for a `Thin` class, in total and per node and LVMVolumeGroup. The free space of a `Thin` class is the allocation limit less what is allocated to volumes, the same figure the module checks when it creates a volume, so overprovisioning is taken into account. The row is built on the new controller metric `sds_local_volume_local_storage_class_lvg_info{storage_class, lvg_name, thin_pool}`, which ties every LocalStorageClass to its LVMVolumeGroups and thin pools, and on the LVMVolumeGroup capacity metrics of sds-node-configurator."
+
 improvements:
   - "New alert `D8SdsLocalVolumeLocalStorageClassNotReady` fires when the `Ready` condition of a LocalStorageClass has not been `True` for 15 minutes: the controller could not apply the class (`reason: ReconcileFailed`), or another controller's finalizer holds the class in its deletion (`reason: Deleting`). The alert reads the existing metric `sds_local_volume_local_storage_class_ready`."
   - "A LocalStorageClass can no longer be created under the name of a StorageClass that belongs to another provisioner. The module names its StorageClass after the LocalStorageClass, so such a resource used to be created and then stay `Failed`; the webhook now rejects it at creation and names the StorageClass that holds the name."
@@ -16,7 +19,6 @@ fixes:
   - "With `volumeBindingMode: Immediate`, an LVM-thin volume bigger than the available space of its thin pool no longer turns into an LVMLogicalVolume that the node fails with `not enough space` and the CSI controller deletes, again on every retry of the provisioner. The CSI controller compares the request with the available space of the thin pool, which already counts `allocationLimit`, and leaves the PVC `Pending` with an event that names the thin pool, its available space and `allocationLimit`. The error carries the `ResourceExhausted` code, as do the errors for a Thick volume that does not fit and for a StorageClass whose LVMVolumeGroups have no space left at all; the latter used to fail with `no LVMVolumeGroup found for node`."
 
 # Optional sections — delete rather than leave empty.
-# new_features: []
 # security: []
 # breaking: []
 # upgrade_notes: []
