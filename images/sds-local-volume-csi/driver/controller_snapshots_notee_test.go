@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/pkg/logger"
+	"github.com/deckhouse/sds-common-lib/logger"
 )
 
 // Without the ee implementation csi-snapshotter must not be told that
