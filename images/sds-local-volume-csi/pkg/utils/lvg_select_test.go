@@ -74,6 +74,74 @@ func TestGetNodeWithMaxFreeSpace_SkipsNotReadyLVGs(t *testing.T) {
 	})
 }
 
+func testThinLVG(name, node, available string) snc.LVMVolumeGroup {
+	lvg := testLVG(name, node, snc.PhaseReady, "0")
+	lvg.Status.ThinPools = []snc.LVMVolumeGroupThinPoolStatus{{
+		Name:            "tp",
+		AllocationLimit: "100%",
+		AvailableSpace:  resource.MustParse(available),
+	}}
+	return lvg
+}
+
+func TestGetNodeWithMaxFreeSpace_FreeSpace(t *testing.T) {
+	thinParams := map[string]string{"vg-1": "tp", "vg-2": "tp", "vg-3": "tp"}
+
+	t.Run("the thin pool with the most available space is chosen", func(t *testing.T) {
+		lvgs := []snc.LVMVolumeGroup{
+			testThinLVG("vg-1", "worker-1", "1Gi"),
+			testThinLVG("vg-2", "worker-2", "3Gi"),
+			testThinLVG("vg-3", "worker-3", "2Gi"),
+		}
+		node, free, err := GetNodeWithMaxFreeSpace(lvgs, thinParams, internal.LVMTypeThin)
+		require.NoError(t, err)
+		assert.Equal(t, "worker-2", node)
+		want := resource.MustParse("3Gi")
+		assert.Equal(t, want.Value(), free.Value())
+	})
+
+	// AvailableSpace goes negative once the pool has handed out more than
+	// allocationLimit allows, for example after the limit was lowered.
+	t.Run("no thin pool with available space is ErrNoFreeSpace", func(t *testing.T) {
+		lvgs := []snc.LVMVolumeGroup{
+			testThinLVG("vg-1", "worker-1", "0"),
+			testThinLVG("vg-2", "worker-2", "-1Gi"),
+		}
+		node, _, err := GetNodeWithMaxFreeSpace(lvgs, thinParams, internal.LVMTypeThin)
+		require.ErrorIs(t, err, ErrNoFreeSpace)
+		assert.Empty(t, node)
+		assert.Contains(t, err.Error(), "vg-1 (thin pool tp: available 0, allocationLimit 100%)")
+		assert.Contains(t, err.Error(), "vg-2 (thin pool tp: available -1Gi, allocationLimit 100%)")
+	})
+
+	t.Run("no thick group with free space is ErrNoFreeSpace", func(t *testing.T) {
+		lvgs := []snc.LVMVolumeGroup{
+			testLVG("vg-1", "worker-1", snc.PhaseReady, "0"),
+			testLVG("vg-2", "worker-2", snc.PhaseReady, "0"),
+		}
+		node, _, err := GetNodeWithMaxFreeSpace(lvgs, nil, internal.LVMTypeThick)
+		require.ErrorIs(t, err, ErrNoFreeSpace)
+		assert.Empty(t, node)
+		assert.Contains(t, err.Error(), "vg-1 (VGFree 0), vg-2 (VGFree 0)")
+	})
+
+	t.Run("the groups that are not Ready are listed apart", func(t *testing.T) {
+		lvgs := []snc.LVMVolumeGroup{
+			testLVG("vg-1", "worker-1", snc.PhaseReady, "0"),
+			testLVG("vg-2", "worker-2", snc.PhaseNotReady, "10Gi"),
+		}
+		_, _, err := GetNodeWithMaxFreeSpace(lvgs, nil, internal.LVMTypeThick)
+		require.ErrorIs(t, err, ErrNoFreeSpace)
+		assert.Contains(t, err.Error(), "vg-1 (VGFree 0); not Ready: vg-2 (NotReady)")
+	})
+
+	t.Run("no group at all is not ErrNoFreeSpace", func(t *testing.T) {
+		_, _, err := GetNodeWithMaxFreeSpace(nil, nil, internal.LVMTypeThick)
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrNoFreeSpace)
+	})
+}
+
 func TestSelectLVG_RefusesNotReadyLVG(t *testing.T) {
 	lvgs := []snc.LVMVolumeGroup{
 		testLVG("vg-1", "worker-1", snc.PhaseReady, "10Gi"),

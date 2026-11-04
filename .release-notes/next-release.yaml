@@ -13,6 +13,7 @@ improvements:
 
 fixes:
   - "The CSI controller could create a volume on an LVMVolumeGroup that is not `Ready`. With `volumeBindingMode: Immediate` it picked the node with the most free space among all LVMVolumeGroups of the StorageClass, whatever their phase, and with `WaitForFirstConsumer` it took the LVMVolumeGroup of the chosen node without looking at the phase, which mattered while the scheduler extender, registered with `failurePolicy: Ignore`, was unavailable. LVMVolumeGroups that are not `Ready` are now skipped when a node is picked, and a volume is not created on one: the error names the LVMVolumeGroup, its node and its phase."
+  - "With `volumeBindingMode: Immediate`, an LVM-thin volume bigger than the available space of its thin pool no longer turns into an LVMLogicalVolume that the node fails with `not enough space` and the CSI controller deletes, again on every retry of the provisioner. The CSI controller compares the request with the available space of the thin pool, which already counts `allocationLimit`, and leaves the PVC `Pending` with an event that names the thin pool, its available space and `allocationLimit`. The error carries the `ResourceExhausted` code, as do the errors for a Thick volume that does not fit and for a StorageClass whose LVMVolumeGroups have no space left at all; the latter used to fail with `no LVMVolumeGroup found for node`."
 
 # Optional sections — delete rather than leave empty.
 # new_features: []

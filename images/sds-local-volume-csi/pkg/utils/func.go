@@ -18,6 +18,7 @@ package utils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -386,13 +387,26 @@ func SafeExtentSize(extentSize resource.Quantity) resource.Quantity {
 	return lvmDefaultExtentSize
 }
 
+// ErrNoFreeSpace is returned by GetNodeWithMaxFreeSpace when no Ready
+// LVMVolumeGroup of the storage class has any space left for a new volume.
+var ErrNoFreeSpace = errors.New("no free space left in any Ready LVMVolumeGroup of the storage class")
+
 // GetNodeWithMaxFreeSpace picks the node of the Ready LVMVolumeGroup with the
 // most free space. An LVMVolumeGroup that is not Ready is skipped: Immediate
 // binding does not go through the scheduler extender, which is what keeps such
 // groups out of WaitForFirstConsumer placement.
+//
+// The free space is the one the agent checks a new volume against: VGFree for a
+// thick volume and AvailableSpace of the thin pool for a thin one. When none of
+// the Ready groups has any, the error wraps ErrNoFreeSpace and lists what each
+// of them has left.
 func GetNodeWithMaxFreeSpace(lvgs []snc.LVMVolumeGroup, storageClassLVGParametersMap map[string]string, lvmType string) (nodeName string, freeSpace resource.Quantity, err error) {
+	if len(lvgs) == 0 {
+		return "", resource.Quantity{}, errors.New("none of the LVMVolumeGroups of the storage class was found")
+	}
+
 	var maxFreeSpace int64
-	var notReady []string
+	var notReady, exhausted []string
 	for _, lvg := range lvgs {
 		if lvg.Status.Phase != snc.PhaseReady {
 			notReady = append(notReady, fmt.Sprintf("%s (%s)", lvg.Name, lvgPhase(lvg)))
@@ -402,15 +416,18 @@ func GetNodeWithMaxFreeSpace(lvgs []snc.LVMVolumeGroup, storageClassLVGParameter
 		switch lvmType {
 		case internal.LVMTypeThick:
 			freeSpace = lvg.Status.VGFree
+			exhausted = append(exhausted, fmt.Sprintf("%s (VGFree %s)", lvg.Name, freeSpace.String()))
 		case internal.LVMTypeThin:
 			thinPoolName, ok := storageClassLVGParametersMap[lvg.Name]
 			if !ok {
 				return "", freeSpace, fmt.Errorf("thin pool name for lvg %s not found in storage class parameters: %+v", lvg.Name, storageClassLVGParametersMap)
 			}
-			freeSpace, err = GetLVMThinPoolFreeSpace(lvg, thinPoolName)
-			if err != nil {
-				return "", freeSpace, fmt.Errorf("get free space for thin pool %s in lvg %s: %w", thinPoolName, lvg.Name, err)
+			thinPool, tpErr := GetLVMThinPoolStatus(lvg, thinPoolName)
+			if tpErr != nil {
+				return "", freeSpace, fmt.Errorf("get free space for thin pool %s in lvg %s: %w", thinPoolName, lvg.Name, tpErr)
 			}
+			freeSpace = thinPool.AvailableSpace
+			exhausted = append(exhausted, fmt.Sprintf("%s (thin pool %s: available %s, allocationLimit %s)", lvg.Name, thinPoolName, freeSpace.String(), thinPool.AllocationLimit))
 		}
 
 		if freeSpace.Value() > maxFreeSpace {
@@ -419,8 +436,16 @@ func GetNodeWithMaxFreeSpace(lvgs []snc.LVMVolumeGroup, storageClassLVGParameter
 		}
 	}
 
-	if len(notReady) == len(lvgs) && len(lvgs) > 0 {
+	if len(notReady) == len(lvgs) {
 		return "", resource.Quantity{}, fmt.Errorf("none of the LVMVolumeGroups of the storage class is Ready: %s", strings.Join(notReady, ", "))
+	}
+
+	if nodeName == "" {
+		msg := strings.Join(exhausted, ", ")
+		if len(notReady) > 0 {
+			msg += "; not Ready: " + strings.Join(notReady, ", ")
+		}
+		return "", resource.Quantity{}, fmt.Errorf("%w: %s", ErrNoFreeSpace, msg)
 	}
 
 	return nodeName, *resource.NewQuantity(maxFreeSpace, resource.BinarySI), nil
@@ -454,19 +479,24 @@ func GetLVMVolumeGroupFreeSpace(lvg snc.LVMVolumeGroup) (vgFreeSpace resource.Qu
 }
 
 func GetLVMThinPoolFreeSpace(lvg snc.LVMVolumeGroup, thinPoolName string) (thinPoolFreeSpace resource.Quantity, err error) {
-	var storagePoolThinPool *snc.LVMVolumeGroupThinPoolStatus
-	for _, thinPool := range lvg.Status.ThinPools {
-		if thinPool.Name == thinPoolName {
-			storagePoolThinPool = &thinPool
-			break
+	thinPool, err := GetLVMThinPoolStatus(lvg, thinPoolName)
+	if err != nil {
+		return thinPoolFreeSpace, err
+	}
+
+	return thinPool.AvailableSpace, nil
+}
+
+// GetLVMThinPoolStatus returns the status the agent reports for a thin pool of
+// the LVMVolumeGroup.
+func GetLVMThinPoolStatus(lvg snc.LVMVolumeGroup, thinPoolName string) (*snc.LVMVolumeGroupThinPoolStatus, error) {
+	for i := range lvg.Status.ThinPools {
+		if lvg.Status.ThinPools[i].Name == thinPoolName {
+			return &lvg.Status.ThinPools[i], nil
 		}
 	}
 
-	if storagePoolThinPool == nil {
-		return thinPoolFreeSpace, fmt.Errorf("[GetLVMThinPoolFreeSpace] thin pool %s not found in lvg %+v", thinPoolName, lvg)
-	}
-
-	return storagePoolThinPool.AvailableSpace, nil
+	return nil, fmt.Errorf("thin pool %s not found in the status of LVMVolumeGroup %s", thinPoolName, lvg.Name)
 }
 
 func ExpandLVMLogicalVolume(ctx context.Context, kc client.Client, llv *snc.LVMLogicalVolume, newSize string) error {

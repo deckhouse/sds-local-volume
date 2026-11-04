@@ -59,23 +59,47 @@ func alignToLVGExtentOrStatusErr(log logger.Logger, size resource.Quantity, lvg 
 	return aligned, nil
 }
 
-// fitsFreeSpace reports whether an extent-aligned request fits into the free
-// space of the node picked by Immediate binding.
+// checkFreeSpace rejects with ResourceExhausted an extent-aligned request that
+// does not fit into the LVMVolumeGroup picked by Immediate binding.
 //
-// Only thick volumes are checked: a thin volume is over-provisioned by design,
-// and with WaitForFirstConsumer the node is chosen by the scheduler, which has
-// already accounted for the space.
+// It repeats the check the agent makes before lvcreate: the aligned size against
+// VGFree for a thick volume and against AvailableSpace of the thin pool for a
+// thin one. Overprovisioning is already in AvailableSpace, which is the pool
+// size times allocationLimit minus what the pool has handed out, so a thin
+// request bigger than it is refused by the agent as well. Without the check here
+// every provisioner retry created an LVMLogicalVolume, waited for the agent to
+// fail it and deleted it again.
+//
+// With WaitForFirstConsumer the node is chosen by the scheduler, which has
+// already accounted for the space, so nothing is checked.
 //
 // The check is deliberately performed on the aligned size: a request that fits
 // only before rounding would pass here and then fail on the node with a far less
 // obvious "not enough space", after CreateVolume had already blocked waiting for
 // the LV.
-func fitsFreeSpace(bindingMode, lvmType string, alignedSize, freeSpace resource.Quantity) bool {
-	if bindingMode != internal.BindingModeI || lvmType != internal.LVMTypeThick {
-		return true
+func checkFreeSpace(bindingMode, lvmType string, alignedSize resource.Quantity, lvg *v1alpha1.LVMVolumeGroup, thinPoolName string) error {
+	if bindingMode != internal.BindingModeI {
+		return nil
 	}
 
-	return alignedSize.Value() <= freeSpace.Value()
+	switch lvmType {
+	case internal.LVMTypeThick:
+		if alignedSize.Value() > lvg.Status.VGFree.Value() {
+			return status.Errorf(codes.ResourceExhausted, "requested size %s is greater than the free space of the volume group: %s",
+				alignedSize.String(), lvg.Status.VGFree.String())
+		}
+	case internal.LVMTypeThin:
+		thinPool, err := utils.GetLVMThinPoolStatus(*lvg, thinPoolName)
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+		if alignedSize.Value() > thinPool.AvailableSpace.Value() {
+			return status.Errorf(codes.ResourceExhausted, "requested size %s is greater than the available space of thin pool %s: %s (pool size %s with allocationLimit %s, %s already allocated)",
+				alignedSize.String(), thinPoolName, thinPool.AvailableSpace.String(), thinPool.ActualSize.String(), thinPool.AllocationLimit, thinPool.AllocatedSize.String())
+		}
+	}
+
+	return nil
 }
 
 // errOnLVG names the LVMVolumeGroup and its node in an error of a volume
@@ -270,22 +294,19 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			preferredNode = selectedLVG.Spec.Local.NodeName
 		}
 	} else {
-		// Free space of the node picked by Immediate binding. The thick check against
-		// it is deferred until after the size has been aligned below, because the node
-		// provisions whole extents and it is the aligned size that has to fit.
-		var maxFreeSpace resource.Quantity
-
 		switch BindingMode {
 		case internal.BindingModeI:
 			log.Info("immediate binding, selecting a node", "bindingMode", internal.BindingModeI)
 			selectedNodeName, freeSpace, err := utils.GetNodeWithMaxFreeSpace(storageClassLVGs, storageClassLVGParametersMap, LvmType)
 			if err != nil {
 				log.Error("unable to select the node with the most free space", logger.Err(err))
+				if errors.Is(err, utils.ErrNoFreeSpace) {
+					return nil, status.Error(codes.ResourceExhausted, err.Error())
+				}
 				return nil, status.Errorf(codes.Internal, "error selecting the node with max free space: %s", err.Error())
 			}
 
 			preferredNode = selectedNodeName
-			maxFreeSpace = freeSpace
 			log.Info("selected a node", "nodeName", selectedNodeName, "freeSpace", freeSpace.String())
 		case internal.BindingModeWFFC:
 			log.Info("late binding, taking the preferred node from the request", "bindingMode", internal.BindingModeWFFC)
@@ -314,8 +335,11 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 		}
 		*llvSize = alignedLlvSize
 
-		if !fitsFreeSpace(BindingMode, LvmType, *llvSize, maxFreeSpace) {
-			return nil, errOnLVG(selectedLVG, status.Errorf(codes.Internal, "requested size: %s is greater than free space: %s", llvSize.String(), maxFreeSpace.String()))
+		// Checked only now, on the aligned size: the node provisions whole extents
+		// and it is the aligned size that has to fit.
+		if fitErr := checkFreeSpace(BindingMode, LvmType, *llvSize, selectedLVG, storageClassLVGParametersMap[selectedLVG.Name]); fitErr != nil {
+			log.Error("the volume does not fit into the LVMVolumeGroup", logger.Err(fitErr), slog.String("alignedSize", llvSize.String()))
+			return nil, errOnLVG(selectedLVG, fitErr)
 		}
 	}
 

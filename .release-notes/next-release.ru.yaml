@@ -13,6 +13,7 @@ improvements:
 
 fixes:
   - "CSI-контроллер мог создать том на LVMVolumeGroup не в фазе `Ready`. При `volumeBindingMode: Immediate` он выбирал узел с наибольшим свободным местом среди всех LVMVolumeGroup StorageClass независимо от их фазы, а при `WaitForFirstConsumer` брал LVMVolumeGroup выбранного узла, не глядя на фазу, — это имело значение, пока был недоступен scheduler extender, зарегистрированный с `failurePolicy: Ignore`. Теперь LVMVolumeGroup не в фазе `Ready` пропускаются при выборе узла, и том на такой группе не создаётся: ошибка называет LVMVolumeGroup, её узел и фазу."
+  - "При `volumeBindingMode: Immediate` том LVM-thin, превышающий доступное место в своём thin pool, больше не превращается в LVMLogicalVolume, который узел отклоняет с ошибкой `not enough space`, а CSI-контроллер удаляет, и так при каждой повторной попытке провижинера. Теперь CSI-контроллер сравнивает запрос с доступным местом thin pool, в котором уже учтён `allocationLimit`, и оставляет PVC в состоянии `Pending` с событием, где названы thin pool, его доступное место и `allocationLimit`. Ошибка возвращается с кодом `ResourceExhausted`, как и ошибки для не помещающегося Thick-тома и для StorageClass, в LVMVolumeGroup которого не осталось места совсем; в последнем случае раньше приходила ошибка `no LVMVolumeGroup found for node`."
 
 # Необязательные разделы — пустые не оставлять, а удалять.
 # new_features: []
