@@ -867,7 +867,10 @@ func publishLocalStorageClassStatus(
 		}
 	}
 
-	if err := conditions.UpdateStatus(ctx, cl, lsc, apply); err != nil {
+	// A write that moves Ready records an Event on the LocalStorageClass through
+	// the recorder on ctx, if there is one; see withEventRecorder.
+	if err := conditions.UpdateStatus(ctx, cl, lsc, apply,
+		conditions.WithEvents(eventRecorderFrom(ctx), localStorageClassConditions)); err != nil {
 		return err
 	}
 

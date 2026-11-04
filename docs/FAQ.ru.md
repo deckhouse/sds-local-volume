@@ -175,6 +175,12 @@ d8 k get lsc <lsc-name> -o jsonpath='{.status.conditions[?(@.type=="Ready")]}'
 d8 k -n d8-sds-local-volume logs deploy/controller -c controller --tail=200 | grep <lsc-name>
 ```
 
+Когда условие изменилось и что оно сообщало раньше, видно в событиях (Events) класса: контроллер создаёт событие `Warning`, когда `Ready` становится `False`, и `Normal`, когда оно снова становится `True`, с причиной условия. Класс — кластерный ресурс, поэтому его события лежат в пространстве имён `default`, и по умолчанию API-сервер хранит их час:
+
+```shell
+d8 k describe lsc <lsc-name>
+```
+
 Класс, часть LVMVolumeGroup которого находится на узлах без CSI-узла модуля, остаётся `Ready` с причиной `LVMVolumeGroupsOutsideCSINodes` и алерт не вызывает.
 
 ## Как посмотреть, сколько места осталось у LocalStorageClass?

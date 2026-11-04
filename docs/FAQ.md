@@ -175,6 +175,12 @@ If the command prints nothing, the controller has not been able to write the sta
 d8 k -n d8-sds-local-volume logs deploy/controller -c controller --tail=200 | grep <lsc-name>
 ```
 
+The Events of the class tell when the condition changed and what it said before: the controller records a `Warning` Event when `Ready` turns `False` and a `Normal` one when it turns `True` again, with the reason of the condition. The class is cluster-scoped, so its Events are in the `default` namespace, and the API server keeps them for an hour by default:
+
+```shell
+d8 k describe lsc <lsc-name>
+```
+
 A class whose LVMVolumeGroups are partly on nodes without the module's CSI node stays `Ready` with `reason: LVMVolumeGroupsOutsideCSINodes` and does not trigger the alert.
 
 ## How do I see how much space a LocalStorageClass has left?
