@@ -104,7 +104,7 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 
 		// Managed-by label must always be present and owned by the controller,
 		// even when the LSC tried to override it via storage.deckhouse.io/managed-by.
-		Expect(sc.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassCtrlName))
+		Expect(sc.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassManagedByValue))
 
 		Expect(sc.Labels).To(HaveKeyWithValue("team", "storage"))
 		Expect(sc.Labels).To(HaveKeyWithValue("env", "prod"))
@@ -152,7 +152,7 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 		Expect(scAfter.ResourceVersion).To(Equal(rvBefore))
 	})
 
-	It("recreates StorageClass when a non-ignored label changes", func(ctx SpecContext) {
+	It("updates StorageClass in place when a non-ignored label changes", func(ctx SpecContext) {
 		lsc := &slv.LocalStorageClass{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
 
@@ -165,7 +165,42 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 		// Tag the object so that "was it recreated" is a question about its
 		// identity rather than about its resourceVersion: the fake client
 		// numbers those per object, so a recreated StorageClass starts again
-		// from 1 and can compare equal to the one it replaced.
+		// from 1 and can compare equal to the one it replaced. The default-class
+		// mark stands for the annotations others put on the class, and the
+		// managed-by value is the one an older release wrote.
+		const markerUID = "before-the-update"
+		scBefore.UID = markerUID
+		scBefore.Annotations["storageclass.kubernetes.io/is-default-class"] = "true"
+		scBefore.Labels[internal.SLVStorageManagedLabelKey] = internal.SLVStorageClassCtrlName
+		Expect(cl.Update(ctx, scBefore)).To(Succeed())
+
+		scList := &v1.StorageClassList{}
+		Expect(cl.List(ctx, scList)).To(Succeed())
+
+		shouldRequeue, err := controller.RunEventReconcile(ctx, cl, log, scList, lsc, defaultIgnoredPrefixes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(shouldRequeue).To(BeFalse())
+
+		scAfter := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, scAfter)).To(Succeed())
+		Expect(scAfter.UID).To(Equal(types.UID(markerUID)))
+		Expect(scAfter.Labels).To(HaveKeyWithValue("team", "platform"))
+		Expect(scAfter.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassManagedByValue))
+		Expect(scAfter.Labels).NotTo(HaveKey("argocd.argoproj.io/instance"))
+		Expect(scAfter.Annotations).To(HaveKeyWithValue("storageclass.kubernetes.io/is-default-class", "true"))
+		Expect(scAfter.Finalizers).To(Equal(scBefore.Finalizers))
+	})
+
+	It("recreates StorageClass when its LVMVolumeGroups change", func(ctx SpecContext) {
+		lsc := &slv.LocalStorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, lsc)).To(Succeed())
+
+		lsc.Spec.LVM.LVMVolumeGroups = []slv.LocalStorageClassLVG{{Name: lvg1Name}}
+		Expect(cl.Update(ctx, lsc)).To(Succeed())
+
+		scBefore := &v1.StorageClass{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, scBefore)).To(Succeed())
+
 		const markerUID = "before-the-recreate"
 		scBefore.UID = markerUID
 		Expect(cl.Update(ctx, scBefore)).To(Succeed())
@@ -180,9 +215,9 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 		scAfter := &v1.StorageClass{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: lscName}, scAfter)).To(Succeed())
 		Expect(scAfter.UID).NotTo(Equal(types.UID(markerUID)))
+		Expect(scAfter.Parameters[controller.LVMVolumeGroupsParamKey]).NotTo(ContainSubstring(lvg2Name))
 		Expect(scAfter.Labels).To(HaveKeyWithValue("team", "platform"))
-		Expect(scAfter.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassCtrlName))
-		Expect(scAfter.Labels).NotTo(HaveKey("argocd.argoproj.io/instance"))
+		Expect(scAfter.Annotations).To(HaveKeyWithValue("storageclass.kubernetes.io/is-default-class", "true"))
 	})
 
 	It("creates StorageClass with only the managed-by label when all LSC labels are ignored", func(ctx SpecContext) {
@@ -209,7 +244,7 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 		sc := &v1.StorageClass{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: onlyIgnoredName}, sc)).To(Succeed())
 		Expect(sc.Labels).To(HaveLen(1))
-		Expect(sc.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassCtrlName))
+		Expect(sc.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassManagedByValue))
 
 		Expect(cl.Delete(ctx, lsc)).To(Succeed())
 		Expect(cl.List(ctx, scList)).To(Succeed())
@@ -246,7 +281,7 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 		Expect(cl.Get(ctx, client.ObjectKey{Name: safeName}, sc)).To(Succeed())
 		Expect(sc.Labels).To(HaveKeyWithValue("team", "storage"))
 		Expect(sc.Labels).To(HaveKeyWithValue("env", "prod"))
-		Expect(sc.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassCtrlName))
+		Expect(sc.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassManagedByValue))
 
 		Expect(cl.Delete(ctx, lsc)).To(Succeed())
 		Expect(cl.List(ctx, scList)).To(Succeed())

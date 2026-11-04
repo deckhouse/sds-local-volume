@@ -22,3 +22,7 @@ const (
 	SLVStorageClassVolumeSnapshotClassAnnotationValue = "sds-local-volume-snapshot-class"
 	SLVStorageManagedLabelKey                         = "storage.deckhouse.io/managed-by"
 )
+
+// SLVStorageClassManagedByValue is the value of the managed-by label on the
+// StorageClasses the module creates: the name of the module.
+const SLVStorageClassManagedByValue = "sds-local-volume"

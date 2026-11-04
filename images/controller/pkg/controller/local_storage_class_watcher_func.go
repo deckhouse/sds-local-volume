@@ -273,7 +273,7 @@ func reconcileLSCUpdateFunc(
 
 	log.Trace("current StorageClass parameters", "storageClass", oldSC.Name, "parameters", fmt.Sprintf("%+v", oldSC.Parameters))
 	log.Trace("LocalStorageClass LVM spec", "lvm", fmt.Sprintf("%+v", lsc.Spec.LVM))
-	hasDiff, err := hasSCDiff(oldSC, lsc, effectiveLVGs, ignoredLabelPrefixes)
+	hasDiff, err := hasSCSpecDiff(oldSC, lsc, effectiveLVGs)
 	if err != nil {
 		log.Error("unable to determine the LVMVolumeGroup difference", logger.Err(err))
 		upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
@@ -307,6 +307,30 @@ func reconcileLSCUpdateFunc(
 		}
 
 		log.Info("recreated the StorageClass", "storageClass", newSC.Name)
+	} else if !labelsMatchLSC(oldSC.Labels, lsc.Labels, ignoredLabelPrefixes) {
+		log.Info("the StorageClass labels no longer match, updating the StorageClass")
+		newSC, err := updateStorageClass(lsc, oldSC, effectiveLVGs, ignoredLabelPrefixes)
+		if err != nil {
+			log.Error("unable to build the StorageClass", logger.Err(err))
+			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+			if upError != nil {
+				log.Error("unable to update the LocalStorageClass status", logger.Err(upError))
+				return true, upError
+			}
+			return false, err
+		}
+
+		err = updateStorageClassMetadata(ctx, cl, oldSC, newSC)
+		if err != nil {
+			log.Error("unable to update the StorageClass", logger.Err(err), slog.String("storageClass", newSC.Name))
+			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+			if upError != nil {
+				log.Error("unable to update the LocalStorageClass status", logger.Err(upError))
+			}
+			return true, err
+		}
+
+		log.Info("updated the StorageClass labels", "storageClass", newSC.Name)
 	}
 
 	err = setLocalStorageClassCreated(ctx, cl, lsc, csiWarning)
@@ -400,17 +424,27 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 	return false, err
 }
 
+// hasSCDiff reports whether the StorageClass differs from the LocalStorageClass
+// in its labels or in the parameters hasSCSpecDiff compares.
 func hasSCDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass, effectiveLVGs []slv.LocalStorageClassLVG, ignoredLabelPrefixes []string) (bool, error) {
+	if !labelsMatchLSC(sc.Labels, lsc.Labels, ignoredLabelPrefixes) {
+		return true, nil
+	}
+
+	return hasSCSpecDiff(sc, lsc, effectiveLVGs)
+}
+
+// hasSCSpecDiff reports whether the parameters of the StorageClass differ from
+// the LocalStorageClass. The API server refuses to change the parameters of an
+// existing StorageClass, so such a difference is applied by recreating it,
+// while a difference in the labels alone is applied in place.
+func hasSCSpecDiff(sc *v1.StorageClass, lsc *slv.LocalStorageClass, effectiveLVGs []slv.LocalStorageClassLVG) (bool, error) {
 	currentLVGs, err := getLVGFromSCParams(sc)
 	if err != nil {
 		return false, err
 	}
 
 	if lsc.Spec.LVM.VolumeCleanup != sc.Parameters[LVMVolumeCleanupParamKey] {
-		return true, nil
-	}
-
-	if !labelsMatchLSC(sc.Labels, lsc.Labels, ignoredLabelPrefixes) {
 		return true, nil
 	}
 
@@ -458,7 +492,7 @@ func labelsMatchLSC(scLabels, lscLabels map[string]string, ignoredLabelPrefixes 
 	for k, v := range filtered {
 		expected[k] = v
 	}
-	expected[internal.SLVStorageManagedLabelKey] = internal.SLVStorageClassCtrlName
+	expected[internal.SLVStorageManagedLabelKey] = internal.SLVStorageClassManagedByValue
 
 	return reflect.DeepEqual(scLabels, expected)
 }
@@ -716,10 +750,10 @@ func configureStorageClass(lsc *slv.LocalStorageClass, effectiveLVGs []slv.Local
 	filteredLabels := filterLabelsForStorageClass(lsc.Labels, ignoredLabelPrefixes)
 	if len(filteredLabels) > 0 {
 		sc.Labels = filteredLabels
-		sc.Labels[internal.SLVStorageManagedLabelKey] = internal.SLVStorageClassCtrlName
+		sc.Labels[internal.SLVStorageManagedLabelKey] = internal.SLVStorageClassManagedByValue
 	} else {
 		sc.Labels = map[string]string{
-			internal.SLVStorageManagedLabelKey: internal.SLVStorageClassCtrlName,
+			internal.SLVStorageManagedLabelKey: internal.SLVStorageClassManagedByValue,
 		}
 	}
 
@@ -1128,6 +1162,16 @@ func recreateStorageClass(ctx context.Context, cl client.Client, oldSC, newSC *v
 	}
 
 	return nil
+}
+
+// updateStorageClassMetadata writes the labels and annotations of newSC to the
+// existing StorageClass.
+func updateStorageClassMetadata(ctx context.Context, cl client.Client, oldSC, newSC *v1.StorageClass) error {
+	sc := oldSC.DeepCopy()
+	sc.Labels = newSC.Labels
+	sc.Annotations = newSC.Annotations
+
+	return cl.Update(ctx, sc)
 }
 
 func deleteStorageClass(ctx context.Context, cl client.Client, sc *v1.StorageClass) error {

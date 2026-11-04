@@ -165,7 +165,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 		err := cl.Get(ctx, client.ObjectKey{Name: nameForLocalStorageClass}, sc)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(sc.Labels).To(HaveLen(1))
-		Expect(sc.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassCtrlName))
+		Expect(sc.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassManagedByValue))
 		Expect(sc.Annotations).To(HaveLen(1))
 		Expect(sc.Annotations).To(HaveKeyWithValue(internal.SLVStorageClassVolumeSnapshotClassAnnotationKey, internal.SLVStorageClassVolumeSnapshotClassAnnotationValue))
 	})
