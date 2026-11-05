@@ -19,7 +19,9 @@ package controller
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/deckhouse/sds-common-lib/conditions"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
@@ -54,4 +56,17 @@ func localStorageClassConditions(lsc *slv.LocalStorageClass) []metav1.Condition 
 		return nil
 	}
 	return lsc.Status.Conditions
+}
+
+func asNormal(rec conditions.EventRecorder) conditions.EventRecorder {
+	if rec == nil {
+		return nil
+	}
+	return normalRecorder{rec}
+}
+
+type normalRecorder struct{ rec conditions.EventRecorder }
+
+func (n normalRecorder) Eventf(regarding, related runtime.Object, _, reason, action, note string, args ...any) {
+	n.rec.Eventf(regarding, related, corev1.EventTypeNormal, reason, action, note, args...)
 }

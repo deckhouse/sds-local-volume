@@ -835,6 +835,7 @@ func updateLocalStorageClassPhase(
 // successful pass, so an alert on "Ready=False for longer than N minutes" is
 // exactly what it never fires.
 func setLocalStorageClassDeleting(ctx context.Context, cl client.Client, lsc *slv.LocalStorageClass) error {
+	ctx = withEventRecorder(ctx, asNormal(eventRecorderFrom(ctx)))
 	return publishLocalStorageClassStatus(ctx, cl, lsc, metav1.Condition{
 		Type:               slv.ConditionTypeReady,
 		Status:             metav1.ConditionFalse,

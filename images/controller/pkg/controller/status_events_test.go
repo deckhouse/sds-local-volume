@@ -78,7 +78,13 @@ func TestStatusWriterRecordsReadyTransitions(t *testing.T) {
 		}, []string{"Normal " + slv.ConditionReasonLVMVolumeGroupsOutsideCSINodes + " lvg-1 (node-1)"}},
 		{"is deleted", func() error {
 			return setLocalStorageClassDeleting(ctx, cl, lsc)
-		}, []string{"Warning " + conditions.ReasonDeleting + " the LocalStorageClass is being deleted"}},
+		}, []string{"Normal " + conditions.ReasonDeleting + " the LocalStorageClass is being deleted"}},
+		{"is still being deleted", func() error {
+			return setLocalStorageClassDeleting(ctx, cl, lsc)
+		}, nil},
+		{"fails to finish the deletion", func() error {
+			return updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, "Unable to remove a finalizer")
+		}, []string{"Warning ReconcileFailed Unable to remove a finalizer"}},
 	}
 
 	for _, s := range steps {
@@ -88,6 +94,18 @@ func TestStatusWriterRecordsReadyTransitions(t *testing.T) {
 		if got := drainEvents(rec); !slices.Equal(got, s.want) {
 			t.Errorf("%s: Events = %q, want %q", s.name, got, s.want)
 		}
+	}
+}
+
+func TestSetLocalStorageClassDeletingWithoutARecorder(t *testing.T) {
+	lsc := &slv.LocalStorageClass{ObjectMeta: metav1.ObjectMeta{Name: testLSCName, Generation: 1}}
+	cl := newStatusTestClient(t, lsc)
+
+	if err := setLocalStorageClassDeleting(context.Background(), cl, lsc); err != nil {
+		t.Fatalf("setLocalStorageClassDeleting: %v", err)
+	}
+	if !conditions.IsFalse(readLSC(t, cl).Status.Conditions, slv.ConditionTypeReady) {
+		t.Error("Ready was not written as False")
 	}
 }
 
