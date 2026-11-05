@@ -40,6 +40,7 @@ import (
 	"github.com/deckhouse/sds-common-lib/logger"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/internal"
+	"github.com/deckhouse/sds-local-volume/lib/go/common/pkg/feature"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -331,6 +332,19 @@ func reconcileLSCUpdateFunc(
 		}
 
 		log.Info("updated the StorageClass labels", "storageClass", newSC.Name)
+	} else if snapshotClassAnnotationStale(oldSC) {
+		log.Info("the StorageClass snapshot class annotation does not match the edition, updating the StorageClass")
+		err = syncSnapshotClassAnnotation(ctx, cl, oldSC)
+		if err != nil {
+			log.Error("unable to update the StorageClass", logger.Err(err), slog.String("storageClass", oldSC.Name))
+			upError := updateLocalStorageClassPhase(ctx, cl, lsc, FailedStatusPhase, err.Error())
+			if upError != nil {
+				log.Error("unable to update the LocalStorageClass status", logger.Err(upError))
+			}
+			return true, err
+		}
+
+		log.Info("updated the StorageClass snapshot class annotation", "storageClass", oldSC.Name)
 	}
 
 	err = setLocalStorageClassCreated(ctx, cl, lsc, csiWarning)
@@ -380,7 +394,7 @@ func shouldReconcileByUpdateFunc(scList *v1.StorageClassList, lsc *slv.LocalStor
 					return false, err
 				}
 
-				if diff {
+				if diff || snapshotClassAnnotationStale(&sc) {
 					return true, nil
 				}
 
@@ -733,11 +747,8 @@ func configureStorageClass(lsc *slv.LocalStorageClass, effectiveLVGs []slv.Local
 			APIVersion: StorageClassAPIVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      lsc.Name,
-			Namespace: lsc.Namespace,
-			Annotations: map[string]string{
-				internal.SLVStorageClassVolumeSnapshotClassAnnotationKey: internal.SLVStorageClassVolumeSnapshotClassAnnotationValue,
-			},
+			Name:       lsc.Name,
+			Namespace:  lsc.Namespace,
 			Finalizers: []string{LocalStorageClassFinalizerName},
 		},
 		Provisioner:          LocalStorageClassProvisioner,
@@ -745,6 +756,12 @@ func configureStorageClass(lsc *slv.LocalStorageClass, effectiveLVGs []slv.Local
 		ReclaimPolicy:        &reclaimPolicy,
 		AllowVolumeExpansion: &AllowVolumeExpansion,
 		VolumeBindingMode:    &volumeBindingMode,
+	}
+
+	if feature.SnapshotsEnabled() {
+		sc.Annotations = map[string]string{
+			internal.SLVStorageClassVolumeSnapshotClassAnnotationKey: internal.SLVStorageClassVolumeSnapshotClassAnnotationValue,
+		}
 	}
 
 	filteredLabels := filterLabelsForStorageClass(lsc.Labels, ignoredLabelPrefixes)
@@ -1288,5 +1305,44 @@ func updateStorageClass(lsc *slv.LocalStorageClass, oldSC *v1.StorageClass, effe
 		}
 	}
 
+	// Carrying the old annotations over would bring back the one that names
+	// the snapshot class in an edition that does not deploy the class.
+	if !feature.SnapshotsEnabled() {
+		delete(newSC.Annotations, internal.SLVStorageClassVolumeSnapshotClassAnnotationKey)
+	}
+
 	return newSC, nil
+}
+
+// snapshotClassAnnotationStale reports whether the StorageClass disagrees with
+// the edition about the annotation that names the module VolumeSnapshotClass.
+//
+// The class is deployed, and the annotation set, only in the editions whose
+// CSI driver takes snapshots. Without a snapshotter the annotation lets the
+// storage-foundation mutator put the class into every VolumeSnapshot of the
+// StorageClass, and such a snapshot then waits forever for a sidecar that is
+// not running. A StorageClass created before the edition check carries it, so
+// the annotation is removed there; it is added back when the module moves to
+// an edition with snapshots, where a value other than the module class is left
+// as it is.
+func snapshotClassAnnotationStale(sc *v1.StorageClass) bool {
+	_, annotated := sc.Annotations[internal.SLVStorageClassVolumeSnapshotClassAnnotationKey]
+	return annotated != feature.SnapshotsEnabled()
+}
+
+// syncSnapshotClassAnnotation sets or removes the snapshot class annotation
+// of an existing StorageClass in place, so the StorageClass is not recreated
+// for a change in its metadata.
+func syncSnapshotClassAnnotation(ctx context.Context, cl client.Client, sc *v1.StorageClass) error {
+	patched := sc.DeepCopy()
+	if feature.SnapshotsEnabled() {
+		if patched.Annotations == nil {
+			patched.Annotations = make(map[string]string, 1)
+		}
+		patched.Annotations[internal.SLVStorageClassVolumeSnapshotClassAnnotationKey] = internal.SLVStorageClassVolumeSnapshotClassAnnotationValue
+	} else {
+		delete(patched.Annotations, internal.SLVStorageClassVolumeSnapshotClassAnnotationKey)
+	}
+
+	return cl.Patch(ctx, patched, client.MergeFrom(sc))
 }

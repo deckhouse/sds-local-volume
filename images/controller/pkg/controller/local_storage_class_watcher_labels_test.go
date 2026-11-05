@@ -170,6 +170,9 @@ var _ = Describe("local-storage-class-controller label filtering", Ordered, func
 		// managed-by value is the one an older release wrote.
 		const markerUID = "before-the-update"
 		scBefore.UID = markerUID
+		if scBefore.Annotations == nil {
+			scBefore.Annotations = map[string]string{}
+		}
 		scBefore.Annotations["storageclass.kubernetes.io/is-default-class"] = "true"
 		scBefore.Labels[internal.SLVStorageManagedLabelKey] = internal.SLVStorageClassCtrlName
 		Expect(cl.Update(ctx, scBefore)).To(Succeed())

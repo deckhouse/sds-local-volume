@@ -166,8 +166,7 @@ var _ = Describe("local-storage-class-controller", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(sc.Labels).To(HaveLen(1))
 		Expect(sc.Labels).To(HaveKeyWithValue(internal.SLVStorageManagedLabelKey, internal.SLVStorageClassManagedByValue))
-		Expect(sc.Annotations).To(HaveLen(1))
-		Expect(sc.Annotations).To(HaveKeyWithValue(internal.SLVStorageClassVolumeSnapshotClassAnnotationKey, internal.SLVStorageClassVolumeSnapshotClassAnnotationValue))
+		expectModuleSnapshotClassAnnotation(sc)
 	})
 
 	It("Update_local_sc_remove_existing_lvg", func(ctx SpecContext) {

@@ -25,7 +25,7 @@ limitations under the License.
 // Run with:
 //
 //	KUBEBUILDER_ASSETS=$(setup-envtest use -p path) \
-//	  go test -tags integration ./test/integration/... -count=1
+//	  go test -tags "integration ee" ./test/integration/... -count=1
 package integration
 
 import (

@@ -205,3 +205,38 @@ sum(
 ```
 
 Класс нужно выбрать заранее: одна LVMVolumeGroup может использоваться несколькими классами, а соединение падает, если справа на одну LVMVolumeGroup приходится больше одной серии. `max by` сохраняет работоспособность запроса, пока у контроллера меняется лидер.
+
+## Почему снимок тома (VolumeSnapshot) не становится готовым?
+
+Снимки томов доступны только в коммерческих редакциях Deckhouse Kubernetes Platform и только для томов LVM-thin. Снимок, который невозможно создать, не ждёт без статуса: причина указана в поле `status.error` ресурса VolumeSnapshot и в его событиях типа `Warning`.
+
+```shell
+d8 k -n <namespace> get volumesnapshot <name> -o jsonpath='{.status.error.message}'
+```
+
+- В Community Edition модуль не разворачивает ни свой VolumeSnapshotClass `sds-local-volume-snapshot-class`, ни компонент создания снимков (snapshotter), а его StorageClass не указывают класс снимков в аннотации `storage.deckhouse.io/volumesnapshotclass`. VolumeSnapshot без `volumeSnapshotClassName` получает ошибку `Failed to set default snapshot class with error cannot find default snapshot class` (причина события `SetDefaultSnapshotClassFailed`), а VolumeSnapshot, в котором класс указан явно, — `Failed to get snapshot class with error volumesnapshotclass.snapshot.storage.k8s.io "sds-local-volume-snapshot-class" not found` (причина события `GetSnapshotClassFailed`). Не создавайте VolumeSnapshotClass для драйвера `local.csi.storage.deckhouse.io` самостоятельно: в Community Edition снимки по нему никто не создаёт, и они снова будут ждать без статуса.
+- В коммерческой редакции снимок тома `Thick` получает ошибку, которая заканчивается на `Source LVMLogicalVolume '<name>' is not of 'Thin' type`.
+
+## Как удалить VolumeSnapshot, зависшие в Community Edition?
+
+Пока модуль разворачивал свой VolumeSnapshotClass и в Community Edition, VolumeSnapshot его тома получал VolumeSnapshotContent, который никто не обрабатывал, и оба оставались без статуса. После обновления такой VolumeSnapshot сообщает `Failed to get snapshot class` и никогда не будет создан. Удалите его:
+
+```shell
+d8 k -n <namespace> delete volumesnapshot <name> --wait=false
+```
+
+snapshot-controller удаляет его VolumeSnapshotContent, но финализатор `snapshot.storage.kubernetes.io/volumesnapshotcontent-bound-protection` с VolumeSnapshotContent снимает только snapshotter, а в Community Edition его нет. VolumeSnapshotContent остаётся в состоянии `Terminating`, и VolumeSnapshot вместе с ним. Выведите такие VolumeSnapshotContent модуля:
+
+```shell
+d8 k get volumesnapshotcontent -o jsonpath='{range .items[?(@.spec.driver=="local.csi.storage.deckhouse.io")]}{.metadata.name}{"\t"}{.metadata.deletionTimestamp}{"\t"}{.status.snapshotHandle}{"\t"}{.metadata.finalizers}{"\n"}{end}'
+```
+
+Берите только те, у которых есть время удаления и нет идентификатора снимка (snapshot handle): для них на узле ничего не создавалось, поэтому снятие финализатора не приводит к потере данных. VolumeSnapshotContent с идентификатором снимка не трогайте: его снимок существует на узле, и удалить его может только CSI-драйвер. Если в списке финализаторов только указанный выше, снимите его:
+
+```shell
+d8 k patch volumesnapshotcontent <name> --type=merge -p '{"metadata":{"finalizers":null}}'
+```
+
+Если в списке есть и другие финализаторы, удалите только этот, например через `d8 k edit volumesnapshotcontent <name>`.
+
+Когда VolumeSnapshotContent удалён, snapshot-controller снимает оставшийся финализатор VolumeSnapshot, и VolumeSnapshot удаляется. Финализатор `snapshot.storage.kubernetes.io/pvc-as-source-protection` с исходного PVC snapshot-controller тоже снимает сам, когда у этого PVC не остаётся незавершённых VolumeSnapshot.
