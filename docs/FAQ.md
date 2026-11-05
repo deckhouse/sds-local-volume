@@ -240,3 +240,11 @@ d8 k patch volumesnapshotcontent <name> --type=merge -p '{"metadata":{"finalizer
 If the list holds other finalizers too, remove only this one, for example with `d8 k edit volumesnapshotcontent <name>`.
 
 Once the VolumeSnapshotContent is gone, the snapshot-controller removes the remaining finalizer of the VolumeSnapshot, and the VolumeSnapshot is deleted. The `snapshot.storage.kubernetes.io/pvc-as-source-protection` finalizer on the source PVC is removed by the snapshot-controller as well, once no unfinished VolumeSnapshot of that PVC is left.
+
+## What happens to snapshots and restored volumes when one of them is deleted?
+
+Snapshots and restores are available for LVM-thin volumes only, and all of them stay in the thin pool and on the node of the source volume.
+
+- A volume restored from a snapshot is a thin snapshot of that snapshot: it shares the unchanged blocks with the snapshot and the source, and only the blocks written later take new space in the pool (copy-on-write).
+- Any order of deletion is allowed. Deleting the PVC of the source with `reclaimPolicy: Delete` removes its logical volume, and its snapshots can still be restored. A VolumeSnapshot can be deleted while a volume restored from it exists. A restored volume can be snapshotted and restored in turn.
+- A block of the pool is freed when no logical volume — the source, a snapshot or a restored volume — uses it any more. `allocationLimit` and the space free by it count every snapshot and every restored volume at the full size of its source, although they share the data with it.

@@ -4,6 +4,9 @@ date: "2026-xx-xx"
 summary: ""
 highlights: []
 
+docs:
+  - "The FAQ explains what happens to snapshots and restored volumes when one of them is deleted: a volume restored from a snapshot is a copy-on-write thin snapshot in the same thin pool, any order of deletion is allowed, and `allocationLimit` counts every snapshot and restored volume at the full size of its source. The usage guide no longer says that a volume cannot be fully deleted while it has a snapshot: that holds only for an LVMLogicalVolume deleted by hand after `reclaimPolicy: Retain`, while deleting the PVC with `reclaimPolicy: Delete` removes the logical volume and leaves the snapshot restorable."
+
 # Optional sections — delete rather than leave empty.
 # new_features: []
 # improvements: []
