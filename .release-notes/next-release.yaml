@@ -4,6 +4,9 @@ date: "2026-xx-xx"
 summary: ""
 highlights: []
 
+improvements:
+  - "On DKP 1.78 and later, the `d8:system-capability:sds-local-volume:view` and `d8:system-capability:sds-local-volume:edit` roles also give read access to the `sds-local-volume` ModuleConfig, and `edit` write access to it, and carry the standard titles and descriptions of the platform, as every capability of the DKP 1.78 role model does. The RBAC of the module is now declared in `rbac.yaml`, and the RBACv2 templates are written from it; clusters below DKP 1.78 keep the roles they had."
+
 docs:
   - "The FAQ explains what happens to snapshots and restored volumes when one of them is deleted: a volume restored from a snapshot is a copy-on-write thin snapshot in the same thin pool, any order of deletion is allowed, and `allocationLimit` counts every snapshot and restored volume at the full size of its source. The usage guide no longer says that a volume cannot be fully deleted while it has a snapshot: that holds only for an LVMLogicalVolume deleted by hand after `reclaimPolicy: Retain`, while deleting the PVC with `reclaimPolicy: Delete` removes the logical volume and leaves the snapshot restorable."
 
