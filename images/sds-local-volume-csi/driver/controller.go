@@ -484,15 +484,7 @@ func (d *Driver) ListVolumes(_ context.Context, _ *csi.ListVolumesRequest) (*csi
 
 func (d *Driver) GetCapacity(_ context.Context, _ *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
 	d.log.Named("GetCapacity").Info("called")
-
-	// todo MaxSize one PV
-	// todo call volumeBindingMode: WaitForFirstConsumer
-
-	return &csi.GetCapacityResponse{
-		AvailableCapacity: 1000000,
-		MaximumVolumeSize: nil,
-		MinimumVolumeSize: nil,
-	}, nil
+	return nil, status.Error(codes.Unimplemented, "storage capacity tracking is not supported")
 }
 
 func (d *Driver) ControllerGetCapabilities(_ context.Context, _ *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
@@ -501,7 +493,6 @@ func (d *Driver) ControllerGetCapabilities(_ context.Context, _ *csi.ControllerG
 	var capabilities = []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_CLONE_VOLUME,
-		csi.ControllerServiceCapability_RPC_GET_CAPACITY,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 		csi.ControllerServiceCapability_RPC_PUBLISH_UNPUBLISH_VOLUME,
 	}

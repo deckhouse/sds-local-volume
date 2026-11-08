@@ -21,6 +21,7 @@ const (
 	ModuleNamespace  string = "d8-sds-local-volume"
 	ModulePluralName string = "sds-local-volume"
 	WebhookCertCn    string = "webhooks"
+	CSIDriverName    string = "local.csi.storage.deckhouse.io"
 )
 
 var AllowedProvisioners = []string{

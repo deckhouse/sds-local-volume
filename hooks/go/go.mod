@@ -6,6 +6,7 @@ require (
 	github.com/deckhouse/sds-common-lib v0.10.0
 	github.com/deckhouse/module-sdk v0.13.1
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.4.0
+	github.com/stretchr/testify v1.11.1
 	k8s.io/api v0.35.8
 	k8s.io/apiextensions-apiserver v0.35.8
 	k8s.io/apimachinery v0.35.8

@@ -21,6 +21,7 @@ import (
 
 	_ "github.com/deckhouse/sds-local-volume/hooks/go/020-webhook-certs"
 	_ "github.com/deckhouse/sds-local-volume/hooks/go/030-remove-finalizers-on-module-delete"
+	_ "github.com/deckhouse/sds-local-volume/hooks/go/040-remove-fake-storage-capacity"
 )
 
 func main() {

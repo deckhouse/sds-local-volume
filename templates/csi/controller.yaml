@@ -101,6 +101,7 @@ storage.deckhouse.io/sds-local-volume-node: ""
 {{- end }}
 {{- $_ := set $csiControllerConfig "csiControllerHaMode" true }}
 {{- $_ := set $csiControllerConfig "resizerEnabled" true }}
+{{- $_ := set $csiControllerConfig "capacityEnabled" false }}
 {{- $_ := set $csiControllerConfig "provisionerTimeout" "1m" }}
 {{- $_ := set $csiControllerConfig "extraCreateMetadataEnabled" true }}
 {{- $_ := set $csiControllerConfig "csiControllerHostNetwork" "false" }}

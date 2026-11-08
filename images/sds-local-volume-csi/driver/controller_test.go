@@ -22,12 +22,15 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/deckhouse/sds-common-lib/logger"
 	"github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi/internal"
 	"github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
@@ -223,4 +226,17 @@ func TestErrOnLVG(t *testing.T) {
 		assert.ErrorIs(t, err, context.DeadlineExceeded)
 		assert.Equal(t, codes.DeadlineExceeded, status.FromContextError(err).Code())
 	})
+}
+
+func TestStorageCapacityIsNotAdvertised(t *testing.T) {
+	d := &Driver{log: logger.NewNop()}
+
+	resp, err := d.ControllerGetCapabilities(context.Background(), &csi.ControllerGetCapabilitiesRequest{})
+	require.NoError(t, err)
+	for _, c := range resp.Capabilities {
+		assert.NotEqual(t, csi.ControllerServiceCapability_RPC_GET_CAPACITY, c.GetRpc().GetType())
+	}
+
+	_, err = d.GetCapacity(context.Background(), &csi.GetCapacityRequest{})
+	assert.Equal(t, codes.Unimplemented, status.Code(err))
 }

@@ -9,6 +9,7 @@ improvements:
 
 fixes:
   - "Repeated `NodePublishVolume` of a block volume (`volumeMode: Block`) no longer stacks another bind mount on the same target. Previously, retries by kubelet could pile up thousands of entries in `/proc/mounts` of the node, leading to failed mounts (`ENOSPC`) and a hung `df`. Mounts that already piled up are removed one per retry when the volume is unpublished, or by a node reboot."
+  - "The module no longer publishes CSIStorageCapacity objects with a fake capacity of 1M for its StorageClasses. The scheduler never used them, because the CSIDriver does not enable storage capacity tracking; node placement is done by the scheduler extender. The existing objects are removed on the update."
 
 docs:
   - "The FAQ explains what happens to snapshots and restored volumes when one of them is deleted: a volume restored from a snapshot is a copy-on-write thin snapshot in the same thin pool, any order of deletion is allowed, and `allocationLimit` counts every snapshot and restored volume at the full size of its source. The usage guide no longer says that a volume cannot be fully deleted while it has a snapshot: that holds only for an LVMLogicalVolume deleted by hand after `reclaimPolicy: Retain`, while deleting the PVC with `reclaimPolicy: Delete` removes the logical volume and leaves the snapshot restorable."
