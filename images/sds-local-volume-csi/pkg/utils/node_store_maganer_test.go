@@ -17,6 +17,8 @@ limitations under the License.
 package utils
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -121,4 +123,61 @@ func TestResizeFSNothingMounted(t *testing.T) {
 
 	err := store.ResizeFS("some-target")
 	assert.ErrorIs(t, err, ErrNotMounted)
+}
+
+func TestNodePublishVolumeBlock(t *testing.T) {
+	const source = "/dev/null"
+
+	newStore := func(f *mountutils.FakeMounter) *Store {
+		return &Store{
+			Log: logger.NewNop(),
+			NodeStorage: mountutils.SafeFormatAndMount{
+				Interface: f,
+			},
+		}
+	}
+
+	mountCalls := func(f *mountutils.FakeMounter) int {
+		count := 0
+		for _, action := range f.GetLog() {
+			if action.Action == mountutils.FakeActionMount {
+				count++
+			}
+		}
+		return count
+	}
+
+	t.Run("target_is_not_mounted_mounts_once", func(t *testing.T) {
+		target := filepath.Join(t.TempDir(), "target")
+		f := &mountutils.FakeMounter{}
+
+		err := newStore(f).NodePublishVolumeBlock(source, target, []string{"bind"})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, mountCalls(f))
+		assert.Len(t, f.MountPoints, 1)
+	})
+
+	t.Run("target_is_already_a_mount_point_skips_mount", func(t *testing.T) {
+		target := filepath.Join(t.TempDir(), "target")
+		assert.NoError(t, os.WriteFile(target, nil, 0o644))
+		f := &mountutils.FakeMounter{
+			MountPoints: []mountutils.MountPoint{{Device: source, Path: target}},
+		}
+
+		err := newStore(f).NodePublishVolumeBlock(source, target, []string{"bind"})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, mountCalls(f))
+		assert.Len(t, f.MountPoints, 1)
+	})
+
+	t.Run("repeated_publish_does_not_stack_mounts", func(t *testing.T) {
+		target := filepath.Join(t.TempDir(), "target")
+		f := &mountutils.FakeMounter{}
+		store := newStore(f)
+
+		assert.NoError(t, store.NodePublishVolumeBlock(source, target, []string{"bind"}))
+		assert.NoError(t, store.NodePublishVolumeBlock(source, target, []string{"bind"}))
+		assert.Equal(t, 1, mountCalls(f))
+		assert.Len(t, f.MountPoints, 1)
+	})
 }

@@ -191,6 +191,23 @@ func (s *Store) NodePublishVolumeBlock(source, target string, mountOpts []string
 
 	log.Trace("source mode", "mode", info.Mode().String())
 
+	exists, err := s.PathExists(target)
+	if err != nil {
+		return fmt.Errorf("[NodePublishVolumeBlock] could not check if target %s exists: %w", target, err)
+	}
+
+	if exists {
+		isMountPoint, mntErr := s.NodeStorage.IsMountPoint(target)
+		if mntErr != nil {
+			return fmt.Errorf("[NodePublishVolumeBlock] could not check if target %s is a mount point: %w", target, mntErr)
+		}
+
+		if isMountPoint {
+			log.Info("the target is already a mount point, skipping mount")
+			return nil
+		}
+	}
+
 	f, err := os.OpenFile(target, os.O_CREATE, os.FileMode(0644))
 	if err != nil {
 		if !os.IsExist(err) {
