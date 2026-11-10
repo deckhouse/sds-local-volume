@@ -26,6 +26,7 @@ import (
 	kwhvalidating "github.com/slok/kubewebhook/v2/pkg/webhook/validating"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/deckhouse/sds-common-lib/logger"
 )
@@ -98,13 +99,13 @@ func isStorageClassChangedExceptAnnotations(log logger.Logger, oldObjectRaw, new
 		return true, nil
 	}
 
-	if *oldSC.VolumeBindingMode != *newSC.VolumeBindingMode {
-		log.Info("the volume binding mode changed", "field", "volumeBindingMode", "old", *oldSC.VolumeBindingMode, "new", *newSC.VolumeBindingMode)
+	if !ptr.Equal(oldSC.VolumeBindingMode, newSC.VolumeBindingMode) {
+		log.Info("the volume binding mode changed", "field", "volumeBindingMode", "old", ptr.Deref(oldSC.VolumeBindingMode, ""), "new", ptr.Deref(newSC.VolumeBindingMode, ""))
 		return true, nil
 	}
 
-	if *oldSC.ReclaimPolicy != *newSC.ReclaimPolicy {
-		log.Info("the reclaim policy changed", "field", "reclaimPolicy", "old", *oldSC.ReclaimPolicy, "new", *newSC.ReclaimPolicy)
+	if !ptr.Equal(oldSC.ReclaimPolicy, newSC.ReclaimPolicy) {
+		log.Info("the reclaim policy changed", "field", "reclaimPolicy", "old", ptr.Deref(oldSC.ReclaimPolicy, ""), "new", ptr.Deref(newSC.ReclaimPolicy, ""))
 		return true, nil
 	}
 
@@ -113,8 +114,8 @@ func isStorageClassChangedExceptAnnotations(log logger.Logger, oldObjectRaw, new
 		return true, nil
 	}
 
-	if *oldSC.AllowVolumeExpansion != *newSC.AllowVolumeExpansion {
-		log.Info("allowVolumeExpansion changed", "field", "allowVolumeExpansion", "old", *oldSC.AllowVolumeExpansion, "new", *newSC.AllowVolumeExpansion)
+	if !ptr.Equal(oldSC.AllowVolumeExpansion, newSC.AllowVolumeExpansion) {
+		log.Info("allowVolumeExpansion changed", "field", "allowVolumeExpansion", "old", ptr.Deref(oldSC.AllowVolumeExpansion, false), "new", ptr.Deref(newSC.AllowVolumeExpansion, false))
 		return true, nil
 	}
 

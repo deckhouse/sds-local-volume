@@ -292,6 +292,9 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 			}
 
 			preferredNode = selectedLVG.Spec.Local.NodeName
+		default:
+			log.Error("unsupported volume content source", slog.String("type", fmt.Sprintf("%T", s)))
+			return nil, status.Errorf(codes.InvalidArgument, "unsupported volume content source type %T", s)
 		}
 	} else {
 		switch BindingMode {

@@ -1,11 +1,12 @@
 module github.com/deckhouse/sds-local-volume/images/sds-local-volume-csi
 
 go 1.27.3
+
 require (
 	github.com/deckhouse/sds-common-lib v0.19.0
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20260817195343-682df4d51ffd
 	github.com/deckhouse/sds-local-volume/lib/go/common v0.0.0-20260817195343-682df4d51ffd
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20261103051600-faab642235a0
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20261105063529-cfd9d4738615
 	github.com/container-storage-interface/spec v1.11.0
 	github.com/deckhouse/deckhouse/pkg/metrics-storage v0.3.0
 	github.com/golang/protobuf v1.5.4

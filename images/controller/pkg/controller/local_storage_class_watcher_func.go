@@ -284,7 +284,8 @@ func reconcileLSCUpdateFunc(
 		return true, err
 	}
 
-	if hasDiff {
+	switch {
+	case hasDiff:
 		log.Info("the StorageClass LVMVolumeGroups no longer match, recreating the StorageClass")
 		newSC, err := updateStorageClass(lsc, oldSC, effectiveLVGs, ignoredLabelPrefixes)
 		if err != nil {
@@ -308,7 +309,7 @@ func reconcileLSCUpdateFunc(
 		}
 
 		log.Info("recreated the StorageClass", "storageClass", newSC.Name)
-	} else if !labelsMatchLSC(oldSC.Labels, lsc.Labels, ignoredLabelPrefixes) {
+	case !labelsMatchLSC(oldSC.Labels, lsc.Labels, ignoredLabelPrefixes):
 		log.Info("the StorageClass labels no longer match, updating the StorageClass")
 		newSC, err := updateStorageClass(lsc, oldSC, effectiveLVGs, ignoredLabelPrefixes)
 		if err != nil {
@@ -332,7 +333,7 @@ func reconcileLSCUpdateFunc(
 		}
 
 		log.Info("updated the StorageClass labels", "storageClass", newSC.Name)
-	} else if snapshotClassAnnotationStale(oldSC) {
+	case snapshotClassAnnotationStale(oldSC):
 		log.Info("the StorageClass snapshot class annotation does not match the edition, updating the StorageClass")
 		err = syncSnapshotClassAnnotation(ctx, cl, oldSC)
 		if err != nil {

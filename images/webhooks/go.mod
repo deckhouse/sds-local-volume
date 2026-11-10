@@ -1,16 +1,18 @@
 module github.com/deckhouse/sds-local-volume/images/webhooks
 
 go 1.27.3
+
 require (
 	github.com/deckhouse/sds-common-lib v0.19.0
 	github.com/deckhouse/sds-local-volume/api v0.0.0-20260817195343-682df4d51ffd
-	github.com/deckhouse/sds-node-configurator/api v0.0.0-20261103051600-faab642235a0
+	github.com/deckhouse/sds-node-configurator/api v0.0.0-20261105063529-cfd9d4738615
 	github.com/slok/kubewebhook/v2 v2.7.0
 	github.com/stretchr/testify v1.11.1
 	k8s.io/api v0.33.0
 	k8s.io/apiextensions-apiserver v0.33.0
 	k8s.io/apimachinery v0.33.0
 	k8s.io/client-go v0.33.0
+	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/controller-runtime v0.20.4
 )
 
@@ -51,7 +53,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
-	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
