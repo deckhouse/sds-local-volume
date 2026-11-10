@@ -1,0 +1,17 @@
+date: "2026-11-10"
+summary: "Fixes the pile-up of bind mounts of block volumes on nodes, stops publishing CSIStorageCapacity objects with a fake capacity and removes two crashes of the CSI controller and the webhook."
+highlights:
+  - "Repeated `NodePublishVolume` of a block volume (`volumeMode: Block`) no longer piles up bind mounts in `/proc/mounts` of the node."
+  - "CSIStorageCapacity objects with a fake capacity of 1M are no longer published for the StorageClasses of the module, and the existing ones are removed on the update."
+
+improvements:
+  - "On DKP 1.78 and later, the `d8:system-capability:sds-local-volume:view` and `d8:system-capability:sds-local-volume:edit` roles also give read access to the `sds-local-volume` ModuleConfig, and `edit` write access to it, and carry the standard titles and descriptions of the platform, as every capability of the DKP 1.78 role model does. The RBAC of the module is now declared in `rbac.yaml`, and the RBACv2 templates are written from it; clusters below DKP 1.78 keep the roles they had."
+
+fixes:
+  - "Repeated `NodePublishVolume` of a block volume (`volumeMode: Block`) no longer stacks another bind mount on the same target. Previously, retries by kubelet could pile up thousands of entries in `/proc/mounts` of the node, leading to failed mounts (`ENOSPC`) and a hung `df`. Mounts that already piled up are removed one per retry when the volume is unpublished, or by a node reboot."
+  - "The module no longer publishes CSIStorageCapacity objects with a fake capacity of 1M for its StorageClasses. The scheduler never used them, because the CSIDriver does not enable storage capacity tracking; node placement is done by the scheduler extender. The existing objects are removed on the update."
+  - "`CreateVolume` returns `InvalidArgument` for a volume content source that is neither a snapshot nor a volume, instead of crashing the CSI controller."
+  - "The webhook no longer crashes on an update of a StorageClass of the module that has no `volumeBindingMode`, `reclaimPolicy` or `allowVolumeExpansion` set; a field that is set in only one of the two revisions counts as a change."
+
+docs:
+  - "The FAQ explains what happens to snapshots and restored volumes when one of them is deleted: a volume restored from a snapshot is a copy-on-write thin snapshot in the same thin pool, any order of deletion is allowed, and `allocationLimit` counts every snapshot and restored volume at the full size of its source. The usage guide no longer says that a volume cannot be fully deleted while it has a snapshot: that holds only for an LVMLogicalVolume deleted by hand after `reclaimPolicy: Retain`, while deleting the PVC with `reclaimPolicy: Delete` removes the logical volume and leaves the snapshot restorable."
