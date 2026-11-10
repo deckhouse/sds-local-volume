@@ -4,6 +4,15 @@ date: "2026-xx-xx"
 summary: ""
 highlights: []
 
+fixes:
+  - "CSI-драйвер больше не провижинит (не создаёт том для) PersistentVolumeClaim с режимом доступа `ReadWriteMany` или `ReadOnlyMany`. Раньше такой том создавался, хотя это логический том на одном узле и использовать его с нескольких узлов нельзя. Теперь PersistentVolumeClaim остаётся в состоянии `Pending` с событием `ProvisioningFailed`, в котором назван отклонённый режим доступа."
+
+upgrade_notes:
+  - "Для новых томов принимается только `ReadWriteOnce`. Тома, уже созданные с другим режимом доступа, например `ReadWriteMany`, не изменяются и продолжают работать на узле, где они находятся. PersistentVolumeClaim с неподдерживаемым режимом доступа, например созданный Helm-чартом или оператором, остаётся в состоянии `Pending`, пока в `accessModes` не будет указан `ReadWriteOnce`."
+
+docs:
+  - "В документации перечислены поддерживаемый режим доступа (`ReadWriteOnce`) и неподдерживаемые (`ReadWriteOncePod`, `ReadWriteMany`, `ReadOnlyMany`), указано, что поддерживаются оба режима тома — `volumeMode: Filesystem` и `volumeMode: Block`, а в FAQ объяснено, почему PersistentVolumeClaim остаётся в состоянии `Pending`."
+
 # Необязательные разделы — пустые не оставлять, а удалять.
 # new_features: []
 # improvements: []

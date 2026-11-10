@@ -9,7 +9,7 @@ The module is designed to manage local block storage based on LVM. It enables cr
 {{< alert level="info" >}}
 Creating StorageClass for the `local.csi.storage.deckhouse.io` CSI driver by users is prohibited.
 
-Available access modes for the module: RWO.
+Supported access mode: ReadWriteOnce (RWO). See [Access modes and volume modes](#access-modes-and-volume-modes).
 {{< /alert >}}
 
 {{< alert level="warning" >}}
@@ -21,6 +21,16 @@ Volume snapshots require a module that provides the `snapshot.storage.k8s.io` CR
 The `sds-local-volume` module uses local disks of cluster nodes to create block storage based on LVM.
 
 The module supports two operation modes: **LVM (Thick)** and **LVM-thin**. For more details on the differences between modes, see the [FAQ](./faq.html#when-to-use-lvm-and-when-to-use-lvm-thin).
+
+## Access modes and volume modes
+
+Volumes of the module are logical volumes on the disks of a single node, so they can be used from one node only.
+
+- The `ReadWriteOnce` access mode is supported. A volume with this mode can also be mounted read-only on that node.
+- The `ReadWriteOncePod`, `ReadWriteMany` and `ReadOnlyMany` access modes are not supported.
+- Both `volumeMode: Filesystem` and `volumeMode: Block` are supported.
+
+If a PersistentVolumeClaim requests an unsupported access mode, the driver refuses to create the volume. The PersistentVolumeClaim stays in the `Pending` state, and a `ProvisioningFailed` event with the reason appears in its events. The check applies only to the creation of new volumes; volumes that already exist are not changed.
 
 ## When to use the module
 

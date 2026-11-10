@@ -26,6 +26,16 @@ d8 k -n d8-sds-local-volume get po -owide
 
 If the pod is missing, ensure that the node has all the labels specified in the `nodeSelector` field in the module settings. For more details, see [Why are the sds-local-volume component service pods not created on the desired node?](#why-are-the-sds-local-volume-component-service-pods-not-created-on-the-desired-node).
 
+## Why does a PVC with the ReadWriteMany access mode stay in the Pending state?
+
+The module supports only the `ReadWriteOnce` access mode, because a volume is a logical volume on the disks of a single node. The `ReadWriteOncePod`, `ReadWriteMany` and `ReadOnlyMany` modes are refused when the volume is created. The PVC stays in the `Pending` state, and its events contain `ProvisioningFailed` with the rejected access mode:
+
+```shell
+d8 k -n <namespace> describe pvc <pvc-name>
+```
+
+Set `ReadWriteOnce` in `spec.accessModes` of the PVC and create it again. The access mode of an existing PVC cannot be changed. Volumes that were created earlier with another access mode are not affected by the check.
+
 ## Why did the csi-node pod remain on the node after removing labels?
 
 The node likely has [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup) resources that are used in [LocalStorageClass](cr.html#localstorageclass) resources.

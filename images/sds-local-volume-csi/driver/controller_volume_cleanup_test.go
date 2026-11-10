@@ -88,7 +88,7 @@ func TestCreateVolumeAcceptsVolumeCleanupWhereEnabled(t *testing.T) {
 	_, err := d.CreateVolume(ctx, &csi.CreateVolumeRequest{
 		Name:               cleanupTestVolume,
 		CapacityRange:      &csi.CapacityRange{RequiredBytes: 64 << 20},
-		VolumeCapabilities: []*csi.VolumeCapability{{}},
+		VolumeCapabilities: []*csi.VolumeCapability{mountCapability(csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER)},
 		Parameters: map[string]string{
 			internal.TypeKey:           internal.Lvm,
 			internal.LvmTypeKey:        internal.LVMTypeThick,

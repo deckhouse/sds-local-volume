@@ -150,6 +150,9 @@ func (d *Driver) CreateVolume(ctx context.Context, request *csi.CreateVolumeRequ
 	if request.VolumeCapabilities == nil {
 		return nil, status.Error(codes.InvalidArgument, "Volume Capability cannot de empty")
 	}
+	if err := validateVolumeCapabilities(request.VolumeCapabilities); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
 	// volumeID is only known once the request has been validated, so it joins the
 	// logger here rather than above.
@@ -475,9 +478,34 @@ func (d *Driver) ControllerUnpublishVolume(_ context.Context, _ *csi.ControllerU
 	return &csi.ControllerUnpublishVolumeResponse{}, nil
 }
 
-func (d *Driver) ValidateVolumeCapabilities(_ context.Context, _ *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
-	d.log.Named("ValidateVolumeCapabilities").Info("called")
-	return nil, nil
+func (d *Driver) ValidateVolumeCapabilities(ctx context.Context, request *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
+	log := d.log.Named("ValidateVolumeCapabilities").With("volumeID", request.GetVolumeId())
+	log.Info("called")
+
+	volumeID := request.GetVolumeId()
+	if len(volumeID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume id cannot be empty")
+	}
+
+	if _, err := utils.GetLVMLogicalVolume(ctx, d.cl, volumeID, ""); err != nil {
+		if kerrors.IsNotFound(err) {
+			return nil, status.Errorf(codes.NotFound, "volume %s not found", volumeID)
+		}
+		log.Error("unable to get the LVMLogicalVolume", logger.Err(err))
+		return nil, status.Errorf(codes.Internal, "error getting LVMLogicalVolume: %s", err.Error())
+	}
+
+	if err := validateVolumeCapabilities(request.GetVolumeCapabilities()); err != nil {
+		return &csi.ValidateVolumeCapabilitiesResponse{Message: err.Error()}, nil
+	}
+
+	return &csi.ValidateVolumeCapabilitiesResponse{
+		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
+			VolumeContext:      request.GetVolumeContext(),
+			VolumeCapabilities: request.GetVolumeCapabilities(),
+			Parameters:         request.GetParameters(),
+		},
+	}, nil
 }
 
 func (d *Driver) ListVolumes(_ context.Context, _ *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {

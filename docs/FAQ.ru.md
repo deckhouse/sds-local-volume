@@ -26,6 +26,16 @@ d8 k -n d8-sds-local-volume get po -owide
 
 Если под отсутствует, убедитесь, что на узле присутствуют все метки, указанные в поле `nodeSelector` в настройках модуля. Подробнее см. [Почему служебные поды компонентов sds-local-volume не создаются на нужном узле](#почему-служебные-поды-компонентов-sds-local-volume-не-создаются-на-нужном-узле).
 
+## Почему PVC с режимом доступа ReadWriteMany остаётся в состоянии Pending?
+
+Модуль поддерживает только режим доступа `ReadWriteOnce`, так как том — это логический том на дисках одного узла. Режимы `ReadWriteOncePod`, `ReadWriteMany` и `ReadOnlyMany` отклоняются при создании тома. PVC остаётся в состоянии `Pending`, а в его событиях есть `ProvisioningFailed` с названием отклонённого режима доступа:
+
+```shell
+d8 k -n <namespace> describe pvc <pvc-name>
+```
+
+Укажите `ReadWriteOnce` в `spec.accessModes` PVC и создайте его заново. Режим доступа существующего PVC изменить нельзя. Тома, созданные ранее с другим режимом доступа, проверка не затрагивает.
+
 ## Почему под csi-node остался на узле после снятия меток?
 
 Вероятно, на узле есть ресурсы [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup), которые используются в ресурсах [LocalStorageClass](cr.html#localstorageclass).

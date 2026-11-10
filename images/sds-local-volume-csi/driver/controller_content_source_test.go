@@ -52,7 +52,7 @@ func TestCreateVolumeRejectsUnknownContentSource(t *testing.T) {
 	_, err := d.CreateVolume(context.Background(), &csi.CreateVolumeRequest{
 		Name:                cleanupTestVolume,
 		CapacityRange:       &csi.CapacityRange{RequiredBytes: 64 << 20},
-		VolumeCapabilities:  []*csi.VolumeCapability{{}},
+		VolumeCapabilities:  []*csi.VolumeCapability{mountCapability(csi.VolumeCapability_AccessMode_SINGLE_NODE_WRITER)},
 		VolumeContentSource: &csi.VolumeContentSource{},
 		Parameters: map[string]string{
 			internal.TypeKey:           internal.Lvm,
