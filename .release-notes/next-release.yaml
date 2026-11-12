@@ -4,15 +4,6 @@ date: "2026-xx-xx"
 summary: ""
 highlights: []
 
-fixes:
-  - "The CSI driver no longer provisions a PersistentVolumeClaim with the `ReadWriteMany` or `ReadOnlyMany` access mode. Previously such a volume was created, although it is a logical volume on a single node and cannot be used from several nodes. The PersistentVolumeClaim now stays `Pending` with a `ProvisioningFailed` event naming the rejected access mode."
-
-upgrade_notes:
-  - "Only `ReadWriteOnce` is accepted for new volumes. Volumes that were already created with another access mode, for example `ReadWriteMany`, are not changed and keep working on the node where they live. A PersistentVolumeClaim that requests an unsupported access mode, such as one created by a Helm chart or an operator, stays `Pending` until its `accessModes` is changed to `ReadWriteOnce`."
-
-docs:
-  - "The documentation lists the supported access mode (`ReadWriteOnce`) and the unsupported ones (`ReadWriteOncePod`, `ReadWriteMany`, `ReadOnlyMany`), states that both `volumeMode: Filesystem` and `volumeMode: Block` are supported, and explains in the FAQ why a PersistentVolumeClaim stays `Pending`."
-
 # Optional sections — delete rather than leave empty.
 # new_features: []
 # improvements: []
