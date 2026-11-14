@@ -146,7 +146,7 @@ d8 k -n d8-sds-local-volume logs deploy/controller -c controller | grep -E "refu
 - `successor_in_place` — имя теперь занято другим объектом, не тем, который рассматривал модуль: `external-provisioner` при повторной попытке создания переиспользует volume ID (идентификатор тома). Делать ничего не нужно — объект, который сейчас занимает имя, будет рассмотрен на следующем проходе сам по себе, и вместе с ним исчезнет эта причина;
 - `api_error` или `removal_failed` — модуль не смог подтвердить возможность освобождения либо не смог записать снятие finalizer. В отличие от причин выше это неисправность самого модуля, а не свойство тома; для второй причины срабатывает алерт `D8SdsLocalVolumeCSIFinalizerRemovalErrors`.
 
-Снапшоты собираются по тому же правилу и публикуются так же — в метриках `sds_local_volume_orphaned_lvm_logical_volume_snapshot_count` и `sds_local_volume_orphaned_lvm_logical_volume_snapshot_used_bytes`, — с одной собственной причиной: `volume_snapshot_content_exists` означает, что на снапшот всё ещё ссылается VolumeSnapshotContent, то есть снапшот жив и вручную удалён только лежащий под ним ресурс. В этом случае удаляйте VolumeSnapshot, а остальное снимет snapshot-controller.
+Снапшоты собираются по тому же правилу и публикуются так же — в метриках `sds_local_volume_orphaned_lvm_logical_volume_snapshot_count` и `sds_local_volume_orphaned_lvm_logical_volume_snapshot_used_bytes`, — с одной собственной причиной: `volume_snapshot_content_exists` означает, что на снапшот всё ещё ссылается VolumeSnapshotContent, то есть снапшот жив и вручную удалён только лежащий под ним ресурс. В этом случае удаляйте VolumeSnapshot, а остальное снимет storage-foundation.
 
 Удаляемый ресурс, на котором finalizer'а этого модуля уже нет, а finalizer `sds-node-configurator` ещё стоит, учитывается в метрике `sds_local_volume_awaiting_agent_count`. Через это состояние проходит каждое удаление, а том с заданным `spec.volumeCleanup` перед `lvremove` полностью перезаписывается, поэтому время в этой метрике — норма, а не неисправность: алерт `D8SdsLocalVolumeLVMLogicalVolumeDeletionStuck` срабатывает только после двух часов ожидания. В эту же метрику попадают ресурсы, которые модулю никогда не принадлежали: по отсутствию finalizer'а нельзя отличить «модуль уже разблокировал удаление» от «ресурс никогда не был нашим». Ни одна orphan-метрика (метрика по «осиротевшим» ресурсам) их не покрывает — по той же причине.
 
@@ -235,7 +235,7 @@ d8 k -n <namespace> get volumesnapshot <name> -o jsonpath='{.status.error.messag
 d8 k -n <namespace> delete volumesnapshot <name> --wait=false
 ```
 
-snapshot-controller удаляет его VolumeSnapshotContent, но финализатор `snapshot.storage.kubernetes.io/volumesnapshotcontent-bound-protection` с VolumeSnapshotContent снимает только snapshotter, а в Community Edition его нет. VolumeSnapshotContent остаётся в состоянии `Terminating`, и VolumeSnapshot вместе с ним. Выведите такие VolumeSnapshotContent модуля:
+storage-foundation удаляет его VolumeSnapshotContent, но финализатор `snapshot.storage.kubernetes.io/volumesnapshotcontent-bound-protection` с VolumeSnapshotContent снимает только snapshotter, а в Community Edition его нет. VolumeSnapshotContent остаётся в состоянии `Terminating`, и VolumeSnapshot вместе с ним. Выведите такие VolumeSnapshotContent модуля:
 
 ```shell
 d8 k get volumesnapshotcontent -o jsonpath='{range .items[?(@.spec.driver=="local.csi.storage.deckhouse.io")]}{.metadata.name}{"\t"}{.metadata.deletionTimestamp}{"\t"}{.status.snapshotHandle}{"\t"}{.metadata.finalizers}{"\n"}{end}'
@@ -249,7 +249,7 @@ d8 k patch volumesnapshotcontent <name> --type=merge -p '{"metadata":{"finalizer
 
 Если в списке есть и другие финализаторы, удалите только этот, например через `d8 k edit volumesnapshotcontent <name>`.
 
-Когда VolumeSnapshotContent удалён, snapshot-controller снимает оставшийся финализатор VolumeSnapshot, и VolumeSnapshot удаляется. Финализатор `snapshot.storage.kubernetes.io/pvc-as-source-protection` с исходного PVC snapshot-controller тоже снимает сам, когда у этого PVC не остаётся незавершённых VolumeSnapshot.
+Когда VolumeSnapshotContent удалён, storage-foundation снимает оставшийся финализатор VolumeSnapshot, и VolumeSnapshot удаляется. Финализатор `snapshot.storage.kubernetes.io/pvc-as-source-protection` с исходного PVC storage-foundation тоже снимает сам, когда у этого PVC не остаётся незавершённых VolumeSnapshot.
 
 ## Что происходит со снимками и восстановленными томами, когда один из них удаляют?
 

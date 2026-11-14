@@ -124,18 +124,12 @@ echo "Data migration completed"
 {{< alert level="warning" >}}
 Возможность работы со снимками томов доступна только в коммерческих редакциях Deckhouse Kubernetes Platform и только при использовании LVM-thin томов.
 
-Для работы снимков требуется подключенный модуль, поставляющий CRD группы `snapshot.storage.k8s.io`, — например [snapshot-controller](/modules/snapshot-controller/).
+Для работы со снимками томов требуется модуль [storage-foundation](/modules/storage-foundation/).
 {{< /alert >}}
 
 Подробную информацию о снимках см. в [документации Kubernetes](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).
 
 Для того чтобы создать снимок тома, выполните следующие действия:
-
-1. Включите модуль `snapshot-controller`:
-
-   ```shell
-   d8 s module enable snapshot-controller
-   ```
 
 1. Для того чтобы создать снимок тома, выполните следующую команду с необходимыми параметрами:
 

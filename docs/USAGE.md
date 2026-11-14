@@ -124,18 +124,12 @@ echo "Data migration completed"
 {{< alert level="warning" >}}
 The ability to work with volume snapshots is available only in commercial editions of Deckhouse Kubernetes Platform and only when using LVM-thin volumes.
 
-A module that provides the `snapshot.storage.k8s.io` CRDs, for example [snapshot-controller](/modules/snapshot-controller/), must be connected for snapshots to work.
+Volume snapshots require the [storage-foundation](/modules/storage-foundation/) module.
 {{< /alert >}}
 
 For detailed information about snapshots, see the [Kubernetes documentation](https://kubernetes.io/docs/concepts/storage/volume-snapshots/).
 
 To create a volume snapshot, follow these steps:
-
-1. Enable the `snapshot-controller` module:
-
-   ```shell
-   d8 s module enable snapshot-controller
-   ```
 
 1. To create a volume snapshot, run the following command with the necessary parameters:
 
