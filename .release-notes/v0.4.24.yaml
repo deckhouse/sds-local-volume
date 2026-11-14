@@ -1,0 +1,9 @@
+date: "2026-11-14"
+
+summary: "The module can be built inside an isolated network: its build no longer contacts the Go checksum database."
+
+highlights:
+  - "The build of the module no longer contacts the Go checksum database (`sum.golang.org`) and reuses the Go module cache of the build host, so the module can be built inside an isolated network from prepared caches."
+
+improvements:
+  - "The release-notes pages of the documentation are rendered by a tool pinned together with its checksums in `.werf/tools/go.mod`, and the Go module cache of the build host (`~/go-pkg-cache`) is kept between builds. Nothing changes in the images or in the cluster."
