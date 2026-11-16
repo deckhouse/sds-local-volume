@@ -23,6 +23,8 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -143,14 +145,22 @@ func TestDeleteVolumePassesVolumeCleanupWhereEnabled(t *testing.T) {
 	require.NoError(t, cl.Get(ctx, client.ObjectKey{Name: cleanupTestVolume}, &llv))
 
 	if !feature.VolumeCleanupEnabled() {
+		require.Equal(t, codes.FailedPrecondition, status.Code(err))
 		require.ErrorContains(t, err, cleanupTestRefused)
 		assert.Nil(t, llv.DeletionTimestamp)
 		assert.Nil(t, llv.Spec.VolumeCleanup)
 		return
 	}
 
-	require.NoError(t, err)
+	require.Equal(t, codes.Aborted, status.Code(err))
+	assert.Contains(t, err.Error(), "still being deleted")
 	assert.NotNil(t, llv.DeletionTimestamp)
 	require.NotNil(t, llv.Spec.VolumeCleanup)
 	assert.Equal(t, v1alpha1.VolumeCleanupRandomFillSinglePass, *llv.Spec.VolumeCleanup)
+
+	llv.Finalizers = nil
+	require.NoError(t, cl.Update(ctx, &llv))
+
+	_, err = d.DeleteVolume(ctx, &csi.DeleteVolumeRequest{VolumeId: cleanupTestVolume})
+	require.NoError(t, err)
 }

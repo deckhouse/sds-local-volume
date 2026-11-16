@@ -97,6 +97,9 @@ func DeleteLVMLogicalVolumeSnapshot(ctx context.Context, kc client.Client, log l
 
 	log.Trace("Trying to delete LVMLogicalVolumeSnapshot")
 	err = kc.Delete(ctx, llvs)
+	if kerrors.IsNotFound(err) {
+		return nil
+	}
 	return err
 }
 
@@ -269,14 +272,16 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log logger.Lo
 		return fmt.Errorf("get LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
 	}
 
-	if volumeCleanup != "" {
-		llv.Spec.VolumeCleanup = &volumeCleanup
-	} else {
-		llv.Spec.VolumeCleanup = nil
-	}
-	err = kc.Update(ctx, llv)
-	if err != nil {
-		return fmt.Errorf("update LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
+	if llv.DeletionTimestamp == nil {
+		if volumeCleanup != "" {
+			llv.Spec.VolumeCleanup = &volumeCleanup
+		} else {
+			llv.Spec.VolumeCleanup = nil
+		}
+		err = kc.Update(ctx, llv)
+		if err != nil {
+			return fmt.Errorf("update LVMLogicalVolume %s: %w", lvmLogicalVolumeName, err)
+		}
 	}
 
 	log.Trace("found the LVMLogicalVolume", "llv", fmt.Sprintf("%+v", llv), "status", fmt.Sprintf("%+v", llv.Status))
@@ -294,6 +299,9 @@ func DeleteLVMLogicalVolume(ctx context.Context, kc client.Client, log logger.Lo
 
 	log.Trace("Trying to delete LVMLogicalVolume")
 	err = kc.Delete(ctx, llv)
+	if kerrors.IsNotFound(err) {
+		return nil
+	}
 	return err
 }
 

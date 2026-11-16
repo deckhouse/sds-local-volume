@@ -451,16 +451,36 @@ func (d *Driver) DeleteVolume(ctx context.Context, request *csi.DeleteVolumeRequ
 	}()
 
 	if volumeCleanup != "" && !feature.VolumeCleanupEnabled() {
-		return nil, errors.New("volumeCleanup is not supported in your edition")
+		return nil, status.Error(codes.FailedPrecondition, "volumeCleanup is not supported in your edition")
 	}
 
 	err := utils.DeleteLVMLogicalVolume(ctx, d.cl, log, request.VolumeId, volumeCleanup)
+	if kerrors.IsNotFound(err) {
+		log.Info("the LVMLogicalVolume does not exist, nothing to delete")
+		return &csi.DeleteVolumeResponse{}, nil
+	}
 	if err != nil {
 		log.Error("unable to delete the LVMLogicalVolume", logger.Err(err))
-		return nil, err
+		return nil, deleteAPIError(err)
 	}
-	log.Info("volume deleted successfully")
-	return &csi.DeleteVolumeResponse{}, nil
+
+	llv, err := utils.GetLVMLogicalVolume(ctx, d.cl, request.VolumeId, "")
+	if kerrors.IsNotFound(err) {
+		log.Info("volume deleted successfully")
+		return &csi.DeleteVolumeResponse{}, nil
+	}
+	if err != nil {
+		log.Error("unable to check that the LVMLogicalVolume is gone", logger.Err(err))
+		return nil, deleteAPIError(err)
+	}
+
+	var phase, reason string
+	if llv.Status != nil {
+		phase, reason = llv.Status.Phase, llv.Status.Reason
+	}
+	msg := deletionPendingMessage("LVMLogicalVolume", llv.Name, phase, reason, llv.Finalizers)
+	log.Info("the LVMLogicalVolume is still being deleted", "reason", msg)
+	return nil, status.Error(codes.Aborted, msg)
 }
 
 func (d *Driver) ControllerPublishVolume(_ context.Context, request *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {

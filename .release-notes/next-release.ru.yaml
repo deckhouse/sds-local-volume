@@ -7,6 +7,9 @@ highlights: []
 docs:
   - "Документация называет модуль `storage-foundation`, а не `snapshot-controller`, модулем, который требуется для снимков томов, и больше не предлагает включать `snapshot-controller`."
 
+fixes:
+  - "DeleteVolume и DeleteSnapshot больше не сообщают об успехе до того, как sds-node-configurator удалил логический том. Пока LVMLogicalVolume или LVMLogicalVolumeSnapshot существует, возвращается повторяемый статус `Aborted` с phase и reason, поэтому PersistentVolume остаётся в `Released`, а причина видна в `kubectl describe pv`. Отсутствующий объект считается уже удалённым, ошибки API возвращаются статусами `Unavailable` или `Internal`."
+
 # Необязательные разделы — пустые не оставлять, а удалять.
 # new_features: []
 # improvements: []

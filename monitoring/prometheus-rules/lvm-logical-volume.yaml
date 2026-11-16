@@ -49,16 +49,19 @@
         description: |
           {{ $value }} {{ $labels.kind }} resources have been asked to be deleted, carry no finalizer of sds-local-volume any more, and have been waiting for more than two hours.
 
-          Nothing else is holding them up: the deletion now waits entirely on the sds-node-configurator agent to remove the logical volume and drop the last finalizer. Until it does, the space stays allocated in the volume group and no other alert of this module covers it — the resource is outside every orphan series precisely because this module no longer holds a finalizer on it.
+          The deletion now waits entirely on the sds-node-configurator agent to remove the logical volume and drop its finalizer. Until it does, the space stays allocated in the volume group, and the resource is outside every orphan series because this module no longer holds a finalizer on it.
+
+          For volumes provisioned by this module the PersistentVolume stays `Released` until the logical volume is really gone, and the reason is visible on it: run `d8 k describe pv <name>` and read the `VolumeFailedDelete` event, which carries the `phase` and `reason` that the agent wrote to the LVMLogicalVolume status (for example `Logical volume ... in use`, a running wipe, or the name of a foreign finalizer).
 
           Two things this counts that the name does not suggest. It counts resources this module never owned — a hand-written LVMLogicalVolume, or one belonging to another consumer of sds-node-configurator, also carries no finalizer of this module; the deletion is stuck in the agent either way, which is what this alert is about. And it counts a deletion that is legitimately still running: the agent erases the volume as `spec.volumeCleanup` says before it runs `lvremove`, and `RandomFillThreePass` on a large volume takes a long time. That is what the two-hour wait is for, so start by checking whether a wipe is in progress rather than assuming a fault.
 
           The recommended course of action:
-          1. Find the resources: `d8 k get lvmlogicalvolume -o json | jq -r '.items[] | select(.metadata.deletionTimestamp) | "\(.metadata.name) \(.spec.lvmVolumeGroupName) \(.spec.volumeCleanup) \(.metadata.finalizers)"'` (use `lvmlogicalvolumesnapshot` when the `kind` label says so)
-          2. Check whether the agent is still erasing the volume rather than stuck: `d8 k -n d8-sds-node-configurator logs -l app=sds-node-configurator --tail=200 | grep -iE "volumeCleanup|wipe|shred"`. A volume with `volumeCleanup` set to `RandomFillSinglePass` or `RandomFillThreePass` is written over completely before it is removed, and that is not a fault
-          3. Check that the sds-node-configurator agent is running on the node holding the volume group: `d8 k -n d8-sds-node-configurator get pods -l app=sds-node-configurator -o wide`
-          4. Check that the LVMVolumeGroup is healthy: `d8 k get lvmvolumegroup`
-          5. Look for a failing lvremove in the agent log: `d8 k -n d8-sds-node-configurator logs -l app=sds-node-configurator --tail=200 | grep -i lvremove`
+          1. Read the phase and reason the agent reported: `d8 k get lvmlogicalvolume -o custom-columns=NAME:.metadata.name,PHASE:.status.phase,REASON:.status.reason`. `Failed` carries the `lvremove` error, `Cleaning` is a running wipe
+          2. Find the resources: `d8 k get lvmlogicalvolume -o json | jq -r '.items[] | select(.metadata.deletionTimestamp) | "\(.metadata.name) \(.spec.lvmVolumeGroupName) \(.spec.volumeCleanup) \(.metadata.finalizers)"'` (use `lvmlogicalvolumesnapshot` when the `kind` label says so)
+          3. Check whether the agent is still erasing the volume rather than stuck: `d8 k -n d8-sds-node-configurator logs -l app=sds-node-configurator --tail=200 | grep -iE "volumeCleanup|wipe|shred"`. A volume with `volumeCleanup` set to `RandomFillSinglePass` or `RandomFillThreePass` is written over completely before it is removed, and that is not a fault
+          4. Check that the sds-node-configurator agent is running on the node holding the volume group: `d8 k -n d8-sds-node-configurator get pods -l app=sds-node-configurator -o wide`
+          5. Check that the LVMVolumeGroup is healthy: `d8 k get lvmvolumegroup`
+          6. Look for a failing lvremove in the agent log: `d8 k -n d8-sds-node-configurator logs -l app=sds-node-configurator --tail=200 | grep -i lvremove`
 
     - alert: D8SdsLocalVolumeLVMLogicalVolumeReclaimBlocked
       expr: max(sds_local_volume_orphaned_lvm_logical_volume_count{state="blocked"}) > 0
