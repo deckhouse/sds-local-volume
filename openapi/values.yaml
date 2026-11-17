@@ -30,6 +30,21 @@ properties:
           daemonsets/prometheus-metrics for csi-node. The DaemonSet is not hostNetwork
           either, so it can share the number with the CSI controller: the two pods have
           separate network namespaces even on the same node.
+      controllerMetricsPort:
+        type: integer
+        default: 8080
+        description: |
+          The port the module controller binds its metrics on 127.0.0.1 when a
+          kube-rbac-proxy publishes them. Not used while the controller authorizes
+          the scrapes itself.
+      controllerMetricsProxyPort:
+        type: integer
+        default: 8080
+        description: |
+          The port the module controller publishes its metrics on, over HTTPS on the
+          pod address. Reaching it requires "get" on deployments/prometheus-metrics
+          for controller. The pod is not hostNetwork, so the number is pod-level and
+          needs no entry in the Deckhouse port reference.
       pythonVersions:
         type: array
         default: []

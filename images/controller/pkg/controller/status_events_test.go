@@ -22,14 +22,14 @@ import (
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 
 	"github.com/deckhouse/sds-common-lib/conditions"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 )
 
 // drainEvents returns what the fake recorder has received so far.
-func drainEvents(rec *record.FakeRecorder) []string {
+func drainEvents(rec *events.FakeRecorder) []string {
 	var got []string
 	for {
 		select {
@@ -49,8 +49,8 @@ func drainEvents(rec *record.FakeRecorder) []string {
 func TestStatusWriterRecordsReadyTransitions(t *testing.T) {
 	lsc := &slv.LocalStorageClass{ObjectMeta: metav1.ObjectMeta{Name: testLSCName, Generation: 1}}
 	cl := newStatusTestClient(t, lsc)
-	rec := record.NewFakeRecorder(10)
-	ctx := withEventRecorder(context.Background(), conditions.FromLegacyRecorder(rec))
+	rec := events.NewFakeRecorder(10)
+	ctx := withEventRecorder(context.Background(), rec)
 
 	const created = "Normal Reconciled the LocalStorageClass is in the Created phase"
 	steps := []struct {

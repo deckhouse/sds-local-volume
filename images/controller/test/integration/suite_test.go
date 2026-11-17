@@ -37,6 +37,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -123,8 +124,11 @@ var _ = BeforeSuite(func() {
 		// controller-runtime bump that changed either could leave every test green
 		// while referencingPersistentVolumes silently returned an empty map.
 		Cache: cache.Options{
+			DefaultTransform:  cache.TransformStripManagedFields(),
 			DefaultNamespaces: map[string]cache.Config{controllerNamespace: {}},
 			ByObject: map[client.Object]cache.ByObject{
+				&corev1.Secret{}:           {Field: fields.OneTermEqualSelector("metadata.name", config.ConfigSecretName)},
+				&corev1.Node{}:             {Transform: controller.StripNodeStatus},
 				&corev1.PersistentVolume{}: {Transform: controller.StripPersistentVolume},
 			},
 		},

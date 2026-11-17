@@ -407,7 +407,7 @@ func reconcileResult(res *reconcile.Result, err *error) string {
 	switch {
 	case err != nil && *err != nil:
 		return ResultError
-	case res != nil && (res.Requeue || res.RequeueAfter > 0):
+	case res != nil && res.RequeueAfter > 0:
 		return ResultRequeue
 	default:
 		return ResultSuccess

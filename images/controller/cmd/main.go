@@ -27,6 +27,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	sv1 "k8s.io/api/storage/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	apiruntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -38,11 +39,14 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/deckhouse/sds-common-lib/logger"
+	"github.com/deckhouse/sds-common-lib/monitoring/metricsauth"
+	"github.com/deckhouse/sds-common-lib/webhookserver"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/config"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/controller"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/kubutils"
 	"github.com/deckhouse/sds-local-volume/images/controller/pkg/monitoring"
+	"github.com/deckhouse/sds-local-volume/images/webhooks/handlers"
 	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
@@ -108,10 +112,13 @@ func main() {
 	log.Info("metrics registered", "address", cfgParams.MetricsBindAddress+"/metrics")
 
 	cacheOpt := cache.Options{
+		DefaultTransform: cache.TransformStripManagedFields(),
 		DefaultNamespaces: map[string]cache.Config{
 			cfgParams.ControllerNamespace: {},
 		},
 		ByObject: map[client.Object]cache.ByObject{
+			&v1.Secret{}: {Field: fields.OneTermEqualSelector("metadata.name", cfgParams.ConfigSecretName)},
+			&v1.Node{}:   {Transform: controller.StripNodeStatus},
 			// The LVMLogicalVolume garbage collector needs every PersistentVolume in
 			// the cluster, but only its name and its CSI reference. Caching them whole
 			// would grow with the cluster for no reason, so everything else is dropped
@@ -128,9 +135,9 @@ func main() {
 		LeaderElectionID:        config.ControllerName,
 		Logger:                  log.GetLogger(),
 		HealthProbeBindAddress:  cfgParams.HealthProbeBindAddress,
-		Metrics: metricsserver.Options{
+		Metrics: metricsauth.ApplyFromEnv(metricsserver.Options{
 			BindAddress: cfgParams.MetricsBindAddress,
-		},
+		}),
 	}
 
 	mgr, err := manager.New(kConfig, managerOpts)
@@ -165,6 +172,24 @@ func main() {
 	if _, err = controller.RunLVMLogicalVolumeGCController(mgr, *cfgParams, log, metrics); err != nil {
 		log.Error("unable to run the controller", logger.Err(err), slog.String("controller", controller.LVMLogicalVolumeGCCtrlName))
 		os.Exit(1)
+	}
+
+	webhookOpts, webhooksEnabled, err := webhookserver.OptionsFromEnv()
+	if err != nil {
+		log.Error("unable to read the webhook server configuration", logger.Err(err))
+		os.Exit(1)
+	}
+	if webhooksEnabled {
+		hs, err := handlers.Handlers(log.Named("webhooks"))
+		if err != nil {
+			log.Error("unable to create the webhook handlers", logger.Err(err))
+			os.Exit(1)
+		}
+		if err = webhookserver.Add(mgr, webhookOpts, hs); err != nil {
+			log.Error("unable to add the webhook server", logger.Err(err))
+			os.Exit(1)
+		}
+		log.Info("serving the admission webhooks", "port", webhookOpts.Port, "certDir", webhookOpts.CertDir)
 	}
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

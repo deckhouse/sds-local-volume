@@ -894,7 +894,7 @@ func (g *llvGarbageCollector) removeCSIFinalizer(
 ) (bool, error) {
 	var removed bool
 
-	err := retry.OnError(retry.DefaultBackoff, retriableWrite, func() error {
+	attempt := func() error {
 		removed = false
 
 		live := newLive()
@@ -960,7 +960,16 @@ func (g *llvGarbageCollector) removeCSIFinalizer(
 
 		removed = true
 		return nil
+	}
+
+	var attemptErr error
+	err := retry.OnError(retry.DefaultBackoff, retriableWrite, func() error {
+		attemptErr = attempt()
+		return attemptErr
 	})
+	if err == nil {
+		err = attemptErr
+	}
 
 	return removed, err
 }

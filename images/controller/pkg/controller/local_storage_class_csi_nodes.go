@@ -98,6 +98,16 @@ func isCSINode(node *corev1.Node) bool {
 	return ok && value == ""
 }
 
+func StripNodeStatus(obj any) (any, error) {
+	node, ok := obj.(*corev1.Node)
+	if !ok {
+		return obj, nil
+	}
+	node.Status = corev1.NodeStatus{}
+	node.ManagedFields = nil
+	return node, nil
+}
+
 // csiNodeChanged passes the node events that change whether the CSI node runs
 // on the node, and drops the rest, status heartbeats in particular.
 func csiNodeChanged() predicate.TypedFuncs[*corev1.Node] {

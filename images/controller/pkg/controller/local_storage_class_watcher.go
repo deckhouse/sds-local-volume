@@ -97,7 +97,7 @@ func RunLocalStorageClassWatcherController(
 ) (controller.Controller, error) {
 	cl := mgr.GetClient()
 	log = log.Named(LocalStorageClassCtrlName)
-	recorder := conditions.FromLegacyRecorder(mgr.GetEventRecorderFor(LocalStorageClassCtrlName))
+	recorder := mgr.GetEventRecorder(LocalStorageClassCtrlName)
 
 	c, err := controller.New(LocalStorageClassCtrlName, mgr, controller.Options{
 		Reconciler: reconcile.Func(func(ctx context.Context, request reconcile.Request) (res reconcile.Result, err error) {

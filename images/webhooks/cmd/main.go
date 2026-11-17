@@ -22,13 +22,8 @@ import (
 	"net/http"
 	"os"
 
-	storagev1 "k8s.io/api/storage/v1"
-
 	"github.com/deckhouse/sds-common-lib/logger"
-	"github.com/deckhouse/sds-common-lib/logger/kwhlogger"
-	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
 	"github.com/deckhouse/sds-local-volume/images/webhooks/handlers"
-	snc "github.com/deckhouse/sds-node-configurator/api/v1alpha1"
 )
 
 type config struct {
@@ -72,12 +67,7 @@ func initFlags() (config, error) {
 	return cfg, nil
 }
 
-const (
-	port           = ":8443"
-	LSCValidatorID = "LSCValidator"
-	SCValidatorID  = "SCValidator"
-	LVGValidatorID = "LVGValidator"
-)
+const port = ":8443"
 
 func main() {
 	cfg, err := initFlags()
@@ -93,32 +83,16 @@ func main() {
 	}
 	log := baseLog.Named("webhooks")
 
-	// kubewebhook takes its own logger interface; this adapter routes the
-	// library's own messages into the same output and format as ours.
-	kwhLogger := kwhlogger.New(log)
-
-	lscValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LSCValidate(log), LSCValidatorID, &slv.LocalStorageClass{}, kwhLogger)
+	hs, err := handlers.Handlers(log)
 	if err != nil {
-		log.Error("unable to create the LocalStorageClass validating webhook handler", logger.Err(err))
-		os.Exit(1)
-	}
-
-	scValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.SCValidate(log), SCValidatorID, &storagev1.StorageClass{}, kwhLogger)
-	if err != nil {
-		log.Error("unable to create the StorageClass validating webhook handler", logger.Err(err))
-		os.Exit(1)
-	}
-
-	lvgValidatingWebhookHandler, err := handlers.GetValidatingWebhookHandler(handlers.LVGValidate(log), LVGValidatorID, &snc.LVMVolumeGroup{}, kwhLogger)
-	if err != nil {
-		log.Error("unable to create the LVMVolumeGroup validating webhook handler", logger.Err(err))
+		log.Error("unable to create the webhook handlers", logger.Err(err))
 		os.Exit(1)
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/lsc-validate", lscValidatingWebhookHandler)
-	mux.Handle("/sc-validate", scValidatingWebhookHandler)
-	mux.Handle("/lvg-validate", lvgValidatingWebhookHandler)
+	for path, h := range hs {
+		mux.Handle(path, h)
+	}
 	mux.HandleFunc("/healthz", httpHandlerHealthz)
 
 	log.Info("listening", "port", port)

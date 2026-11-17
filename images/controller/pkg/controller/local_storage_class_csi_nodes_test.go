@@ -286,3 +286,49 @@ func TestRunEventReconcileKeepsThePhaseWhenNodesCannotBeListed(t *testing.T) {
 		t.Errorf("Ready = %+v, want it left True", ready)
 	}
 }
+
+func TestStripNodeStatus(t *testing.T) {
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:          "node-a",
+			Labels:        map[string]string{slv.CSINodeLabel: ""},
+			Annotations:   map[string]string{"node.alpha.kubernetes.io/ttl": "0"},
+			ManagedFields: []metav1.ManagedFieldsEntry{{Manager: "kubelet"}},
+		},
+		Spec: corev1.NodeSpec{
+			PodCIDR: "10.0.0.0/24",
+			Taints:  []corev1.Taint{{Key: "dedicated", Effect: corev1.TaintEffectNoSchedule}},
+		},
+		Status: corev1.NodeStatus{
+			Images: []corev1.ContainerImage{{Names: []string{"registry/image:tag"}, SizeBytes: 1}},
+		},
+	}
+
+	out, err := StripNodeStatus(node)
+	if err != nil {
+		t.Fatalf("StripNodeStatus: %v", err)
+	}
+	got, ok := out.(*corev1.Node)
+	if !ok {
+		t.Fatalf("StripNodeStatus returned %T", out)
+	}
+	if got.Name != "node-a" || !isCSINode(got) || got.Annotations["node.alpha.kubernetes.io/ttl"] != "0" {
+		t.Errorf("metadata = %+v, want name, labels and annotations kept", got.ObjectMeta)
+	}
+	if got.Spec.PodCIDR != "10.0.0.0/24" || len(got.Spec.Taints) != 1 {
+		t.Errorf("spec = %+v, want it kept", got.Spec)
+	}
+	if len(got.Status.Images) != 0 || got.ManagedFields != nil {
+		t.Errorf("status = %+v, managedFields = %+v, want both dropped", got.Status, got.ManagedFields)
+	}
+
+	again, err := StripNodeStatus(got)
+	if err != nil || again.(*corev1.Node).Name != "node-a" {
+		t.Errorf("second StripNodeStatus = %v, %v", again, err)
+	}
+
+	tombstone := "not a node"
+	if passed, err := StripNodeStatus(tombstone); err != nil || passed != tombstone {
+		t.Errorf("StripNodeStatus(%q) = %v, %v, want it passed through", tombstone, passed, err)
+	}
+}

@@ -98,11 +98,6 @@ func TestObserveReconcileClassifiesOutcome(t *testing.T) {
 			wantResult: ResultRequeue,
 		},
 		{
-			name:       "Requeue is a requeue",
-			res:        reconcile.Result{Requeue: true},
-			wantResult: ResultRequeue,
-		},
-		{
 			name:       "an error is an error",
 			err:        errors.New("boom"),
 			wantResult: ResultError,

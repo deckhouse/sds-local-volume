@@ -25,6 +25,7 @@
   would be a silent loss of a safety check.
 */ -}}
 {{- $rbacConfig := dict
+  "controllerMetricsProxyPort" (int .Values.sdsLocalVolume.internal.controllerMetricsProxyPort)
   "roleRules" (list
     (dict "apiGroups" (list "") "resources" (list "secrets") "verbs" (list "get" "list" "watch"))
     (dict "apiGroups" (list "") "resources" (list "pods") "verbs" (list "get" "list" "watch" "update"))
@@ -33,6 +34,7 @@
   "clusterRoleRules" (list
     (dict "apiGroups" (list "") "resources" (list "nodes" "persistentvolumes") "verbs" (list "get" "list" "watch" "patch" "update"))
     (dict "apiGroups" (list "") "resources" (list "events") "verbs" (list "create" "patch"))
+    (dict "apiGroups" (list "events.k8s.io") "resources" (list "events") "verbs" (list "create" "patch"))
     (dict "apiGroups" (list "storage.deckhouse.io") "resources" (list "localstorageclasses" "lvmvolumegroups") "verbs" (list "get" "list" "create" "delete" "watch" "update"))
     (dict "apiGroups" (list "storage.deckhouse.io") "resources" (list "localstorageclasses/status") "verbs" (list "get" "update" "patch"))
     (dict "apiGroups" (list "storage.deckhouse.io") "resources" (list "lvmlogicalvolumes") "verbs" (list "get" "list" "watch" "patch"))
