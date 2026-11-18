@@ -6,6 +6,7 @@ highlights: []
 
 docs:
   - "The documentation names the `storage-foundation` module, not `snapshot-controller`, as the module that volume snapshots require, and no longer asks to enable `snapshot-controller`."
+  - "The description of `dataNodes` in the module settings now says that the `csi-node` component runs on the nodes that match the selector, which are all Linux nodes by default, instead of saying that the parameter placed the CSI on all nodes when omitted."
 
 fixes:
   - "DeleteVolume and DeleteSnapshot no longer report success before sds-node-configurator has removed the logical volume. While the LVMLogicalVolume or LVMLogicalVolumeSnapshot still exists they return the retryable `Aborted` status with its phase and reason, so the PersistentVolume stays `Released` and the cause is visible in `kubectl describe pv`. A missing object counts as already deleted, and API errors are returned as `Unavailable` or `Internal` statuses."

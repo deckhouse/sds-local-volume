@@ -52,7 +52,7 @@ All commands below must be run on a machine with access to the Kubernetes API an
    EOF
    ```
 
-   As a result, the module will start with default settings, which will create service pods of the `sds-local-volume` component on all cluster nodes:
+   As a result, the module will start with default settings, which will create service pods of the `sds-local-volume` component on all Linux nodes:
 
 1. Wait for the `sds-local-volume` module to transition to the `Ready` state.
 
@@ -69,7 +69,7 @@ All commands below must be run on a machine with access to the Kubernetes API an
 
 ### Preparing nodes for storage creation
 
-Start `csi-node` pods on selected nodes for correct storage operation. By default, these pods start on all cluster nodes. Check their presence with the command:
+Start `csi-node` pods on selected nodes for correct storage operation. By default, these pods start on all Linux nodes. Check their presence with the command:
 
 ```shell
 d8 k -n d8-sds-local-volume get pod -owide

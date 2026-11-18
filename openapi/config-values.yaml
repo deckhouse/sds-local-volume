@@ -39,7 +39,7 @@ properties:
       PersistentVolume alone never is.
   dataNodes:
     type: object
-    description: Settings for local volumes csi on nodes with data
+    description: Settings for the nodes that store or access local volumes
     default: {}
     properties:
       nodeSelector:
@@ -51,7 +51,9 @@ properties:
         description: |
           The same as in the Pods `spec.nodeSelector` parameter in Kubernetes.
 
-          If parameter is omitted, local volume csi will be placed on all nodes.
+          Nodes that match the selector get the `storage.deckhouse.io/sds-local-volume-node: ""` label. The `csi-node` component runs on nodes with this label.
+
+          By default (`kubernetes.io/os: linux`), it runs on every Linux node. A custom value replaces the default one and is not merged with it.
 
           **Caution!** Changing this parameter does not result in data redistribution. If node with data no longer matches the `nodeSelector`, data on that node will become inaccessible.
   storageClassLabelIgnoredPrefixes:
