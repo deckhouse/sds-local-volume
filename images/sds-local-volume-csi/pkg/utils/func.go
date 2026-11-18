@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -378,7 +379,13 @@ func AlignSizeToExtent(size, extentSize resource.Quantity) (resource.Quantity, e
 	if extentBytes <= 0 {
 		return resource.Quantity{}, fmt.Errorf("extent size must be positive, got %d", extentBytes)
 	}
-	aligned := ((sizeBytes + extentBytes - 1) / extentBytes) * extentBytes
+	aligned := sizeBytes / extentBytes * extentBytes
+	if aligned < sizeBytes {
+		if aligned > math.MaxInt64-extentBytes {
+			return resource.Quantity{}, fmt.Errorf("size %d rounded up to a multiple of the extent size %d does not fit into int64", sizeBytes, extentBytes)
+		}
+		aligned += extentBytes
+	}
 	return *resource.NewQuantity(aligned, resource.BinarySI), nil
 }
 
