@@ -198,7 +198,7 @@ A class whose LVMVolumeGroups are partly on nodes without the module's CSI node 
 Open the "SDS Local Volume" Grafana dashboard, pick the class in the "LocalStorageClass" variable at the top, and read the "Capacity by LocalStorageClass" row:
 
 - For a `Thick` class: the size of its volume groups, their free space, and the share used. The share counts everything in the volume groups, thin pools and volumes of other classes on the same LVMVolumeGroups included.
-- For a `Thin` class: the size of its thin pools, the size allocated to volumes, the allocation limit, the space free by `allocationLimit`, and the share of the pools filled with data. The space free by `allocationLimit` is the pool size multiplied by `allocationLimit` of the thin pool in the LVMVolumeGroup (150% by default), less the requested sizes of the volumes already in the pool, counted per thin pool. It is what new volumes of the class can still be given — the same figure the module checks when it creates a volume — so overprovisioning is taken into account. It says nothing about the data the pool can still hold: watch the share filled with data, because a thin pool that fills up stops every volume in it.
+- For a `Thin` class: the size of its thin pools, the size allocated to volumes, the allocation limit, the space free by `allocationLimit`, the space physically free in the pools, and the share of the pools filled with data. The space free by `allocationLimit` is the pool size multiplied by `allocationLimit` of the thin pool in the LVMVolumeGroup (150% by default), less the requested sizes of the volumes already in the pool, counted per thin pool. It is what new volumes of the class can still be given — the same figure the module checks when it creates a volume — so overprovisioning is taken into account. It says nothing about the data the pool can still hold: watch the share filled with data, because a thin pool that fills up stops every volume in it.
 - The table at the bottom of the row shows the same figures per node and LVMVolumeGroup.
 - "LVMVolumeGroups without capacity data" counts the LVMVolumeGroups of the class (thin pools for a `Thin` class) that sds-node-configurator reports no capacity for: the LVMVolumeGroup does not exist, its volume group or thin pool has not been created yet, or the agent on its node is not running. The totals leave them out.
 
@@ -215,6 +215,33 @@ sum(
 ```
 
 Pick the class first: one LVMVolumeGroup can be used by several classes, and the join fails when the right-hand side has more than one series per LVMVolumeGroup. `max by` keeps the join working while the controller changes its leader.
+
+## Why does a thin pool run out of space while the space free by allocationLimit is still large, and how much is physically free?
+
+A `Thin` class has two different figures of free space, and snapshots affect them differently.
+
+- The space free by `allocationLimit` is the pool size multiplied by `allocationLimit`, less `allocatedSize`: the sum of the sizes of all thin logical volumes in the pool. A snapshot and a volume restored from a snapshot are thin logical volumes too, and each counts at the full size of its source, although it shares the unchanged blocks with it. The module's components check this figure when they hand out space: the CSI controller for a volume with `Immediate` binding, the scheduler extender with `WaitForFirstConsumer`, and the agent when it takes a snapshot, which is refused when the size of its source is larger than the space free by `allocationLimit`. It is a budget for new volumes, not a measure of the disk.
+- The physically free space is `actualSize` less `usedSize` of the thin pool in the `status.thinPools` of the [LVMVolumeGroup](/modules/sds-node-configurator/cr.html#lvmvolumegroup). `usedSize` is the part of the pool filled with data, as the pool reports it to LVM: a block counts once however many volumes, snapshots and restored volumes share it. Every block that a snapshot keeps after the source was overwritten or deleted is counted, and a block written to a restored volume takes new space. This is the space the pool can still hold; when it reaches zero, every volume in the pool stops.
+
+So a pool with many snapshots can show little space free by `allocationLimit` and a lot of physically free space, and, the other way round, a pool with a large `allocationLimit` can be physically full while the limit shows free space.
+
+To see both figures for a class, open the "Capacity by LocalStorageClass" row of the "SDS Local Volume" dashboard: "Thin: free by allocationLimit" and "Thin: free on disk" are next to each other, and the table has the "Free on disk" column per thin pool. For a query of your own, join the series of the class as described above:
+
+```text
+sum(
+  clamp_min(sds_node_configurator_lvg_thin_pool_actual_size_bytes - sds_node_configurator_lvg_thin_pool_used_size_bytes, 0)
+  * on (lvg_name, thin_pool) group_left (storage_class)
+  max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class="<lsc-name>", thin_pool!=""})
+)
+```
+
+Keep in mind:
+
+- `usedSize` is calculated from the data percentage of the pool that LVM reports, so it is approximate. It does not include the metadata of the pool: a pool whose metadata is full stops as well, so check `metadata_percent` of the pool with `lvs` on the node when the data is far from full and the volumes still fail.
+- Deleting a PVC, a VolumeSnapshot or a restored volume does not return the space at once: a block is freed when no logical volume uses it, and the figures follow the next LVMVolumeGroup status update. See [What happens to snapshots and restored volumes when one of them is deleted?](#what-happens-to-snapshots-and-restored-volumes-when-one-of-them-is-deleted).
+- Deleting files inside a volume returns their blocks to the pool only if the filesystem passes the discards down: run `fstrim` on the mounted volume or mount it with the `discard` option. Otherwise the pool still counts the blocks as written and `usedSize` stays high.
+- Deleting a snapshot frees only the blocks that no other snapshot, restored volume or the source volume still uses.
+- The figures are per thin pool and per node. The physically free space of a class is the sum over its pools, but a volume lives in one pool: it cannot use the space of another node.
 
 ## Why does a VolumeSnapshot of a volume not become ready?
 

@@ -1309,7 +1309,7 @@
       "description": "Total size of the thin pools of the selected LocalStorageClass. Empty for a Thick class.",
       "gridPos": {
         "h": 4,
-        "w": 5,
+        "w": 4,
         "x": 0,
         "y": 67
       },
@@ -1348,8 +1348,8 @@
       "description": "Sum of the sizes of the volumes created in the thin pools of the selected LocalStorageClass: the virtual size they were requested with, not the data written into them. Empty for a Thick class.",
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 5,
+        "w": 4,
+        "x": 4,
         "y": 67
       },
       "datasource": {
@@ -1387,8 +1387,8 @@
       "description": "How much can be allocated to volumes in the thin pools of the selected LocalStorageClass: the pool size times the allocationLimit of each thin pool of the LVMVolumeGroup (150% by default). Empty for a Thick class.",
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 10,
+        "w": 4,
+        "x": 8,
         "y": 67
       },
       "datasource": {
@@ -1426,8 +1426,8 @@
       "description": "What new volumes of the selected LocalStorageClass can still be given: allocation limit minus allocated, per thin pool, a pool already past its limit counting as zero. This is the space the module provisions against, so overprovisioning is taken into account. It says nothing about the data the pool can still hold; see Thin: data used. Empty for a Thick class.",
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 15,
+        "w": 4,
+        "x": 12,
         "y": 67
       },
       "datasource": {
@@ -1437,6 +1437,45 @@
       "targets": [
         {
           "expr": "sum((clamp_min(sds_node_configurator_lvg_thin_pool_allocation_limit_bytes - sds_node_configurator_lvg_thin_pool_allocated_size_bytes, 0)) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Thin: free on disk",
+      "description": "Space physically free in the thin pools of the selected LocalStorageClass: pool size minus the data written into it, per thin pool, summed. A block shared by a volume, its snapshots and the volumes restored from them is counted once, so unlike the space free by allocationLimit this figure does not count a snapshot at the full size of its source. It does not include the metadata of the pool. When it reaches zero, every volume in the pool stops. Empty for a Thick class.",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 67
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$ds_prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum((clamp_min(sds_node_configurator_lvg_thin_pool_actual_size_bytes - sds_node_configurator_lvg_thin_pool_used_size_bytes, 0)) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
           "refId": "A"
         }
       ],
@@ -1645,7 +1684,7 @@
     {
       "type": "table",
       "title": "Volume groups and thin pools of the class",
-      "description": "One row per LVMVolumeGroup of the selected LocalStorageClass, and per thin pool for a Thin class. For a Thick class Size and Free are those of the volume group and Used is the difference. For a Thin class Size is the thin pool, Allocated the virtual size of its volumes, Allocation limit the pool size times allocationLimit, Free what is left under that limit, and Used the data written into the pool.",
+      "description": "One row per LVMVolumeGroup of the selected LocalStorageClass, and per thin pool for a Thin class. For a Thick class Size and Free are those of the volume group and Used is the difference. For a Thin class Size is the thin pool, Allocated the virtual size of its volumes, Allocation limit the pool size times allocationLimit, Free what is left under that limit, Free on disk the space physically free in the pool (empty for a Thick class), and Used the data written into the pool.",
       "gridPos": {
         "h": 9,
         "w": 24,
@@ -1682,6 +1721,12 @@
           "refId": "Free"
         },
         {
+          "expr": "max by (node, lvg_name, volume_group, thin_pool) ((clamp_min(sds_node_configurator_lvg_thin_pool_actual_size_bytes - sds_node_configurator_lvg_thin_pool_used_size_bytes, 0)) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
+          "format": "table",
+          "instant": true,
+          "refId": "FreeOnDisk"
+        },
+        {
           "expr": "max by (node, lvg_name, volume_group, thin_pool) (((sds_node_configurator_lvg_vg_size_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"})) - (sds_node_configurator_lvg_vg_free_bytes * on (lvg_name) group_left (storage_class) max by (storage_class, lvg_name) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool=\"\"}))) or (sds_node_configurator_lvg_thin_pool_used_size_bytes) * on (lvg_name, thin_pool) group_left (storage_class) max by (storage_class, lvg_name, thin_pool) (sds_local_volume_local_storage_class_lvg_info{storage_class=\"$storage_class\", thin_pool!=\"\"}))",
           "format": "table",
           "instant": true,
@@ -1705,6 +1750,7 @@
             "Allocated",
             "Allocation limit",
             "Free",
+            "Free on disk",
             "Used"
           ],
           "reducer": [
@@ -1734,7 +1780,8 @@
               "Value #Allocated": 5,
               "Value #Limit": 6,
               "Value #Free": 7,
-              "Value #Used": 8
+              "Value #FreeOnDisk": 8,
+              "Value #Used": 9
             },
             "renameByName": {
               "node": "Node",
@@ -1745,7 +1792,8 @@
               "Value #Allocated": "Allocated",
               "Value #Limit": "Allocation limit",
               "Value #Free": "Free",
-              "Value #Used": "Used"
+              "Value #Used": "Used",
+              "Value #FreeOnDisk": "Free on disk"
             }
           }
         },

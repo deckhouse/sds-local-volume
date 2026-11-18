@@ -7,19 +7,20 @@ highlights: []
 docs:
   - "The documentation names the `storage-foundation` module, not `snapshot-controller`, as the module that volume snapshots require, and no longer asks to enable `snapshot-controller`."
   - "The description of `dataNodes` in the module settings now says that the `csi-node` component runs on the nodes that match the selector, which are all Linux nodes by default, instead of saying that the parameter placed the CSI on all nodes when omitted."
+  - "The FAQ explains why a thin pool can run out of space while the space free by `allocationLimit` is still large: how snapshots and restored volumes count in the two figures, where to read the physically free space, and what `usedSize` leaves out."
+
+improvements:
+  - "The \"Capacity by LocalStorageClass\" row of the \"SDS Local Volume\" dashboard shows the space physically free in the thin pools of a `Thin` class (\"Thin: free on disk\" and the \"Free on disk\" column of the table: pool size minus the data written into it) next to the space free by `allocationLimit`. The latter counts every snapshot and every volume restored from a snapshot at the full size of its source, the former counts a shared block once."
 
 fixes:
   - "DeleteVolume and DeleteSnapshot no longer report success before sds-node-configurator has removed the logical volume. While the LVMLogicalVolume or LVMLogicalVolumeSnapshot still exists they return the retryable `Aborted` status with its phase and reason, so the PersistentVolume stays `Released` and the cause is visible in `kubectl describe pv`. A missing object counts as already deleted, and API errors are returned as `Unavailable` or `Internal` statuses."
 
 # Optional sections — delete rather than leave empty.
 # new_features: []
-# improvements: []
-# fixes: []
 # security: []
 # breaking: []
 # upgrade_notes: []
 # known_issues: []
-# docs: []
 # dependencies:
 #   - name: component
 #     from: "1.0"
