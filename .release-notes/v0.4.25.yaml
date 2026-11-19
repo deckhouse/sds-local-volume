@@ -1,0 +1,27 @@
+date: "2026-11-19"
+
+summary: "A `Thin` LocalStorageClass reports the space of its thin pools in `status.capacity`, DeleteVolume and DeleteSnapshot report success only after the logical volume is gone, the controller metrics require authorization, and the module needs less memory on master nodes."
+
+highlights:
+  - "A `Thin` LocalStorageClass shows the size, the data written and the free space of its thin pools in `status.capacity`, and the dashboard shows the space physically free in thin pools next to the space free by `allocationLimit`."
+  - "DeleteVolume and DeleteSnapshot no longer report success while the LVMLogicalVolume or LVMLogicalVolumeSnapshot still exists, so a PersistentVolume stays `Released` with the cause in `kubectl describe pv` until the logical volume is removed."
+  - "The module controller serves its metrics over HTTPS and only to callers allowed to read them."
+
+new_features:
+  - "A `Thin` LocalStorageClass reports the space of its thin pools in `status.capacity`: the size, the data written, the space physically free, the allocated size and the space free by `allocationLimit`, summed over the pools, with a list per pool and the number of pools the LVMVolumeGroup status has no figures for. The free figures are the wide columns of `d8 k get localstorageclass`. The controller refreshes the status when a figure moves by more than 1% of the pool size or every 5 minutes. The data written comes from the LVMVolumeGroup status that sds-node-configurator publishes, so `status.capacity.used` can trail the data on disk by about a minute and by up to about 2% of the pool, and for longer with sds-node-configurator releases that refresh `usedSize` only on block device events of the node."
+
+improvements:
+  - "The \"Capacity by LocalStorageClass\" row of the \"SDS Local Volume\" dashboard shows the space physically free in the thin pools of a `Thin` class (\"Thin: free on disk\" and the \"Free on disk\" column of the table: pool size minus the data written into it) next to the space free by `allocationLimit`. The latter counts every snapshot and every volume restored from a snapshot at the full size of its source, the former counts a shared block once."
+  - "The module needs less memory on master nodes. The controller serves the admission webhooks itself instead of a separate `webhooks` container, the external-resizer of the CSI controller no longer keeps an informer over every Pod of the cluster, and the controller keeps only the metadata and spec of Nodes, only its own configuration Secret and no `managedFields` in its cache. The webhook Service, the ValidatingWebhookConfigurations and their certificate stay the same; the controller Pods are recreated once during the update."
+  - "In HA mode the CSI controller and the module controller run two replicas instead of one per master node, and one replica on a cluster with a single master node."
+
+fixes:
+  - "DeleteVolume and DeleteSnapshot no longer report success before sds-node-configurator has removed the logical volume. While the LVMLogicalVolume or LVMLogicalVolumeSnapshot still exists they return the retryable `Aborted` status with its phase and reason, so the PersistentVolume stays `Released` and the cause is visible in `kubectl describe pv`. A missing object counts as already deleted, and API errors are returned as `Unavailable` or `Internal` statuses. The cleanup mode of the volume is written to the LVMLogicalVolume by the first DeleteVolume call and kept through the retries, so a wipe that runs for hours is not lost when the LocalStorageClass changes or cannot be read in the meantime."
+
+security:
+  - "The metrics of the module controller are no longer served over plain HTTP to anyone who can reach the Pod. The controller now serves them over HTTPS and lets a scrape through only after a TokenReview and a SubjectAccessReview for `get` on `deployments/prometheus-metrics` of its Deployment, which the cluster Prometheus is granted. The job and the metric names stay the same; the Service port is now called `https-metrics`."
+
+docs:
+  - "The documentation names the `storage-foundation` module, not `snapshot-controller`, as the module that volume snapshots require, and no longer asks to enable `snapshot-controller`."
+  - "The description of `dataNodes` in the module settings now says that the `csi-node` component runs on the nodes that match the selector, which are all Linux nodes by default, instead of saying that the parameter placed the CSI on all nodes when omitted."
+  - "The FAQ explains why a thin pool can run out of space while the space free by `allocationLimit` is still large: how snapshots and restored volumes count in the two figures, where to read the physically free space, and what `usedSize` leaves out."
