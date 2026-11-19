@@ -16,7 +16,10 @@ limitations under the License.
 
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // LocalStorageClass is a Kubernetes Custom Resource that defines a configuration for a Kubernetes StorageClass.
 // +kubebuilder:object:root=true
@@ -25,6 +28,8 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 // +kubebuilder:metadata:labels={"heritage=deckhouse","module=sds-local-volume","backup.deckhouse.io/cluster-config=true"}
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
+// +kubebuilder:printcolumn:name="Free on disk",type="string",JSONPath=".status.capacity.freeOnDisk",priority=1
+// +kubebuilder:printcolumn:name="Free by limit",type="string",JSONPath=".status.capacity.freeByAllocationLimit",priority=1
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.reason",priority=1
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="The age of this resource"
 // +crd-enricher:crd:minimal=true
@@ -143,6 +148,54 @@ type LocalStorageClassStatus struct {
 	// +crd-enricher:raw:items.properties.reason.description="Machine-readable reason for the current status, suitable for log filtering\nand alerting."
 	// +crd-enricher:raw:items.properties.message.description=Human-readable explanation of the current status.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Space of the thin pools the class provisions on, summed over the pools. Set for a `Thin` class only, and
+	// refreshed when a figure moves by more than 1% of the pool size or every 5 minutes, so it can trail the
+	// LVMVolumeGroup status by that much.
+	// +optional
+	Capacity *LocalStorageClassCapacity `json:"capacity,omitempty"`
+}
+
+// Thin pool space of a LocalStorageClass.
+type LocalStorageClassCapacity struct {
+	// Total size of the thin pools.
+	Size resource.Quantity `json:"size"`
+	// Data written into the thin pools. A block shared by a volume, its snapshots and the volumes restored from them is counted once.
+	Used resource.Quantity `json:"used"`
+	// Space physically free in the thin pools: size less the data written into them. It leaves out the metadata of the pools.
+	FreeOnDisk resource.Quantity `json:"freeOnDisk"`
+	// Sum of the sizes of the volumes, snapshots and restored volumes in the thin pools. A snapshot and a restored volume count at the full size of their source.
+	Allocated resource.Quantity `json:"allocated"`
+	// Space new volumes can still be given: the pool size times `allocationLimit` less the allocated size, summed over the pools, a pool past its limit counting as zero.
+	FreeByAllocationLimit resource.Quantity `json:"freeByAllocationLimit"`
+	// Number of thin pools of the class that the LVMVolumeGroup status reports no figures for. The totals leave them out.
+	// +optional
+	PoolsWithoutData int32 `json:"poolsWithoutData,omitempty"`
+	// Figures per thin pool.
+	// +optional
+	// +listType=map
+	// +listMapKey=lvmVolumeGroup
+	Pools []LocalStorageClassPoolCapacity `json:"pools,omitempty"`
+	// When the figures were written.
+	UpdatedAt metav1.Time `json:"updatedAt"`
+}
+
+// Thin pool space of one LVMVolumeGroup used by a LocalStorageClass.
+type LocalStorageClassPoolCapacity struct {
+	// Name of the LVMVolumeGroup.
+	// +kubebuilder:validation:MaxLength=253
+	LVMVolumeGroup string `json:"lvmVolumeGroup"`
+	// Name of the thin pool.
+	// +kubebuilder:validation:MaxLength=253
+	ThinPool string `json:"thinPool"`
+	// Size of the thin pool.
+	Size resource.Quantity `json:"size"`
+	// Data written into the thin pool.
+	Used resource.Quantity `json:"used"`
+	// Space physically free in the thin pool.
+	FreeOnDisk resource.Quantity `json:"freeOnDisk"`
+	// Space new volumes can still be given in the thin pool.
+	FreeByAllocationLimit resource.Quantity `json:"freeByAllocationLimit"`
 }
 
 // +kubebuilder:validation:XValidation:rule=`has(self.name) != has(self.labelSelector)`,message="Exactly one of name or labelSelector must be set."

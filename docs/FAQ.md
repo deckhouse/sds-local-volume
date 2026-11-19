@@ -227,6 +227,8 @@ So a pool with many snapshots can show little space free by `allocationLimit` an
 
 To see both figures for a class, open the "Capacity by LocalStorageClass" row of the "SDS Local Volume" dashboard: "Thin: free by allocationLimit" and "Thin: free on disk" are next to each other, and the table has the "Free on disk" column per thin pool. For a query of your own, join the series of the class as described above:
 
+The same figures are in the `status.capacity` of the LocalStorageClass, summed over the thin pools of the class and listed per pool in `status.capacity.pools`; `freeOnDisk` and `freeByAllocationLimit` are also printed by `d8 k get localstorageclass -o wide`. The status is written by the module's controller for a `Thin` class only. It is refreshed when a figure moves by more than 1% of the pool size, when the pools of the class change, or every 5 minutes, and `status.capacity.updatedAt` tells when that last happened, so it can trail the LVMVolumeGroup by that much. The LVMVolumeGroup figures come from the sds-node-configurator agent, which reads LVM at least every 30 seconds and publishes `usedSize` of a thin pool when it moves by 1% of the pool, so `status.capacity.used` can trail the data on disk by about a minute and by up to about 2% of the pool. Older sds-node-configurator releases refresh `usedSize` only after a block device event on the node, such as creating or deleting a volume or a snapshot, or a restart of the agent. `poolsWithoutData` counts the thin pools of the class that the LVMVolumeGroup status has no figures for; the totals leave them out.
+
 ```text
 sum(
   clamp_min(sds_node_configurator_lvg_thin_pool_actual_size_bytes - sds_node_configurator_lvg_thin_pool_used_size_bytes, 0)

@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"testing"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -101,5 +102,34 @@ func TestLocalStorageClassDeepCopyIsolatesSpec(t *testing.T) {
 	}
 	if origLVG.LabelSelector.MatchLabels["zone"] != "a" {
 		t.Errorf("lvmVolumeGroups[].labelSelector is aliased: %q", origLVG.LabelSelector.MatchLabels["zone"])
+	}
+}
+
+func TestLocalStorageClassDeepCopyIsolatesCapacity(t *testing.T) {
+	orig := &LocalStorageClass{
+		Status: &LocalStorageClassStatus{
+			Capacity: &LocalStorageClassCapacity{
+				Size:       resource.MustParse("10Gi"),
+				FreeOnDisk: resource.MustParse("4Gi"),
+				Pools: []LocalStorageClassPoolCapacity{
+					{LVMVolumeGroup: "lvg-1", ThinPool: "pool", Size: resource.MustParse("10Gi")},
+				},
+			},
+		},
+	}
+
+	cp := orig.DeepCopy()
+	if cp.Status.Capacity == orig.Status.Capacity {
+		t.Fatal("the Capacity pointer is shared with the original")
+	}
+
+	cp.Status.Capacity.Pools[0].LVMVolumeGroup = "lvg-2"
+	cp.Status.Capacity.FreeOnDisk.Add(resource.MustParse("1Gi"))
+
+	if orig.Status.Capacity.Pools[0].LVMVolumeGroup != "lvg-1" {
+		t.Errorf("pools are aliased: %q", orig.Status.Capacity.Pools[0].LVMVolumeGroup)
+	}
+	if orig.Status.Capacity.FreeOnDisk.Cmp(resource.MustParse("4Gi")) != 0 {
+		t.Errorf("freeOnDisk is aliased: %s", orig.Status.Capacity.FreeOnDisk.String())
 	}
 }

@@ -227,6 +227,8 @@ sum(
 
 Обе величины класса видны в строке «Capacity by LocalStorageClass» дашборда «SDS Local Volume»: «Thin: free by allocationLimit» и «Thin: free on disk» стоят рядом, а в таблице есть колонка «Free on disk» по каждому thin-пулу. Для собственного запроса соедините ряды класса так, как описано выше:
 
+Те же величины есть в `status.capacity` ресурса LocalStorageClass: суммой по thin-пулам класса и по каждому пулу в `status.capacity.pools`; `freeOnDisk` и `freeByAllocationLimit` выводит и `d8 k get localstorageclass -o wide`. Статус пишет контроллер модуля, и только для класса `Thin`. Он обновляется, когда величина меняется больше чем на 1% размера пула, когда меняются пулы класса, либо раз в 5 минут; `status.capacity.updatedAt` показывает, когда это было в последний раз, поэтому статус может отставать от LVMVolumeGroup на эту величину. Сами величины LVMVolumeGroup приходят от агента sds-node-configurator: он читает LVM не реже раза в 30 секунд и публикует `usedSize` thin-пула, когда тот меняется на 1% пула, поэтому `status.capacity.used` может отставать от данных на диске примерно на минуту и до 2% пула. Более старые релизы sds-node-configurator обновляют `usedSize` только после события блочного устройства на узле — создания или удаления тома или снимка, перезапуска агента. `poolsWithoutData` — число thin-пулов класса, по которым статус LVMVolumeGroup не содержит данных; в итоги они не входят.
+
 ```text
 sum(
   clamp_min(sds_node_configurator_lvg_thin_pool_actual_size_bytes - sds_node_configurator_lvg_thin_pool_used_size_bytes, 0)

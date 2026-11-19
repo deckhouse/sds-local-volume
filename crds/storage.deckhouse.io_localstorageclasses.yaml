@@ -24,6 +24,14 @@ spec:
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
       type: string
+    - jsonPath: .status.capacity.freeOnDisk
+      name: Free on disk
+      priority: 1
+      type: string
+    - jsonPath: .status.capacity.freeByAllocationLimit
+      name: Free by limit
+      priority: 1
+      type: string
     - jsonPath: .status.reason
       name: Reason
       priority: 1
@@ -242,6 +250,127 @@ spec:
           status:
             description: Current state of the StorageClass.
             properties:
+              capacity:
+                description: |-
+                  Space of the thin pools the class provisions on, summed over the pools. Set for a `Thin` class only, and
+                  refreshed when a figure moves by more than 1% of the pool size or every 5 minutes, so it can trail the
+                  LVMVolumeGroup status by that much.
+                properties:
+                  allocated:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: Sum of the sizes of the volumes, snapshots and restored
+                      volumes in the thin pools. A snapshot and a restored volume
+                      count at the full size of their source.
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  freeByAllocationLimit:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: 'Space new volumes can still be given: the pool size
+                      times `allocationLimit` less the allocated size, summed over
+                      the pools, a pool past its limit counting as zero.'
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  freeOnDisk:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: 'Space physically free in the thin pools: size less
+                      the data written into them. It leaves out the metadata of the
+                      pools.'
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  pools:
+                    description: Figures per thin pool.
+                    items:
+                      description: Thin pool space of one LVMVolumeGroup used by a
+                        LocalStorageClass.
+                      properties:
+                        freeByAllocationLimit:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: Space new volumes can still be given in the
+                            thin pool.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        freeOnDisk:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: Space physically free in the thin pool.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        lvmVolumeGroup:
+                          description: Name of the LVMVolumeGroup.
+                          maxLength: 253
+                          type: string
+                        size:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: Size of the thin pool.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        thinPool:
+                          description: Name of the thin pool.
+                          maxLength: 253
+                          type: string
+                        used:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: Data written into the thin pool.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      required:
+                      - freeByAllocationLimit
+                      - freeOnDisk
+                      - lvmVolumeGroup
+                      - size
+                      - thinPool
+                      - used
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - lvmVolumeGroup
+                    x-kubernetes-list-type: map
+                  poolsWithoutData:
+                    description: Number of thin pools of the class that the LVMVolumeGroup
+                      status reports no figures for. The totals leave them out.
+                    format: int32
+                    type: integer
+                  size:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: Total size of the thin pools.
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  updatedAt:
+                    description: When the figures were written.
+                    format: date-time
+                    type: string
+                  used:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: Data written into the thin pools. A block shared
+                      by a volume, its snapshots and the volumes restored from them
+                      is counted once.
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                required:
+                - allocated
+                - freeByAllocationLimit
+                - freeOnDisk
+                - size
+                - updatedAt
+                - used
+                type: object
               conditions:
                 description: 'The latest observations of the resource state. Condition
                   type: `Ready`.'

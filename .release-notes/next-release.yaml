@@ -9,6 +9,9 @@ docs:
   - "The description of `dataNodes` in the module settings now says that the `csi-node` component runs on the nodes that match the selector, which are all Linux nodes by default, instead of saying that the parameter placed the CSI on all nodes when omitted."
   - "The FAQ explains why a thin pool can run out of space while the space free by `allocationLimit` is still large: how snapshots and restored volumes count in the two figures, where to read the physically free space, and what `usedSize` leaves out."
 
+new_features:
+  - "A `Thin` LocalStorageClass reports the space of its thin pools in `status.capacity`: the size, the data written, the space physically free, the allocated size and the space free by `allocationLimit`, summed over the pools, with a list per pool and the number of pools the LVMVolumeGroup status has no figures for. The free figures are the wide columns of `d8 k get localstorageclass`. The controller refreshes the status when a figure moves by more than 1% of the pool size or every 5 minutes."
+
 improvements:
   - "The \"Capacity by LocalStorageClass\" row of the \"SDS Local Volume\" dashboard shows the space physically free in the thin pools of a `Thin` class (\"Thin: free on disk\" and the \"Free on disk\" column of the table: pool size minus the data written into it) next to the space free by `allocationLimit`. The latter counts every snapshot and every volume restored from a snapshot at the full size of its source, the former counts a shared block once."
 

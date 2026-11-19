@@ -164,6 +164,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = controller.RunLocalStorageClassCapacityPublisher(mgr, log); err != nil {
+		log.Error("unable to run the controller", logger.Err(err), slog.String("controller", controller.LocalStorageClassCapacityCtrlName))
+		os.Exit(1)
+	}
+
 	if _, err = controller.RunLocalCSINodeWatcherController(mgr, *cfgParams, log, metrics); err != nil {
 		log.Error("unable to run the controller", logger.Err(err), slog.String("controller", controller.LocalCSINodeWatcherCtrl))
 		os.Exit(1)
