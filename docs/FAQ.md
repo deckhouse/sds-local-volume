@@ -94,6 +94,28 @@ The issue is likely related to node labels. The module uses nodes that have the 
    d8 k -n d8-sds-local-volume logs -l app=sds-local-volume-controller
    ```
 
+## How do I take a node with volumes out of the cluster?
+
+A volume of the module is a logical volume on the disks of one node, and its snapshots are kept on the same node. The module does not move volumes to other nodes, so a volume is available only while its node is in the cluster. The data of the volume is lost when the server of the node is reinstalled, when its disks are wiped or reused, and when the virtual machine of the node is deleted with its disks.
+
+Draining and rebooting a node keep the data. A Pod with a volume on the node can run only on that node, so after a drain it stays `Pending` until the node is uncordoned.
+
+To take a node with volumes out of the cluster, do the following:
+
+1. List the PersistentVolumes of the module on the node and the PersistentVolumeClaims bound to them:
+
+   ```shell
+   d8 k get pv -o json | jq -r --arg node <node-name> '.items[] | select(.spec.csi.driver == "local.csi.storage.deckhouse.io") | select(any(.spec.nodeAffinity.required.nodeSelectorTerms[]?.matchExpressions[]?; .key == "topology.sds-local-volume-csi/node" and (.values | index($node)))) | [.metadata.name, (.spec.claimRef.namespace // "") + "/" + (.spec.claimRef.name // ""), .status.phase] | @tsv'
+   ```
+
+1. Copy the data of the volumes you need off the node: with the tools of the application, such as database replication, or by restoring it from a backup on another node.
+
+   To copy a volume as files, stop the application that writes to it first. The script from [Migrating data between PVCs](usage.html#migrating-data-between-pvcs) mounts both PersistentVolumeClaims in one Pod on the node of the source volume. Its destination PersistentVolumeClaim must therefore belong to a StorageClass whose volumes can be used on that node and are not kept on it alone, such as a StorageClass of the `sds-replicated-volume` module. To move the data to a volume of this module on another node, copy it twice: to such a PersistentVolumeClaim, and then from it to the new volume.
+
+1. Delete the PersistentVolumeClaims of the volumes on the node while the node is still in the cluster. With `reclaimPolicy: Delete` the module removes their logical volumes. With `reclaimPolicy: Retain` the PersistentVolumes and the logical volumes stay: reclaim them as described in [How do I reclaim the space of a volume created with reclaimPolicy: Retain?](#how-do-i-reclaim-the-space-of-a-volume-created-with-reclaimpolicy-retain).
+1. Check that no logical volumes or snapshots are left on the node, as described in [What do I check before taking a node out of the cluster?](/modules/sds-node-configurator/faq.html#what-do-i-check-before-taking-a-node-out-of-the-cluster) in the `sds-node-configurator` documentation.
+1. Take the node out of the cluster as described in [How do I take a node with volume data out of the cluster?](/modules/node-manager/faq.html#how-do-i-take-a-node-with-volume-data-out-of-the-cluster) in the `node-manager` documentation.
+
 ## How do I reclaim the space of a volume created with reclaimPolicy: Retain?
 
 With `reclaimPolicy: Retain`, deleting a PersistentVolumeClaim leaves both the PersistentVolume and the data in place: reclaiming the storage is a deliberate administrative step. Deleting the PersistentVolume is not that step — it removes the Kubernetes object, while the logical volume stays allocated in the volume group and is described by an [LVMLogicalVolume](/modules/sds-node-configurator/cr.html#lvmlogicalvolume) resource with the same name as the PersistentVolume.
