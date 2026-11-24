@@ -1,0 +1,12 @@
+date: "2026-11-24"
+
+summary: "The `controller` Pod starts again on clusters with `ContainerdV2` and the `erofs` snapshotter, and the FAQ explains how to take a node with volumes out of the cluster."
+
+highlights:
+  - "The `controller` Pod no longer stays in `CrashLoopBackOff` with `read-only file system` on clusters with `ContainerdV2` and the `erofs` snapshotter (DKP CSE, or DKP with `defaultCRI: ContainerdV2`)."
+
+fixes:
+  - "The `controller` Pod now starts on clusters with `ContainerdV2` and the `erofs` snapshotter (DKP CSE, or DKP with `defaultCRI: ContainerdV2`): its image contains the `/etc/webhook/certs` mount point, so the container no longer fails with `read-only file system` and no longer stays in `CrashLoopBackOff`."
+
+docs:
+  - "The FAQ explains how to take a node with volumes out of the cluster: that draining and rebooting keep the data, that the volumes and their snapshots are lost with the disks of the node, how to list the volumes of the node, how to copy their data off it and what to delete before the node leaves."

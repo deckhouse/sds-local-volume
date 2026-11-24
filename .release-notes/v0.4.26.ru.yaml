@@ -1,0 +1,12 @@
+date: "2026-11-24"
+
+summary: "Под `controller` снова запускается в кластерах с `ContainerdV2` и снапшоттером (snapshotter — механизм хранения слоёв образов контейнеров) `erofs`, а в FAQ описано, как вывести из кластера узел с томами."
+
+highlights:
+  - "Под `controller` больше не остаётся в `CrashLoopBackOff` с ошибкой `read-only file system` в кластерах с `ContainerdV2` и снапшоттером `erofs` (DKP CSE или DKP с `defaultCRI: ContainerdV2`)."
+
+fixes:
+  - "Под `controller` теперь запускается в кластерах с `ContainerdV2` и снапшоттером `erofs` (DKP CSE или DKP с `defaultCRI: ContainerdV2`): в его образе есть точка монтирования `/etc/webhook/certs`, поэтому контейнер больше не падает с ошибкой `read-only file system` и не остаётся в `CrashLoopBackOff`."
+
+docs:
+  - "В FAQ описано, как вывести из кластера узел с томами: что вытеснение подов и перезагрузка узла данные сохраняют, что тома и их снимки теряются вместе с дисками узла, как получить список томов узла, скопировать их данные и что удалить до вывода узла."

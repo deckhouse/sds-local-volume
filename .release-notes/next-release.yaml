@@ -12,8 +12,7 @@ highlights: []
 # breaking: []
 # upgrade_notes: []
 # known_issues: []
-docs:
-  - "The FAQ explains how to take a node with volumes out of the cluster: that draining and rebooting keep the data, that the volumes and their snapshots are lost with the disks of the node, how to list the volumes of the node, how to copy their data off it and what to delete before the node leaves."
+# docs: []
 # dependencies:
 #   - name: component
 #     from: "1.0"
