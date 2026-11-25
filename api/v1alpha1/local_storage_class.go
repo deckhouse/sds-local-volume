@@ -19,6 +19,8 @@ package v1alpha1
 import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/deckhouse/sds-common-lib/capacity"
 )
 
 // LocalStorageClass is a Kubernetes Custom Resource that defines a configuration for a Kubernetes StorageClass.
@@ -153,21 +155,23 @@ type LocalStorageClassStatus struct {
 	// refreshed when a figure moves by more than 1% of the pool size or every 5 minutes, so it can trail the
 	// LVMVolumeGroup status by that much.
 	// +optional
+	// +crd-enricher:unset:properties.quota
+	// +crd-enricher:unset:properties.freeByQuota
+	// +crd-enricher:unset:properties.heldBySnapshots
+	// +crd-enricher:unset:properties.heldByDeleted
+	// +crd-enricher:raw:required=[allocated,freeByAllocationLimit,freeOnDisk,size,updatedAt,used]
+	// +crd-enricher:raw:properties.size.description="Total size of the thin pools."
+	// +crd-enricher:raw:properties.used.description="Data written into the thin pools. A block shared by a volume, its snapshots and the volumes restored from them is counted once."
+	// +crd-enricher:raw:properties.freeOnDisk.description="Space physically free in the thin pools: size less the data written into them. It leaves out the metadata of the pools."
+	// +crd-enricher:raw:properties.allocated.description="Sum of the sizes of the volumes, snapshots and restored volumes in the thin pools. A snapshot and a restored volume count at the full size of their source."
+	// +crd-enricher:raw:properties.freeByAllocationLimit.description="Space new volumes can still be given: the pool size times `allocationLimit` less the allocated size, summed over the pools, a pool past its limit counting as zero."
+	// +crd-enricher:raw:properties.updatedAt.description="When the figures were written."
 	Capacity *LocalStorageClassCapacity `json:"capacity,omitempty"`
 }
 
 // Thin pool space of a LocalStorageClass.
 type LocalStorageClassCapacity struct {
-	// Total size of the thin pools.
-	Size resource.Quantity `json:"size"`
-	// Data written into the thin pools. A block shared by a volume, its snapshots and the volumes restored from them is counted once.
-	Used resource.Quantity `json:"used"`
-	// Space physically free in the thin pools: size less the data written into them. It leaves out the metadata of the pools.
-	FreeOnDisk resource.Quantity `json:"freeOnDisk"`
-	// Sum of the sizes of the volumes, snapshots and restored volumes in the thin pools. A snapshot and a restored volume count at the full size of their source.
-	Allocated resource.Quantity `json:"allocated"`
-	// Space new volumes can still be given: the pool size times `allocationLimit` less the allocated size, summed over the pools, a pool past its limit counting as zero.
-	FreeByAllocationLimit resource.Quantity `json:"freeByAllocationLimit"`
+	capacity.Capacity `json:",inline"`
 	// Number of thin pools of the class that the LVMVolumeGroup status reports no figures for. The totals leave them out.
 	// +optional
 	PoolsWithoutData int32 `json:"poolsWithoutData,omitempty"`
@@ -176,8 +180,6 @@ type LocalStorageClassCapacity struct {
 	// +listType=map
 	// +listMapKey=lvmVolumeGroup
 	Pools []LocalStorageClassPoolCapacity `json:"pools,omitempty"`
-	// When the figures were written.
-	UpdatedAt metav1.Time `json:"updatedAt"`
 }
 
 // Thin pool space of one LVMVolumeGroup used by a LocalStorageClass.

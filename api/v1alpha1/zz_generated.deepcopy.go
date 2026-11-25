@@ -172,11 +172,7 @@ func (in *LocalStorageClassStatus) DeepCopyInto(out *LocalStorageClassStatus) {
 // DeepCopyInto is a deepcopy function, copying the receiver, writing into out. in must be non-nil.
 func (in *LocalStorageClassCapacity) DeepCopyInto(out *LocalStorageClassCapacity) {
 	*out = *in
-	out.Size = in.Size.DeepCopy()
-	out.Used = in.Used.DeepCopy()
-	out.FreeOnDisk = in.FreeOnDisk.DeepCopy()
-	out.Allocated = in.Allocated.DeepCopy()
-	out.FreeByAllocationLimit = in.FreeByAllocationLimit.DeepCopy()
+	in.Capacity.DeepCopyInto(&out.Capacity)
 	if in.Pools != nil {
 		in, out := &in.Pools, &out.Pools
 		*out = make([]LocalStorageClassPoolCapacity, len(*in))
@@ -184,7 +180,6 @@ func (in *LocalStorageClassCapacity) DeepCopyInto(out *LocalStorageClassCapacity
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	in.UpdatedAt.DeepCopyInto(&out.UpdatedAt)
 }
 
 // DeepCopy is a deepcopy function, copying the receiver, creating a new LocalStorageClassCapacity.

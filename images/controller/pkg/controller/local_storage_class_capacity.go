@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	sdscapacity "github.com/deckhouse/sds-common-lib/capacity"
 	"github.com/deckhouse/sds-common-lib/conditions"
 	"github.com/deckhouse/sds-common-lib/logger"
 	slv "github.com/deckhouse/sds-local-volume/api/v1alpha1"
@@ -101,8 +102,8 @@ func computeLocalStorageClassCapacity(lsc *slv.LocalStorageClass, lvgList *snc.L
 	capacity.Size = *resource.NewQuantity(size, resource.BinarySI)
 	capacity.Used = *resource.NewQuantity(used, resource.BinarySI)
 	capacity.FreeOnDisk = *resource.NewQuantity(free, resource.BinarySI)
-	capacity.Allocated = *resource.NewQuantity(allocated, resource.BinarySI)
-	capacity.FreeByAllocationLimit = *resource.NewQuantity(limitFree, resource.BinarySI)
+	capacity.Allocated = resource.NewQuantity(allocated, resource.BinarySI)
+	capacity.FreeByAllocationLimit = resource.NewQuantity(limitFree, resource.BinarySI)
 
 	return capacity, nil
 }
@@ -120,8 +121,8 @@ func capacityNeedsWrite(prev, next *slv.LocalStorageClassCapacity, now time.Time
 	if moved(prev.Size, next.Size, next.Size) ||
 		moved(prev.Used, next.Used, next.Size) ||
 		moved(prev.FreeOnDisk, next.FreeOnDisk, next.Size) ||
-		moved(prev.Allocated, next.Allocated, next.Size) ||
-		moved(prev.FreeByAllocationLimit, next.FreeByAllocationLimit, next.Size) {
+		sdscapacity.MovedOptional(prev.Allocated, next.Allocated, next.Size) ||
+		sdscapacity.MovedOptional(prev.FreeByAllocationLimit, next.FreeByAllocationLimit, next.Size) {
 		return true
 	}
 	for i := range next.Pools {

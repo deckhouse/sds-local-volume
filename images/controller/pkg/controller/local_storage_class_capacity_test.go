@@ -110,7 +110,8 @@ func TestComputeCapacityResolvesLabelSelector(t *testing.T) {
 func capacityOf(size, used, free, allocated, limitFree int64, at time.Time) *slv.LocalStorageClassCapacity {
 	q := func(v int64) resource.Quantity { return *resource.NewQuantity(v, resource.BinarySI) }
 	return &slv.LocalStorageClassCapacity{
-		Size: q(size), Used: q(used), FreeOnDisk: q(free), Allocated: q(allocated), FreeByAllocationLimit: q(limitFree),
+		Size: q(size), Used: q(used), FreeOnDisk: q(free),
+		Allocated: resource.NewQuantity(allocated, resource.BinarySI), FreeByAllocationLimit: resource.NewQuantity(limitFree, resource.BinarySI),
 		Pools: []slv.LocalStorageClassPoolCapacity{{
 			LVMVolumeGroup: "lvg", ThinPool: "pool", Size: q(size), Used: q(used), FreeOnDisk: q(free), FreeByAllocationLimit: q(limitFree),
 		}},
