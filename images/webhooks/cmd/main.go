@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"os"
 
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+
 	"github.com/deckhouse/sds-common-lib/logger"
 	"github.com/deckhouse/sds-local-volume/images/webhooks/handlers"
 )
@@ -81,6 +83,7 @@ func main() {
 		fmt.Printf("unable to create NewLogger, err: %v\n", err)
 		os.Exit(1)
 	}
+	ctrllog.SetLogger(baseLog.GetLogger())
 	log := baseLog.Named("webhooks")
 
 	hs, err := handlers.Handlers(log)
