@@ -32,6 +32,7 @@
   "controllerMetricsProxyPort" (int .Values.sdsLocalVolume.internal.controllerMetricsProxyPort)
   "controllerMetricsInProcessAuthorization" true
   "additionalControllerEnvs" $controllerEnvs
+  "additionalDeploymentLabels" (dict "storage-status.storage.deckhouse.io/availabilityCheck" "controller")
 }}
 {{ include "helm_lib_module_controller_manifests" (list . $config) }}
 
